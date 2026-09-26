@@ -75,6 +75,14 @@ Fresh Linux focused qualification passes 90 tests and full Ruff, including the
 real App lifespan's post-shutdown queue assertion and one dispatch/completion
 after restart. The failing diagnostics remain in the combined task evidence.
 
+Independent final-candidate review also identified an already-admitted queued
+lease retained by cancellation during close. The deterministic pre-start
+barrier reproduced the reserved slot after shutdown. Close now releases that
+slot only for a proven undispatched explicit queue; dispatch-marked ownership
+remains retained. Both focused barrier cases pass. The first frozen full Bridge
+run passes 2,436 tests with 27 existing skips; final qualification will cover
+this scoped correction separately against the corrected committed source.
+
 Final qualification requires a clean local commit, a canonical Git archive
 verified against every committed file, fresh applicable Linux gates and parent
 native acceptance. No combined publication or deployment has occurred.

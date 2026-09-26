@@ -9294,9 +9294,13 @@ def test_app_recovered_queue_keeps_original_deadline_and_never_replays_dispatche
         recovered_broker.close()
 
 
+@pytest.mark.parametrize(
+    "dispatch_uncertain", [False, True], ids=["undispatched", "dispatch-marked"]
+)
 def test_closed_broker_wakes_recovered_queued_worker_and_preserves_prompt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    dispatch_uncertain: bool,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
     original_client = ValidatorBackedAppServer()
@@ -9341,15 +9345,29 @@ def test_closed_broker_wakes_recovered_queued_worker_and_preserves_prompt(
             for worker in recovered_broker._workers
             if worker.name.endswith(queued.run_id[-8:])
         )
+        if dispatch_uncertain:
+            # A stale or racing checkpoint must retain its active lease when
+            # the turn may have crossed the provider dispatch boundary.
+            with recovered_broker._lock:
+                run.turn_start_dispatched = True
+                recovered_broker._persist_locked()
+        else:
+            assert not run.turn_start_dispatched
+        queued_lease = recovered_broker._leases[queued.run_id]
+        assert recovered_broker.gate.snapshot().active_turns == 1
 
         recovered_broker.close()
         assert recovered_broker._state.runs[queued.run_id].status == "queued"
         assert queued.run_id not in recovered_broker._completion_events
+        assert recovered_broker.gate.snapshot().active_turns == int(dispatch_uncertain)
 
         release_start.set()
         worker.join(timeout=2)
         assert not worker.is_alive()
         assert not _requests(recovered_client, "turn/start")
+        if dispatch_uncertain:
+            queued_lease.release()
+            return
     finally:
         release_start.set()
         recovered_broker.close()

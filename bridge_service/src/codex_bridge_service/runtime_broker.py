@@ -2210,7 +2210,13 @@ class RuntimeBroker:
                     # re-admit it after process restart.
                     lease = self._leases.pop(run.run_id, None)
                     if lease is not None:
-                        lease.cancel()
+                        if run.turn_start_dispatched:
+                            lease.cancel()
+                        else:
+                            # cancel() intentionally retains active ownership;
+                            # an undispatched queued run has no provider turn
+                            # to protect, so release its slot during shutdown.
+                            lease.release()
                     # The old broker must stop owning its in-memory worker
                     # even though this queued run remains durable. A worker
                     # may already have passed lease admission and be about to
