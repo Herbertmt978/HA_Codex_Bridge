@@ -53,6 +53,9 @@ from codex_bridge_service.resource_limits import (
 from codex_bridge_service.runtime_broker import (
     RuntimeBroker,
     RuntimeBrokerError,
+    RuntimeCollaborationModeUnavailableError,
+    QueuedPromptNotFoundError,
+    QueuedPromptRevisionConflictError,
     RuntimeEventPayloadTooLargeError,
     InteractionStaleError,
     RuntimeThreadOperationConflictError,
@@ -75,6 +78,7 @@ from codex_bridge_service.runtime_state import (
 from codex_bridge_service.storage import BridgeStorage, ProjectMutationError
 from codex_bridge_service.routes import task_actions
 from codex_bridge_service.routes import threads as thread_routes
+from codex_bridge_service.routes import prompts as prompt_routes
 from codex_bridge_service.routes.prompts import PromptRequest
 from codex_bridge_service.model_catalog import CodexModelCatalogProbe, ModelCatalogError
 
@@ -8489,6 +8493,510 @@ def test_corrupt_runtime_checkpoint_is_quarantined_and_thread_is_repaired(
         )
         _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
         assert fresh.status == "starting"
+    finally:
+        broker.close()
+
+
+def test_explicit_queue_is_idempotent_editable_cancellable_and_claimed_once(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        active = broker.submit_prompt(
+            thread.thread_id,
+            "Active prompt",
+            client_request_id="explicit-queue-active",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+
+        queued = broker.submit_prompt(
+            thread.thread_id,
+            "Queued prompt",
+            client_request_id="explicit-queue-item",
+            follow_up_mode="queue",
+        )
+        assert queued.status == "queued"
+        replay = broker.submit_prompt(
+            thread.thread_id,
+            "Queued prompt",
+            client_request_id="explicit-queue-item",
+            follow_up_mode="queue",
+        )
+        assert replay.run_id == queued.run_id
+        assert [item.run_id for item in broker.list_queued_prompts(thread.thread_id)] == [
+            queued.run_id
+        ]
+
+        edited = broker.update_queued_prompt(
+            thread.thread_id,
+            queued.run_id,
+            "Edited queued prompt",
+            expected_revision=1,
+        )
+        assert edited.prompt == "Edited queued prompt"
+        assert edited.revision == 2
+        updated_messages = [
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "message.updated"
+            and event.payload.get("run_id") == queued.run_id
+        ]
+        assert len(updated_messages) == 1
+        assert updated_messages[0].payload["text"] == "Edited queued prompt"
+        assert updated_messages[0].payload["message_sequence"] == next(
+            event.sequence
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "message.created"
+            and event.payload.get("run_id") == queued.run_id
+        )
+        with pytest.raises(QueuedPromptRevisionConflictError):
+            broker.update_queued_prompt(
+                thread.thread_id,
+                queued.run_id,
+                "Stale edit",
+                expected_revision=1,
+            )
+        assert broker.cancel_queued_prompt(thread.thread_id, queued.run_id).status == "cancelled"
+        removed_messages = [
+            event
+            for event in storage.list_thread_events(thread.thread_id)
+            if event.event_type == "message.removed"
+            and event.payload.get("run_id") == queued.run_id
+        ]
+        assert len(removed_messages) == 1
+        assert removed_messages[0].payload["message_sequence"] == updated_messages[0].payload[
+            "message_sequence"
+        ]
+        assert storage.event_store.search_transcript_messages(
+            query="edited queued prompt",
+            thread_ids=(thread.thread_id,),
+            before_cursor=None,
+            limit=10,
+        ) == []
+        with pytest.raises(QueuedPromptNotFoundError):
+            broker.cancel_queued_prompt(thread.thread_id, queued.run_id)
+
+        next_queued = broker.submit_prompt(
+            thread.thread_id,
+            "Claim this queued prompt",
+            client_request_id="explicit-queue-next",
+            follow_up_mode="queue",
+        )
+        assert next_queued.status == "queued"
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 2)
+        _wait_until(
+            lambda: storage.load_thread(thread.thread_id).active_run_id
+            == next_queued.run_id
+        )
+        started = _requests(client, "turn/start")
+        assert len(started) == 2
+        assert started[1]["input"][0]["text"] == "Claim this queued prompt"
+        assert started[1]["threadId"] == remote_thread_id
+        assert broker.runtime_snapshot().queued_prompts == 0
+        assert active.run_id != next_queued.run_id
+    finally:
+        broker.close()
+
+
+def test_plan_turn_uses_native_mode_and_read_only_execution_policy(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
+    client = ValidatorBackedAppServer()
+    client.enable_experimental_api = True
+    client.supports_collaboration_mode = True
+    broker = _broker(storage, client)
+    try:
+        plan = broker.submit_prompt(
+            thread.thread_id,
+            "Review the approach",
+            client_request_id="native-plan-run",
+            collaboration_mode="plan",
+        )
+        _active_ids(storage, thread.thread_id)
+        start = _requests(client, "turn/start")[0]
+        assert plan.collaboration_mode == "plan"
+        assert start["collaborationMode"] == {
+            "mode": "plan",
+            "settings": {
+                "model": "gpt-5.6-codex",
+                "reasoning_effort": "high",
+                "developer_instructions": None,
+            },
+        }
+        assert start["sandboxPolicy"]["type"] == "readOnly"
+        assert start["sandboxPolicy"]["networkAccess"] is False
+        assert thread.mode == RunMode.EDIT
+        assert storage.load_thread(thread.thread_id).collaboration_mode == "plan"
+        assert broker.supports_plan_mode is True
+    finally:
+        broker.close()
+
+
+def test_plan_mode_is_rejected_when_native_schema_capability_is_absent(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client)
+    try:
+        assert broker.supports_plan_mode is False
+        with pytest.raises(RuntimeCollaborationModeUnavailableError):
+            broker.submit_prompt(
+                thread.thread_id,
+                "Review only",
+                client_request_id="unsupported-plan-run",
+                collaboration_mode="plan",
+            )
+        assert client.requests == []
+        assert storage.load_thread(thread.thread_id).collaboration_mode == "default"
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize(
+    ("semantic", "capability"),
+    [
+        ({"follow_up_mode": "queue"}, "prompt_queue_v1"),
+        ({"collaboration_mode": "default"}, "plan_mode_v1"),
+        ({"collaboration_mode": "plan"}, "plan_mode_v1"),
+    ],
+)
+def test_prompt_route_rejects_explicit_semantics_without_negotiated_capability(
+    tmp_path: Path,
+    semantic: dict[str, str],
+    capability: str,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+
+    class Runner:
+        submitted = False
+
+        def submit_prompt(self, *_args: Any, **_kwargs: Any) -> None:
+            self.submitted = True
+            raise AssertionError("unsupported prompt must not be submitted")
+
+    runner = Runner()
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.storage = storage
+    app.state.runner = runner
+    app.state.feature_capabilities = ()
+    app.include_router(prompt_routes.router)
+    with TestClient(app) as client:
+        response = client.post(
+            f"/threads/{thread.thread_id}/prompts",
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+            json={
+                "prompt": "Queue this",
+                "client_request_id": "route-queue-request",
+                **semantic,
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["capability"] == capability
+    assert runner.submitted is False
+
+
+def test_explicit_queue_survives_broker_restart_without_duplicate_dispatch(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="DurablePromptQueue")
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(storage, original_client)
+    original_broker.submit_prompt(
+        active_thread.thread_id,
+        "Hold runtime while queueing",
+        client_request_id="durable-queue-active",
+    )
+    _active_ids(storage, active_thread.thread_id)
+    queued = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "Resume after restart",
+        client_request_id="durable-queue-item",
+        follow_up_mode="queue",
+    )
+    assert queued.status == "queued"
+
+    _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+
+    recovered_client = ValidatorBackedAppServer()
+    recovered_broker = _broker(storage, recovered_client)
+    try:
+        _wait_until(lambda: len(_requests(recovered_client, "turn/start")) == 1)
+        replay = recovered_broker.submit_prompt(
+            queued_thread.thread_id,
+            "Resume after restart",
+            client_request_id="durable-queue-item",
+            follow_up_mode="queue",
+        )
+        assert replay.run_id == queued.run_id
+        assert len(_requests(recovered_client, "turn/start")) == 1
+        assert recovered_broker.list_queued_prompts(queued_thread.thread_id) == []
+        assert storage.load_thread(queued_thread.thread_id).active_run_id == queued.run_id
+    finally:
+        recovered_broker.close()
+
+
+def test_plan_denies_command_and_file_approvals_but_keeps_questions_and_execute(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
+    client = ValidatorBackedAppServer()
+    client.enable_experimental_api = True
+    client.supports_collaboration_mode = True
+    broker = _broker(storage, client)
+    workspace = str(storage.resolve_workspace_path(thread.workspace_path))
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Review without implementing",
+            client_request_id="plan-approval-run",
+            collaboration_mode="plan",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        client.emit_notification(
+            "item/fileChange/patchUpdated",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "plan-file-approval",
+                "changes": [
+                    {
+                        "path": "src/app.py",
+                        "diff": "@@ -1 +1 @@\n-old\n+new\n",
+                        "kind": {"type": "update", "move_path": None},
+                    }
+                ],
+            },
+        )
+        assert client.emit_request(
+            "item/fileChange/requestApproval",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "plan-file-approval",
+                "reason": "Update workspace file",
+                "startedAtMs": 1_783_936_800_000,
+            },
+        ) == {"decision": "decline"}
+        assert client.emit_request(
+            "item/commandExecution/requestApproval",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "plan-command-approval",
+                "command": "python -c \"Path('src/app.py').write_text('bad')\"",
+                "commandActions": [
+                    {
+                        "type": "listFiles",
+                        "command": "python -c \"Path('src/app.py').write_text('bad')\"",
+                        "path": workspace,
+                    }
+                ],
+                "cwd": workspace,
+                "startedAtMs": 1_783_936_800_000,
+            },
+        ) == {"decision": "decline"}
+        assert broker.pending_interactions(thread.thread_id) == ()
+
+        assert client.emit_request(
+            "item/tool/requestUserInput",
+            {
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "itemId": "plan-question",
+                "isBlocking": True,
+                "questions": [
+                    {
+                        "id": "scope",
+                        "header": "Scope",
+                        "question": "Which files should the plan cover?",
+                        "options": [
+                            {"label": "Source", "description": "Source files only."}
+                        ],
+                        "isOther": False,
+                        "isSecret": False,
+                    }
+                ],
+            },
+        ) is DEFERRED_RESPONSE
+        pending_question = _pending_one(broker, thread.thread_id)
+        broker.answer_user_input(
+            thread_id=thread.thread_id,
+            interaction_id=pending_question["interaction_id"],
+            answers={"scope": ["Source"]},
+            client_request_id="plan-question-answer",
+        )
+        _wait_until(lambda: len(client.responses) == 1)
+
+        _complete(client, remote_thread_id=remote_thread_id, turn_id=turn_id)
+        _wait_until(lambda: broker.runtime_snapshot().active_turns == 0)
+        execute = broker.submit_prompt(
+            thread.thread_id,
+            "Implement the reviewed plan",
+            client_request_id="execute-after-plan-run",
+            collaboration_mode="default",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 2)
+        _execute_run_id, execute_remote_thread, execute_turn = _active_ids(
+            storage, thread.thread_id
+        )
+        assert execute.collaboration_mode == "default"
+        assert _requests(client, "turn/start")[1].get("collaborationMode") == {
+            "mode": "default",
+            "settings": {
+                "model": "gpt-5.6-codex",
+                "reasoning_effort": "high",
+                "developer_instructions": None,
+            },
+        }
+        assert _requests(client, "turn/start")[1]["sandboxPolicy"] == {
+            "type": "workspaceWrite",
+            "writableRoots": [workspace],
+            "networkAccess": False,
+            "excludeSlashTmp": True,
+            "excludeTmpdirEnvVar": True,
+        }
+        assert client.emit_request(
+            "item/commandExecution/requestApproval",
+            {
+                "threadId": execute_remote_thread,
+                "turnId": execute_turn,
+                "itemId": "execute-command-approval",
+                "command": "python -m pytest -q",
+                "commandActions": [
+                    {
+                        "type": "listFiles",
+                        "command": "python -m pytest -q",
+                        "path": workspace,
+                    }
+                ],
+                "cwd": workspace,
+                "startedAtMs": 1_783_936_800_000,
+            },
+        ) is DEFERRED_RESPONSE
+        pending_execute = _pending_one(broker, thread.thread_id)
+        assert pending_execute["kind"] == "command_approval"
+        broker.decide_approval(
+            thread_id=thread.thread_id,
+            interaction_id=pending_execute["interaction_id"],
+            decision="decline",
+            client_request_id="execute-approval-decline",
+        )
+        _wait_until(lambda: len(client.responses) == 2)
+    finally:
+        broker.close()
+
+
+def test_plan_browser_tools_allow_research_and_reject_mutations_before_invocation(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path, mode=RunMode.EDIT)
+    client = ValidatorBackedAppServer()
+    client.enable_experimental_api = True
+    client.supports_collaboration_mode = True
+    browser = _BrowserBroker()
+    broker = _broker(
+        storage,
+        client,
+        browser_broker=browser,
+        browser_dynamic_tools_enabled=True,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Research the public documentation",
+            client_request_id="plan-browser-run",
+            collaboration_mode="plan",
+        )
+        run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        base = {
+            "namespace": "ha_browser",
+            "threadId": remote_thread_id,
+            "turnId": turn_id,
+        }
+        assert client.emit_request(
+            "item/tool/call",
+            {
+                **base,
+                "callId": "plan-inspect-call",
+                "tool": "inspect",
+                "arguments": {"session_id": "brs_0123456789abcdef"},
+            },
+        )["success"] is True
+        assert client.emit_request(
+            "item/tool/call",
+            {
+                **base,
+                "callId": "plan-click-call",
+                "tool": "click",
+                "arguments": {
+                    "session_id": "brs_0123456789abcdef",
+                    "selector": "button[type=submit]",
+                },
+            },
+        ) == runtime_broker_module._browser_tool_rejection()
+        assert [tool for _owner, tool, _args in browser.invocations] == ["inspect"]
+        assert browser.invocations[0][0].run_id == run_id
+    finally:
+        broker.close()
+
+
+def test_plan_rejects_host_tool_calls_before_host_invocation(tmp_path: Path) -> None:
+    storage, thread = _storage_and_thread(
+        tmp_path, mode=RunMode.HAOS_FULL_ACCESS
+    )
+    thread.host_access_grant = "a" * 32
+    storage.save_thread(thread)
+
+    class _HostAccessProbe:
+        invocations = 0
+
+        def validate_selection(self, grant_id: str | None) -> None:
+            assert grant_id == "a" * 32
+
+        def active(self, _lease: object) -> bool:
+            return True
+
+        def close_run(self, _run_id: str) -> None:
+            pass
+
+        def invoke(self, _lease: object, _arguments: dict[str, object]) -> dict[str, object]:
+            self.invocations += 1
+            return {"status": "completed", "output": "unexpected"}
+
+    host_access = _HostAccessProbe()
+    client = ValidatorBackedAppServer()
+    client.enable_experimental_api = True
+    client.supports_collaboration_mode = True
+    broker = _broker(storage, client, host_access=host_access)
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Plan a host maintenance task",
+            client_request_id="plan-host-tool-run",
+            collaboration_mode="plan",
+        )
+        _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        response = client.emit_request(
+            "item/tool/call",
+            {
+                "namespace": "ha_host",
+                "threadId": remote_thread_id,
+                "turnId": turn_id,
+                "callId": "plan-host-call",
+                "tool": "execute",
+                "arguments": {"command": "touch /tmp/plan-must-not-write"},
+            },
+        )
+        assert response["success"] is False
+        assert host_access.invocations == 0
     finally:
         broker.close()
 

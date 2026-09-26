@@ -68,6 +68,8 @@ from .routes import (
     prompts,
     runtime_events,
     status,
+    transcript_search,
+    git_review,
     task_actions,
     threads,
 )
@@ -818,8 +820,13 @@ def create_app(
                 "agents_v1",
                 "office_preview_v1",
                 "chat_operations_v1",
+                "transcript_search_v1",
+                "git_review_v1",
+                "prompt_queue_v1",
             ]
         )
+        if getattr(resolved_runner, "supports_plan_mode", False) is True:
+            feature_capabilities.append("plan_mode_v1")
         if resolved_account_profile_store is not None:
             feature_capabilities.append("account_profiles_v1")
             feature_capabilities.append("account_profile_details_v1")
@@ -1089,4 +1096,6 @@ def create_app(
     app.include_router(runtime_events.router)
     app.include_router(status.router)
     app.include_router(threads.router)
+    app.include_router(transcript_search.router)
+    app.include_router(git_review.router)
     return app

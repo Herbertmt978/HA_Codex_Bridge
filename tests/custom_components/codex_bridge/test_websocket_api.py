@@ -458,6 +458,43 @@ async def test_web_search_mode_is_forwarded_server_side_for_prompts_and_manual_r
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("follow_up_mode", "queue"),
+        ("follow_up_mode", "steer"),
+        ("collaboration_mode", "plan"),
+        ("collaboration_mode", "default"),
+    ],
+)
+async def test_send_prompt_rejects_explicit_semantics_without_capability(
+    field: str, value: str
+) -> None:
+    runtime, _broker = _runtime()
+    runtime.client.async_send_prompt = AsyncMock(return_value={"run_id": "run_1"})
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_send_prompt(
+        hass,
+        connection,
+        {
+            "id": 43,
+            "type": f"{DOMAIN}/send_prompt",
+            "thread_id": "thr_1",
+            "prompt": "Review",
+            field: value,
+        },
+    )
+    await hass.finish()
+
+    assert connection.results == []
+    assert connection.errors == [
+        (43, "capabilities_unavailable", "Codex capabilities are temporarily unavailable")
+    ]
+    runtime.client.async_send_prompt.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
     ("capabilities", "mode", "expected_mode"),
     [
         (("web_search_v1",), "live", "live"),

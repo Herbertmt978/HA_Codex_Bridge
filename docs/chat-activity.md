@@ -1,7 +1,9 @@
 # Chat appearance and activity
 
 User messages use black bubbles with white text. Assistant prose stays on the
-page background. Copy is available on fenced code blocks and copies their
+page background and supports safe Markdown headings, lists, quotations and tables.
+Raw HTML and filesystem download links stay inert; indexed file cards retain
+authenticated downloads. Copy is available on fenced code blocks and copies their
 contents, preserving indentation and line breaks.
 
 The desktop side columns are 15% narrower and the central reading column can

@@ -663,6 +663,483 @@ function contextUsage(value) {
   };
 }
 
+// frontend/src/safe-dom.js
+var RASTER_MIME_TYPES = /* @__PURE__ */ new Set([
+  "image/avif",
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp"
+]);
+var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
+  "c",
+  "cfg",
+  "conf",
+  "cpp",
+  "css",
+  "csv",
+  "diff",
+  "env",
+  "h",
+  "ini",
+  "js",
+  "json",
+  "log",
+  "md",
+  "py",
+  "rst",
+  "sh",
+  "sql",
+  "text",
+  "toml",
+  "ts",
+  "tsx",
+  "txt",
+  "yaml",
+  "yml"
+]);
+var PDF_MIME_TYPE = "application/pdf";
+function removeControlChars(value) {
+  return [...value].filter((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint > 31 && codePoint !== 127;
+  }).join("");
+}
+function sanitizeId(value, fallback = "") {
+  const text3 = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
+  return text3.slice(0, 200) || fallback;
+}
+function sanitizeFilename(value, fallback = "download") {
+  const text3 = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
+  return (text3 || fallback).slice(0, 255);
+}
+function sanitizeUrl(value, { base, allowRemote = false } = {}) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  let parsed;
+  try {
+    const origin = base || globalThis.location?.origin || "http://ha.invalid";
+    parsed = new URL(value, origin);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  if (!allowRemote) {
+    try {
+      if (parsed.origin !== new URL(base || globalThis.location?.origin || "http://ha.invalid").origin) return null;
+    } catch {
+      return null;
+    }
+  }
+  parsed.username = "";
+  parsed.password = "";
+  return parsed.href;
+}
+function sanitizeBlobUrl(value, { origin } = {}) {
+  if (typeof value !== "string" || !value.startsWith("blob:")) return null;
+  try {
+    const parsed = new URL(value);
+    if (origin && parsed.origin !== origin) return null;
+    return parsed.href;
+  } catch {
+    return null;
+  }
+}
+function extensionOf(filename) {
+  const name = String(filename ?? "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1) : "";
+}
+function effectivePreviewMime(artifact = {}, blob = {}) {
+  const blobMime = String(blob?.type || "").toLowerCase().split(";", 1)[0].trim();
+  const artifactMime = String(artifact?.mime_type || "").toLowerCase().split(";", 1)[0].trim();
+  return blobMime && blobMime !== "application/octet-stream" ? blobMime : artifactMime || blobMime;
+}
+function isPdfArtifactCandidate(artifact = {}, blob = {}) {
+  const mime = effectivePreviewMime(artifact, blob);
+  const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
+  return mime === PDF_MIME_TYPE || extensionOf(filename) === "pdf";
+}
+async function hasValidPdfHeader(blob) {
+  if (!(blob instanceof Blob) || blob.size < 5) return false;
+  const bytes = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+  return bytes[0] === 37 && bytes[1] === 80 && bytes[2] === 68 && bytes[3] === 70 && bytes[4] === 45;
+}
+function previewDescriptor(artifact = {}, blob = {}, { validatedPdf = false } = {}) {
+  const mime = effectivePreviewMime(artifact, blob);
+  const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
+  const base = { artifactId: sanitizeId(artifact?.artifact_id), filename, contentType: mime || "application/octet-stream" };
+  if (validatedPdf && isPdfArtifactCandidate(artifact, blob)) {
+    return { ...base, kind: "pdf", contentType: PDF_MIME_TYPE, url: null };
+  }
+  if (RASTER_MIME_TYPES.has(mime)) return { ...base, kind: "image", url: null };
+  if (mime.startsWith("text/") && mime !== "text/html" && mime !== "text/xml") return { ...base, kind: "text", text: "" };
+  if (TEXT_EXTENSIONS.has(extensionOf(filename)) && !mime.includes("html") && !mime.includes("svg") && !mime.includes("xml")) {
+    return { ...base, kind: "text", text: "" };
+  }
+  return { ...base, kind: "binary" };
+}
+function createPreviewElement(document2, descriptor, { blobUrl } = {}) {
+  if (!document2 || !descriptor) return null;
+  if (descriptor.kind === "text") {
+    const pre = document2.createElement("pre");
+    pre.textContent = String(descriptor.text ?? "");
+    return pre;
+  }
+  if (descriptor.kind === "image") {
+    const url = sanitizeBlobUrl(blobUrl || descriptor.url, { origin: document2.defaultView?.location?.origin });
+    if (!url || !RASTER_MIME_TYPES.has(descriptor.contentType)) return null;
+    const image = document2.createElement("img");
+    image.src = url;
+    image.alt = descriptor.filename || "artifact preview";
+    return image;
+  }
+  if (descriptor.kind === "pdf") return null;
+  const empty = document2.createElement("div");
+  empty.textContent = `${descriptor.filename || "Artifact"} preview unavailable`;
+  return empty;
+}
+
+// frontend/src/markdown.js
+var MAX_MARKDOWN_LENGTH = 2e5;
+function element2(document2, name, text3) {
+  const node2 = document2.createElement(name);
+  if (text3 !== void 0) node2.textContent = text3;
+  return node2;
+}
+function safeLink(document2, destination, label) {
+  const base = document2.defaultView?.location?.origin;
+  const target = destination.startsWith("<") && destination.endsWith(">") ? destination.slice(1, -1) : destination;
+  if (/^(?:file|sandbox):/iu.test(target) || /^(?:[a-z]:[\\/]|\\\\|\/\/)/iu.test(target) || /^\/(?:config\/workspaces|workspace)(?:\/|$)/iu.test(target)) return null;
+  let input2;
+  try {
+    input2 = new URL(target, base || "http://ha.invalid");
+  } catch {
+    return null;
+  }
+  if (input2.username || input2.password) return null;
+  const href = sanitizeUrl(target, { base, allowRemote: true });
+  if (!href) return null;
+  const parsed = new URL(href);
+  const currentOrigin = base ? new URL(base).origin : null;
+  if (parsed.username || parsed.password || parsed.protocol === "http:" && parsed.origin !== currentOrigin) return null;
+  const link2 = element2(document2, "a", label);
+  link2.href = href;
+  if (parsed.origin !== currentOrigin) {
+    link2.target = "_blank";
+    link2.rel = "noopener noreferrer";
+  }
+  return link2;
+}
+function appendText(document2, parent, value) {
+  if (value) parent.append(document2.createTextNode(value));
+}
+function renderInline(document2, parent, source) {
+  const length = source.length;
+  const escaped = new Uint8Array(length);
+  let slashCount = 0;
+  for (let index2 = 0; index2 < length; index2 += 1) {
+    escaped[index2] = slashCount % 2;
+    slashCount = source[index2] === "\\" ? slashCount + 1 : 0;
+  }
+  const tracked = ["[", "]", "(", ")", "`", "*", "_", "~", "\n"];
+  const nextAt = /* @__PURE__ */ Object.create(null);
+  for (const character of tracked) {
+    const next = new Int32Array(length + 1);
+    next.fill(-1);
+    let nearest = -1;
+    for (let index2 = length - 1; index2 >= 0; index2 -= 1) {
+      if (source[index2] === character && !escaped[index2]) nearest = index2;
+      next[index2] = nearest;
+    }
+    nextAt[character] = next;
+  }
+  const tickRuns = [];
+  for (let index2 = 0; index2 < length; ) {
+    if (source[index2] !== "`" || escaped[index2]) {
+      index2 += 1;
+      continue;
+    }
+    let end = index2 + 1;
+    while (end < length && source[end] === "`") end += 1;
+    tickRuns.push({ start: index2, width: end - index2 });
+    index2 = end;
+  }
+  const nextTickRun = /* @__PURE__ */ new Map();
+  const closestTickByWidth = /* @__PURE__ */ new Map();
+  for (let index2 = tickRuns.length - 1; index2 >= 0; index2 -= 1) {
+    const run = tickRuns[index2];
+    nextTickRun.set(run.start, closestTickByWidth.get(run.width) ?? -1);
+    closestTickByWidth.set(run.width, run.start);
+  }
+  const plain = [];
+  let plainStart = 0;
+  let index = 0;
+  const emitToken = (end, node2, text3) => {
+    const before = source.slice(plainStart, index);
+    appendText(document2, parent, before);
+    if (before) plain.push(before);
+    parent.append(node2);
+    plain.push(text3);
+    index = end;
+    plainStart = end;
+  };
+  while (index < length) {
+    if (source[index] === "\\" && index + 1 < length && "\\`*_{}[]()#+-.!>~|".includes(source[index + 1])) {
+      const escapedText = source[index + 1];
+      emitToken(index + 2, document2.createTextNode(escapedText), escapedText);
+      continue;
+    }
+    const image = source[index] === "!" && source[index + 1] === "[" && !escaped[index];
+    const openBracket = image ? index + 1 : index;
+    if ((source[index] === "[" || image) && !escaped[openBracket]) {
+      const closeBracket = nextAt["]"][openBracket + 1];
+      const newline = nextAt["\n"][openBracket + 1];
+      if (closeBracket > openBracket && (newline < 0 || newline > closeBracket) && source[closeBracket + 1] === "(") {
+        const closeParen = nextAt[")"][closeBracket + 2];
+        if (closeParen > closeBracket + 2) {
+          const label = source.slice(openBracket + 1, closeBracket);
+          const destinationText = source.slice(closeBracket + 2, closeParen).trim();
+          const destinationMatch = destinationText.match(/^([^\s]+)(?:\s+"([^"\n]*)")?$/u);
+          if (destinationMatch) {
+            const destination = destinationMatch[1];
+            const title = destinationMatch[2];
+            if (image) {
+              const alt = label || "Image";
+              emitToken(closeParen + 1, document2.createTextNode(alt), alt);
+              continue;
+            }
+            const link2 = safeLink(document2, destination, label);
+            if (link2) {
+              if (title) link2.title = title;
+              emitToken(closeParen + 1, link2, `${label} (${destination})`);
+            } else {
+              const text4 = `${label} (${destination})`;
+              emitToken(closeParen + 1, document2.createTextNode(text4), text4);
+            }
+            continue;
+          }
+          const text3 = `${label} (${destinationText})`;
+          emitToken(closeParen + 1, document2.createTextNode(text3), text3);
+          continue;
+        }
+      }
+    }
+    if (source[index] === "`" && !escaped[index]) {
+      let runEnd = index + 1;
+      while (runEnd < length && source[runEnd] === "`") runEnd += 1;
+      const closeRun = nextTickRun.get(index) ?? -1;
+      if (closeRun > index) {
+        const closeEnd = closeRun + (runEnd - index);
+        const code2 = source.slice(runEnd, closeRun);
+        emitToken(closeEnd, element2(document2, "code", code2), code2);
+        continue;
+      }
+    }
+    const marker = source[index];
+    if ((marker === "*" || marker === "_" || marker === "~") && !escaped[index]) {
+      const width = marker === "~" ? 2 : source[index + 1] === marker ? 2 : 1;
+      if (width === 2 && source[index + 1] !== marker) {
+        index += 1;
+        continue;
+      }
+      const close = nextAt[marker][index + width];
+      if (close > index + width && (width === 1 || source[close + 1] === marker)) {
+        const end = close + width;
+        const content = source.slice(index + width, close);
+        const tag = marker === "~" ? "del" : width === 2 ? "strong" : "em";
+        emitToken(end, element2(document2, tag, content), content);
+        continue;
+      }
+    }
+    index += 1;
+  }
+  appendText(document2, parent, source.slice(plainStart));
+  plain.push(source.slice(plainStart));
+  return plain.join("");
+}
+function isTableDelimiter(line) {
+  return /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/u.test(line);
+}
+function tableCells(line) {
+  const value = line.trim().replace(/^\|/u, "").replace(/\|$/u, "");
+  return value.split(/(?<!\\)\|/u).map((cell) => cell.replace(/\\\|/gu, "|").trim());
+}
+function appendTable(document2, parent, lines2) {
+  const rows = lines2.filter(Boolean).map(tableCells);
+  const plainRows = [];
+  const table = element2(document2, "table");
+  table.className = "assistant-markdown-table";
+  const head = element2(document2, "thead");
+  const headingRow = element2(document2, "tr");
+  plainRows.push([]);
+  for (const value of rows[0] || []) {
+    const cell = element2(document2, "th");
+    cell.scope = "col";
+    plainRows[0].push(renderInline(document2, cell, value));
+    headingRow.append(cell);
+  }
+  head.append(headingRow);
+  table.append(head);
+  const body = element2(document2, "tbody");
+  for (const row of rows.slice(1)) {
+    const tr2 = element2(document2, "tr");
+    const plainRow = [];
+    for (let index = 0; index < (rows[0]?.length || row.length); index += 1) {
+      const cell = element2(document2, "td");
+      plainRow.push(renderInline(document2, cell, row[index] || ""));
+      tr2.append(cell);
+    }
+    plainRows.push(plainRow);
+    body.append(tr2);
+  }
+  table.append(body);
+  parent.append(table);
+  return plainRows.map((row) => row.join("	")).join("\n");
+}
+function fenceInfo(value) {
+  const match = value.trim().match(/^([\w.+-]*)/u);
+  return match?.[1] || "";
+}
+function renderAssistantMarkdown(document2, source, { createCodeBlock } = {}) {
+  if (!document2?.createDocumentFragment) throw new TypeError("A document is required");
+  const original = String(source ?? "");
+  let formattedLength = Math.min(original.length, MAX_MARKDOWN_LENGTH);
+  if (formattedLength < original.length && original.charCodeAt(formattedLength - 1) >= 55296 && original.charCodeAt(formattedLength - 1) <= 56319 && original.charCodeAt(formattedLength) >= 56320 && original.charCodeAt(formattedLength) <= 57343) {
+    formattedLength += 1;
+  }
+  const markdown = original.slice(0, formattedLength);
+  const overflow = original.slice(formattedLength);
+  const lines2 = markdown.replace(/\r\n?/gu, "\n").split("\n");
+  const fragment = document2.createDocumentFragment();
+  const plainParts = [];
+  let index = 0;
+  while (index < lines2.length) {
+    const line = lines2[index];
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+    const fence = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+    if (fence) {
+      const close = new RegExp(`^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`, "u");
+      const body = [];
+      index += 1;
+      while (index < lines2.length && !close.test(lines2[index])) body.push(lines2[index++]);
+      if (index < lines2.length) index += 1;
+      const code2 = body.length ? `${body.join("\n")}
+` : "";
+      const language = fenceInfo(fence[2]);
+      const node2 = createCodeBlock?.(document2, code2, language) || (() => {
+        const pre = element2(document2, "pre");
+        pre.className = "assistant-markdown-code";
+        const codeNode = element2(document2, "code", code2);
+        if (language) codeNode.dataset.language = language;
+        pre.append(codeNode);
+        return pre;
+      })();
+      fragment.append(node2);
+      plainParts.push(code2);
+      continue;
+    }
+    if (index + 1 < lines2.length && line.includes("|") && isTableDelimiter(lines2[index + 1])) {
+      const tableLines = [line];
+      index += 2;
+      while (index < lines2.length && lines2[index].trim() && lines2[index].includes("|")) tableLines.push(lines2[index++]);
+      plainParts.push(appendTable(document2, fragment, tableLines));
+      continue;
+    }
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$/u);
+    if (heading) {
+      const node2 = element2(document2, `h${heading[1].length}`);
+      node2.className = "assistant-markdown-heading";
+      const headingText = renderInline(document2, node2, heading[2]);
+      fragment.append(node2);
+      plainParts.push(headingText);
+      index += 1;
+      continue;
+    }
+    const listMatch = line.match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/u);
+    if (listMatch) {
+      const ordered = /^\d/u.test(listMatch[1]);
+      const list = element2(document2, ordered ? "ol" : "ul");
+      list.className = "assistant-markdown-list";
+      const listPlain = [];
+      while (index < lines2.length) {
+        const itemMatch = lines2[index].match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/u);
+        if (!itemMatch || /^\d/u.test(itemMatch[1]) !== ordered) break;
+        const item = element2(document2, "li");
+        const itemText = renderInline(document2, item, itemMatch[2]);
+        list.append(item);
+        listPlain.push(`${ordered ? `${list.children.length}.` : "•"} ${itemText}`);
+        index += 1;
+      }
+      fragment.append(list);
+      plainParts.push(listPlain.join("\n"));
+      continue;
+    }
+    if (/^\s*>/u.test(line)) {
+      const quote = element2(document2, "blockquote");
+      quote.className = "assistant-markdown-quote";
+      const quotePlain = [];
+      while (index < lines2.length && /^\s*>/u.test(lines2[index])) {
+        const text3 = lines2[index++].replace(/^\s*>\s?/u, "");
+        const paragraph2 = element2(document2, "p");
+        const paragraphText2 = renderInline(document2, paragraph2, text3);
+        quote.append(paragraph2);
+        quotePlain.push(paragraphText2);
+      }
+      fragment.append(quote);
+      plainParts.push(quotePlain.join("\n"));
+      continue;
+    }
+    const paragraphLines = [line];
+    index += 1;
+    while (index < lines2.length && lines2[index].trim() && !/^\s{0,3}(?:#{1,6}\s|```|~~~|>|[-+*]\s|\d+[.)]\s)/u.test(lines2[index])) {
+      if (index + 1 < lines2.length && lines2[index].includes("|") && isTableDelimiter(lines2[index + 1])) break;
+      paragraphLines.push(lines2[index++]);
+    }
+    const paragraph = element2(document2, "p");
+    paragraph.className = "assistant-markdown-paragraph";
+    const paragraphText = paragraphLines.map((part, lineIndex) => {
+      if (lineIndex) paragraph.append(element2(document2, "br"));
+      return renderInline(document2, paragraph, part);
+    });
+    fragment.append(paragraph);
+    plainParts.push(paragraphText.join("\n"));
+  }
+  if (overflow) {
+    const notice = element2(document2, "p", "The rest of this response is shown as plain text because it is too long to format safely.");
+    notice.className = "assistant-markdown-overflow-notice";
+    const remainder = element2(document2, "pre", overflow);
+    remainder.className = "assistant-markdown-overflow";
+    fragment.append(notice, remainder);
+    plainParts.push(overflow);
+  }
+  fragment.plainText = plainParts.filter(Boolean).join("\n\n");
+  return fragment;
+}
+var assistantMarkdownStyles = `
+  .assistant-markdown-paragraph { margin: 0 0 0.8em; overflow-wrap: anywhere; }
+  .assistant-markdown-paragraph:last-child { margin-bottom: 0; }
+  .assistant-markdown-heading { margin: 1.1em 0 0.45em; line-height: 1.25; overflow-wrap: anywhere; }
+  .assistant-markdown-heading:first-child { margin-top: 0; }
+  .assistant-markdown-list { margin: 0.5em 0 0.85em; padding-inline-start: 1.5em; }
+  .assistant-markdown-list li + li { margin-top: 0.25em; }
+  .assistant-markdown-quote { margin: 0.65em 0; padding-inline-start: 0.9em; border-inline-start: 3px solid var(--border-color); color: var(--muted-color); }
+  .assistant-markdown-quote p { margin: 0.35em 0; }
+  .assistant-markdown-table { display: block; width: max-content; max-width: 100%; margin: 0.75em 0; border-collapse: collapse; overflow-x: auto; }
+  .assistant-markdown-table th, .assistant-markdown-table td { padding: 0.45em 0.65em; border: 1px solid var(--border-color); text-align: start; vertical-align: top; overflow-wrap: anywhere; }
+  .assistant-markdown-table th { background: var(--surface-muted); }
+  .assistant-markdown-code { max-width: 100%; margin: 0.75em 0; padding: 0.8em; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-muted); white-space: pre; }
+  .assistant-markdown-code code, .assistant-markdown-paragraph code { font-family: var(--code-font-family, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
+  .assistant-markdown-paragraph code { padding: 0.08em 0.3em; border-radius: 4px; background: var(--surface-muted); overflow-wrap: anywhere; }
+  .assistant-markdown-paragraph a { overflow-wrap: anywhere; }
+  .assistant-markdown-overflow-notice { margin: 0.75em 0 0.35em; color: var(--muted-color); font-size: var(--font-caption-size); }
+  .assistant-markdown-overflow { max-width: 100%; max-height: 32rem; margin: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 600px) { .assistant-markdown-table { max-width: 100%; } .assistant-markdown-table th, .assistant-markdown-table td { padding: 0.35em 0.45em; } }
+`;
+
 // frontend/src/chat-resources.js
 function chatResources(events = []) {
   const pullRequests = /* @__PURE__ */ new Map();
@@ -10360,122 +10837,6 @@ function savePreferences(storage, key, value) {
   const preferences = normalisePreferences(value);
   storage.setItem(key, JSON.stringify(preferences));
   return preferences;
-}
-
-// frontend/src/safe-dom.js
-var RASTER_MIME_TYPES = /* @__PURE__ */ new Set([
-  "image/avif",
-  "image/bmp",
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp"
-]);
-var TEXT_EXTENSIONS = /* @__PURE__ */ new Set([
-  "c",
-  "cfg",
-  "conf",
-  "cpp",
-  "css",
-  "csv",
-  "diff",
-  "env",
-  "h",
-  "ini",
-  "js",
-  "json",
-  "log",
-  "md",
-  "py",
-  "rst",
-  "sh",
-  "sql",
-  "text",
-  "toml",
-  "ts",
-  "tsx",
-  "txt",
-  "yaml",
-  "yml"
-]);
-var PDF_MIME_TYPE = "application/pdf";
-function removeControlChars(value) {
-  return [...value].filter((character) => {
-    const codePoint = character.codePointAt(0);
-    return codePoint > 31 && codePoint !== 127;
-  }).join("");
-}
-function sanitizeId(value, fallback = "") {
-  const text3 = removeControlChars(String(value ?? "")).replace(/[^A-Za-z0-9_.:-]/g, "").trim();
-  return text3.slice(0, 200) || fallback;
-}
-function sanitizeFilename(value, fallback = "download") {
-  const text3 = removeControlChars(String(value ?? "")).replace(/[\\/]/g, "_").replace(/["']/g, "").trim().replace(/^\.+$/, "");
-  return (text3 || fallback).slice(0, 255);
-}
-function sanitizeBlobUrl(value, { origin } = {}) {
-  if (typeof value !== "string" || !value.startsWith("blob:")) return null;
-  try {
-    const parsed = new URL(value);
-    if (origin && parsed.origin !== origin) return null;
-    return parsed.href;
-  } catch {
-    return null;
-  }
-}
-function extensionOf(filename) {
-  const name = String(filename ?? "").toLowerCase();
-  const dot = name.lastIndexOf(".");
-  return dot >= 0 ? name.slice(dot + 1) : "";
-}
-function effectivePreviewMime(artifact = {}, blob = {}) {
-  const blobMime = String(blob?.type || "").toLowerCase().split(";", 1)[0].trim();
-  const artifactMime = String(artifact?.mime_type || "").toLowerCase().split(";", 1)[0].trim();
-  return blobMime && blobMime !== "application/octet-stream" ? blobMime : artifactMime || blobMime;
-}
-function isPdfArtifactCandidate(artifact = {}, blob = {}) {
-  const mime = effectivePreviewMime(artifact, blob);
-  const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
-  return mime === PDF_MIME_TYPE || extensionOf(filename) === "pdf";
-}
-async function hasValidPdfHeader(blob) {
-  if (!(blob instanceof Blob) || blob.size < 5) return false;
-  const bytes = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
-  return bytes[0] === 37 && bytes[1] === 80 && bytes[2] === 68 && bytes[3] === 70 && bytes[4] === 45;
-}
-function previewDescriptor(artifact = {}, blob = {}, { validatedPdf = false } = {}) {
-  const mime = effectivePreviewMime(artifact, blob);
-  const filename = sanitizeFilename(artifact?.filename || artifact?.relative_path || "artifact", "artifact");
-  const base = { artifactId: sanitizeId(artifact?.artifact_id), filename, contentType: mime || "application/octet-stream" };
-  if (validatedPdf && isPdfArtifactCandidate(artifact, blob)) {
-    return { ...base, kind: "pdf", contentType: PDF_MIME_TYPE, url: null };
-  }
-  if (RASTER_MIME_TYPES.has(mime)) return { ...base, kind: "image", url: null };
-  if (mime.startsWith("text/") && mime !== "text/html" && mime !== "text/xml") return { ...base, kind: "text", text: "" };
-  if (TEXT_EXTENSIONS.has(extensionOf(filename)) && !mime.includes("html") && !mime.includes("svg") && !mime.includes("xml")) {
-    return { ...base, kind: "text", text: "" };
-  }
-  return { ...base, kind: "binary" };
-}
-function createPreviewElement(document2, descriptor, { blobUrl } = {}) {
-  if (!document2 || !descriptor) return null;
-  if (descriptor.kind === "text") {
-    const pre = document2.createElement("pre");
-    pre.textContent = String(descriptor.text ?? "");
-    return pre;
-  }
-  if (descriptor.kind === "image") {
-    const url = sanitizeBlobUrl(blobUrl || descriptor.url, { origin: document2.defaultView?.location?.origin });
-    if (!url || !RASTER_MIME_TYPES.has(descriptor.contentType)) return null;
-    const image = document2.createElement("img");
-    image.src = url;
-    image.alt = descriptor.filename || "artifact preview";
-    return image;
-  }
-  if (descriptor.kind === "pdf") return null;
-  const empty = document2.createElement("div");
-  empty.textContent = `${descriptor.filename || "Artifact"} preview unavailable`;
-  return empty;
 }
 
 // frontend/src/protocol.js
@@ -32320,11 +32681,22 @@ function snippet(value) {
   if (compact.length <= SNIPPET_LIMIT) return compact;
   return `${compact.slice(0, SNIPPET_LIMIT - 1).trimEnd()}…`;
 }
+function projectTranscriptMessages(events = []) {
+  const edits = /* @__PURE__ */ new Map();
+  const removed = /* @__PURE__ */ new Set();
+  for (const event of events) {
+    if (event?.event_type === "message.removed" && Number.isSafeInteger(event.payload?.message_sequence)) removed.add(event.payload.message_sequence);
+    if (event?.event_type === "message.updated" && Number.isSafeInteger(event.payload?.message_sequence) && typeof event.payload?.text === "string") {
+      edits.set(event.payload.message_sequence, event.payload.text);
+    }
+  }
+  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence) ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
+}
 function projectConversationTurns(events = []) {
   const turns = [];
   const byRun = /* @__PURE__ */ new Map();
   let lastUserTurn = null;
-  for (const event of Array.isArray(events) ? events : []) {
+  for (const event of projectTranscriptMessages(Array.isArray(events) ? events : [])) {
     const type2 = event?.event_type;
     if (!Number.isSafeInteger(event?.sequence) || event.sequence <= 0) continue;
     const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
@@ -32507,14 +32879,14 @@ async function fetchInlineImage(url, { token = "", signal, fetchImpl = fetch } =
   }
   return new Blob(chunks);
 }
-function element2(tag, className, text3 = "") {
+function element3(tag, className, text3 = "") {
   const node2 = document.createElement(tag);
   node2.className = className;
   node2.textContent = text3;
   return node2;
 }
 function button(label, click) {
-  const node2 = element2("button", "inline-image-action", label);
+  const node2 = element3("button", "inline-image-action", label);
   node2.type = "button";
   node2.setAttribute("aria-label", label);
   node2.addEventListener("click", click);
@@ -32577,20 +32949,20 @@ var InlineImageController = class {
       state = { key, kind, record, status: "idle", nodes: /* @__PURE__ */ new Set(), controller: new AbortController() };
       this.records.set(key, state);
     }
-    const card = element2("figure", `inline-image-card${compact ? " compact" : ""}`);
+    const card = element3("figure", `inline-image-card${compact ? " compact" : ""}`);
     card.dataset.inlineImageKey = key;
     const open = button(`Preview ${imageFilename(record.filename)}`, () => this.open(state, open));
     open.className = "inline-image-thumbnail";
-    const placeholder = element2("span", "inline-image-placeholder", "Image preview");
+    const placeholder = element3("span", "inline-image-placeholder", "Image preview");
     open.append(placeholder);
-    const caption = element2("figcaption", "inline-image-caption", imageFilename(record.filename));
-    const actions = element2("div", "inline-image-actions");
+    const caption = element3("figcaption", "inline-image-caption", imageFilename(record.filename));
+    const actions = element3("div", "inline-image-actions");
     const options = button("Image actions", () => this.openMenu(state, options));
     options.textContent = "⋯";
     options.setAttribute("aria-haspopup", "menu");
     options.setAttribute("aria-label", `Actions for ${caption.textContent}`);
     actions.append(options);
-    const status = element2("span", "inline-image-status");
+    const status = element3("span", "inline-image-status");
     status.setAttribute("role", "status");
     card.append(open, caption, actions, status);
     const node2 = { card, open, placeholder, status };
@@ -32652,7 +33024,7 @@ var InlineImageController = class {
       if (state.url) {
         let image = node2.open.querySelector("img");
         if (!image) {
-          image = element2("img", "inline-image-raster");
+          image = element3("img", "inline-image-raster");
           image.alt = imageFilename(state.record.filename, "Image");
           image.draggable = false;
           node2.open.replaceChildren(image);
@@ -32747,7 +33119,7 @@ var InlineImageController = class {
       state.url = null;
       state.blob = null;
       state.status = "idle";
-      for (const node2 of state.nodes) node2.open.replaceChildren(element2("span", "inline-image-placeholder", "Open image to reload preview"));
+      for (const node2 of state.nodes) node2.open.replaceChildren(element3("span", "inline-image-placeholder", "Open image to reload preview"));
     }
   }
   setPending(files) {
@@ -32776,7 +33148,7 @@ var InlineImageController = class {
   }
   openMenu(state, trigger, position) {
     this.closeMenu();
-    const menu = element2("div", "inline-image-menu");
+    const menu = element3("div", "inline-image-menu");
     menu.setAttribute("role", "menu");
     menu.setAttribute("aria-label", "Image actions");
     const items = [button("Open image", () => {
@@ -32857,16 +33229,16 @@ var InlineImageController = class {
     if (this.pendingModalRequest === request) this.pendingModalRequest = null;
     if (!loaded || generation !== this.generation || request !== this.modalRequest) return;
     this._removeModal();
-    const modal = element2("dialog", "inline-image-dialog");
+    const modal = element3("dialog", "inline-image-dialog");
     modal.setAttribute("aria-label", `Image preview: ${imageFilename(state.record.filename)}`);
-    const controls = element2("div", "inline-image-dialog-controls");
+    const controls = element3("div", "inline-image-dialog-controls");
     const close = button("Close", () => this.closeModal());
-    controls.append(element2("strong", "inline-image-dialog-name", imageFilename(state.record.filename)), button("Copy image", () => this.copy(state)), button("Download", () => this.download(state)), close);
-    const image = element2("img", "inline-image-full");
+    controls.append(element3("strong", "inline-image-dialog-name", imageFilename(state.record.filename)), button("Copy image", () => this.copy(state)), button("Download", () => this.download(state)), close);
+    const image = element3("img", "inline-image-full");
     image.src = loaded.url;
     image.alt = imageFilename(state.record.filename);
     image.addEventListener("load", () => this.placeModal());
-    const status = element2("p", "inline-image-status");
+    const status = element3("p", "inline-image-status");
     status.setAttribute("role", "status");
     modal.append(controls, image, status);
     this.root.append(modal);
@@ -32988,7 +33360,7 @@ var InlineImageController = class {
       return;
     }
     const url = URL.createObjectURL(blob);
-    const anchor = element2("a", "");
+    const anchor = element3("a", "");
     anchor.href = url;
     anchor.download = imageFilename(state.record.filename);
     try {
@@ -36675,6 +37047,18 @@ async function readBoundedPreviewResponse(response, maximumBytes) {
 var template = document.createElement("template");
 template.innerHTML = `
   <style>
+    ${assistantMarkdownStyles}
+    #transcript-search { padding: 8px; }
+    .transcript-search-result { display: flex; flex-direction: column; text-align: left; width: 100%; margin: 6px 0; white-space: normal; overflow-wrap: anywhere; }
+    #collaboration-controls { flex-wrap: wrap; padding: 6px; }
+    #collaboration-controls[hidden], #prompt-queue[hidden], #git-composer-review[hidden], #git-review-button[hidden], #implement-plan-button[hidden], #plan-availability[hidden] { display: none !important; }
+    #prompt-queue { max-height: 220px; overflow: auto; padding: 8px; }
+    .queued-prompt textarea { display: block; width: 100%; box-sizing: border-box; }
+    #git-review { padding: 10px; min-width: 0; }
+    #git-review .row-actions { flex-wrap: wrap; }
+    #git-review input { max-width: 180px; }
+    .git-diff { max-width: 100%; overflow: auto; white-space: pre; font-size: 12px; }
+    #git-review summary { overflow-wrap: anywhere; cursor: pointer; padding: 6px; }
     ${SELECTION_STYLES}
     :host {
       --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -40888,6 +41272,7 @@ template.innerHTML = `
     .composer-shell .composer .send-button:hover:not(:disabled) { background: color-mix(in srgb, var(--text-color) 85%, var(--surface-bg)); transform: none; }
 
     .composer-shell .composer-diagnostics {
+      display: block;
       grid-column: 2;
       grid-row: 2;
       min-width: 0;
@@ -42090,6 +42475,11 @@ template.innerHTML = `
         </label>
       </div>
       <nav class="desktop-destinations" aria-label="Application destinations" id="desktop-destinations"></nav>
+      <section id="transcript-search" aria-label="Search messages" hidden>
+        <label><input type="checkbox" id="search-archived" /> Include archived chats</label>
+        <div id="transcript-search-results" role="status"></div>
+        <button type="button" id="transcript-search-more" data-action="more-transcript-results" hidden>More matching messages</button>
+      </section>
       <div class="forms-stack">
         <section class="panel-form" id="project-form-panel"></section>
         <section class="panel-form" id="thread-form-panel"></section>
@@ -42157,6 +42547,8 @@ template.innerHTML = `
         </div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+        <section id="prompt-queue" aria-label="Queued messages" hidden></section>
+
       </div>
       <div class="composer-shell">
         <div class="add-menu" id="add-menu" role="group" aria-label="Add to chat" hidden>
@@ -42186,6 +42578,14 @@ template.innerHTML = `
         </div>
         <details class="composer-diagnostics" id="composer-diagnostics" open>
           <summary>Chat settings and limits</summary>
+        <div class="row-actions" id="collaboration-controls">
+          <label id="follow-up-control" hidden>Follow-up <select id="follow-up-mode"><option value="queue">Queue after response</option><option value="steer">Steer active response</option></select></label>
+          <label id="collaboration-control">Collaboration <select id="collaboration-mode"><option value="default">Implement</option><option value="plan" disabled>Plan — unavailable</option></select></label>
+          <button type="button" id="implement-plan-button" data-action="implement-reviewed-plan" hidden>Implement reviewed plan</button>
+          <button type="button" id="git-composer-review" data-action="open-git-review" hidden>Review changes</button>
+          <details class="row-meta" id="plan-availability"><summary>Plan unavailable</summary><p>This runtime does not support selecting native Plan mode. Update the paired App and Integration to use it.</p></details>
+        </div>
+
           <div class="compact-toolbar" id="compact-toolbar"></div>
         </details>
         <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
@@ -42195,6 +42595,12 @@ template.innerHTML = `
       </div>
       <section class="bottom-panel" id="bottom-panel" aria-label="Workspace panel" hidden>
         <div class="bottom-panel-header"><div class="row-actions"><button type="button" data-action="bottom-preview" aria-pressed="true" id="bottom-preview-button">File preview</button><button type="button" data-action="bottom-terminal" aria-pressed="false" id="bottom-terminal-button">Terminal</button></div><button class="icon-button small" type="button" data-action="toggle-bottom-panel" aria-label="Hide bottom panel">×</button></div>
+        <div class="row-actions"><button type="button" data-action="open-git-review" id="git-review-button" hidden>Review Git changes</button></div>
+        <section id="git-review" aria-label="Git review" hidden>
+          <div class="row-actions"><label>Scope <select id="git-review-scope"><option value="unstaged">Unstaged</option><option value="staged">Staged</option><option value="commit">Commit</option><option value="branch">Branch</option><option disabled>Last turn — unavailable</option></select></label><label>Reference <input id="git-review-ref" placeholder="HEAD (commit) or branch base" /></label><button type="button" data-action="refresh-git-review">Refresh diff</button></div>
+          <p class="row-meta">Git repository state at refresh. Last-turn review is unavailable because a trusted baseline is not recorded.</p>
+          <div id="git-review-results"></div>
+        </section>
         <div id="bottom-preview"></div>
         <div id="bottom-terminal" hidden>
           <p class="terminal-note">Commands run immediately in this chat's workspace. Network access and private Home Assistant files stay blocked, including in host-access chats. Close the terminal before running Codex or changing workspace files elsewhere.</p>
@@ -42410,6 +42816,20 @@ var CodexBridgePanel = class extends HTMLElement {
     this._draft = "";
     this._drafts = /* @__PURE__ */ new Map();
     this._searchQuery = "";
+    this._transcriptSearchGeneration = 0;
+    this._transcriptSearchResults = [];
+    this._transcriptSearchError = "";
+    this._transcriptSearchCursor = null;
+    this._transcriptSearchHasMore = false;
+    this._transcriptSearchComplete = true;
+    this._searchArchived = false;
+    this._followUpMode = "queue";
+    this._collaborationMode = "default";
+    this._collaborationChoices = /* @__PURE__ */ new Map();
+    this._promptQueues = /* @__PURE__ */ new Map();
+    this._promptQueueGenerations = /* @__PURE__ */ new Map();
+    this._gitReviewGeneration = 0;
+    this._gitReviewThreadId = null;
     this._showProjectForm = false;
     this._showThreadForm = false;
     this._projectFormMode = "create";
@@ -42969,6 +43389,33 @@ var CodexBridgePanel = class extends HTMLElement {
       case "bottom-terminal":
         this._selectBottomTab("terminal");
         break;
+      case "open-git-review":
+        if (!this._bottomPanelOpen) this._toggleBottomPanel();
+        this._selectBottomTab("preview");
+        this.shadowRoot.getElementById("git-review").hidden = false;
+        void this._loadGitReview();
+        break;
+      case "refresh-git-review":
+        void this._loadGitReview();
+        break;
+      case "load-git-file":
+        void this._loadGitFile(actionTarget);
+        break;
+      case "open-search-result":
+        void this._openTranscriptSearchResult(actionTarget);
+        break;
+      case "more-transcript-results":
+        void this._searchTranscript(true);
+        break;
+      case "save-queued-prompt":
+        void this._mutateQueuedPrompt(actionTarget, false);
+        break;
+      case "cancel-queued-prompt":
+        void this._mutateQueuedPrompt(actionTarget, true);
+        break;
+      case "implement-reviewed-plan":
+        void this._implementReviewedPlan();
+        break;
       case "open-terminal":
         void this._terminal.open(this._selectedThreadId);
         break;
@@ -43280,6 +43727,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._searchQuery = target.value;
       this._expandedProjectActions = {};
       this._render();
+      void this._searchTranscript();
       return;
     }
     if (target.id === "project-name-input") {
@@ -43301,6 +43749,22 @@ var CodexBridgePanel = class extends HTMLElement {
   _handleChange(event) {
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (target.id === "search-archived") {
+      this._searchArchived = target.checked;
+      void this._searchTranscript();
+      return;
+    }
+    if (target.id === "follow-up-mode") {
+      this._followUpMode = target.value;
+      this._renderComposerState(this._activeThread);
+      return;
+    }
+    if (target.id === "collaboration-mode") {
+      this._collaborationMode = target.value;
+      this._collaborationChoices.set(this._selectedThreadId, target.value);
+      this._renderComposerState(this._activeThread);
       return;
     }
     if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
@@ -44832,6 +45296,7 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     this._renderNavigationSections();
     this._renderNavigationEmptyState();
+    this._renderTranscriptSearch();
     this._renderToolbar();
     this._renderAttachmentChips();
     this._renderMessages();
@@ -45111,6 +45576,29 @@ var CodexBridgePanel = class extends HTMLElement {
     assistNotice.hidden = !assistManaged;
     assistNotice.classList.toggle("visible", assistManaged);
     promptInput.setAttribute("aria-describedby", assistManaged ? "assist-conversation-notice composer-shortcut-hint composer-status" : "composer-shortcut-hint composer-status");
+    const queueSupported = this._config?.capabilities?.includes("prompt_queue_v1");
+    this.shadowRoot.getElementById("collaboration-controls").hidden = !activeThread || assistManaged;
+    this.shadowRoot.getElementById("follow-up-control").hidden = !queueSupported || !isRunning || assistManaged;
+    this.shadowRoot.getElementById("follow-up-mode").value = this._followUpMode;
+    const planSupported = this._config?.capabilities?.includes("plan_mode_v1");
+    this.shadowRoot.getElementById("collaboration-control").hidden = !planSupported;
+    this._collaborationMode = this._collaborationChoices.get(this._selectedThreadId) || activeThread?.collaboration_mode || "default";
+    this.shadowRoot.getElementById("collaboration-mode").value = this._collaborationMode;
+    const planOption = this.shadowRoot.querySelector('#collaboration-mode option[value="plan"]');
+    planOption.disabled = !planSupported;
+    planOption.textContent = planSupported ? "Plan" : "Plan — unavailable";
+    this.shadowRoot.getElementById("collaboration-mode").disabled = !activeThread || Boolean(mutation) || assistManaged;
+    this.shadowRoot.getElementById("plan-availability").hidden = planSupported;
+    const implement = this.shadowRoot.getElementById("implement-plan-button");
+    implement.hidden = !planSupported || activeThread?.collaboration_mode !== "plan" || isRunning || assistManaged;
+    implement.disabled = Boolean(mutation);
+    this.shadowRoot.getElementById("git-review-button").hidden = !activeThread || !this._config?.capabilities?.includes("git_review_v1");
+    this.shadowRoot.getElementById("git-composer-review").hidden = !activeThread || !this._config?.capabilities?.includes("git_review_v1");
+    if (this._gitReviewThreadId !== this._selectedThreadId) {
+      this.shadowRoot.getElementById("git-review").hidden = true;
+      this.shadowRoot.getElementById("git-review-results").replaceChildren();
+    }
+    this._renderPromptQueue(activeThread);
     const retryable = !assistManaged && mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
     const cancelling = this._cancellingThreads.has(this._selectedThreadId);
@@ -45119,7 +45607,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (promptInput.value !== draft) {
       promptInput.value = draft;
     }
-    promptInput.placeholder = assistManaged ? "Continue this conversation in Assist" : isRunning ? "Steer the running Codex turn" : "Message Codex through Home Assistant";
+    promptInput.placeholder = assistManaged ? "Continue this conversation in Assist" : isRunning ? queueSupported && this._followUpMode === "queue" ? "Queue a message after this response" : "Steer the running Codex turn" : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked || assistManaged;
     if (this._speechRecognition && (this._speechThreadId !== this._selectedThreadId || promptInput.disabled)) {
       this._stopDictation({ abort: true });
@@ -45135,8 +45623,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const hasDraft = Boolean(promptInput.value.trim());
     const stop = isRunning && (!hasDraft || assistManaged) && !mutation;
     sendButton.disabled = !activeThread || cancelling || assistManaged && !stop || locked && !retryable || !stop && !retryable && !hasDraft;
-    const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? "Steer" : "Send";
-    const actionTitle = cancelling ? "Stopping the running Codex turn" : retryable ? "Retry this message safely" : stop ? "Stop the running Codex turn" : isRunning ? "Steer the running Codex turn" : "Send message to Codex";
+    const followUpLabel = queueSupported && this._followUpMode === "queue" ? "Queue" : "Steer";
+    const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? followUpLabel : "Send";
+    const actionTitle = cancelling ? "Stopping the running Codex turn" : retryable ? "Retry this message safely" : stop ? "Stop the running Codex turn" : isRunning ? followUpLabel === "Queue" ? "Queue after the active response" : "Steer the running Codex turn" : "Send message to Codex";
     sendButton.dataset.action = stop || cancelling ? "stop-run" : "send-prompt";
     this._setTrustedButtonContent(sendButton, stop || cancelling ? icons.stop : icons.send, actionLabel);
     const stopButton = this.shadowRoot.getElementById("stop-run-button");
@@ -47000,7 +47489,8 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.replaceChildren();
     }
     const shouldStick = shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
-    const eventsToRender = this._renderedSequence === 0 ? this._events : this._events.filter((item) => item.sequence > this._renderedSequence);
+    const transcriptEvents = projectTranscriptMessages(this._events);
+    const eventsToRender = this._renderedSequence === 0 ? transcriptEvents : transcriptEvents.filter((item) => item.sequence > this._renderedSequence);
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
       this._syncStreamingMessage(messageList, activity);
@@ -47035,7 +47525,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "message.updated", "message.removed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
     const sameThread = this._timelineProjectedThread === this._selectedThreadId;
     const unchangedPrefix = this._timelineEvents === this._events || this._timelineEventCount > 0 && this._events[this._timelineEventCount - 1] === this._timelineLastEvent;
     const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
@@ -47332,6 +47822,7 @@ var CodexBridgePanel = class extends HTMLElement {
     });
   }
   _renderEvent(event) {
+    if (["message.updated", "message.removed"].includes(event.event_type)) return null;
     const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
     if (event.event_type === "message.created") {
       return this._renderMessage(
@@ -47516,7 +48007,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     if (label) bubble.append(this._textElement("span", "message-state row-meta", label));
-    this._renderMessageBody(bubble, String(text3 ?? ""));
+    if (role === "user") this._renderMessageBody(bubble, String(text3 ?? ""));
+    else bubble.append(renderAssistantMarkdown(document, String(text3 ?? ""), { createCodeBlock: (_document, code2, language) => this._markdownCodeBlock(code2, language) }));
     article.append(bubble);
     return article;
   }
@@ -47547,6 +48039,19 @@ var CodexBridgePanel = class extends HTMLElement {
     if (lastIndex < text3.length || !renderedPart) {
       container.append(this._textElement("pre", "bubble-text", text3.slice(lastIndex)));
     }
+  }
+  _markdownCodeBlock(code2, language) {
+    const block = document.createElement("div");
+    block.className = "code-block";
+    const head = document.createElement("div");
+    head.className = "code-head";
+    head.append(this._textElement("span", "", language || "code"));
+    const copy = this._actionButton("copy-button", "copy-code-block", "Copy code");
+    this._appendTrustedIcon(copy, icons.copy);
+    copy.append(this._textElement("span", "", "Copy code"));
+    head.append(copy);
+    block.append(head, this._textElement("pre", "code-text", code2));
+    return block;
   }
   _renderProgress() {
     const container = this.shadowRoot.getElementById("progress-list");
@@ -48795,6 +49300,7 @@ var CodexBridgePanel = class extends HTMLElement {
         return false;
       }
       this._activeThread = thread;
+      void this._loadPromptQueue(threadId);
       this._selectedProjectId = thread.project_id;
       const authoritativeEvents = parseEvents(events).filter(
         (event) => !event.thread_id || event.thread_id === threadId
@@ -49312,6 +49818,199 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setError(error);
     }
   }
+  async _searchTranscript(append = false) {
+    const generation = ++this._transcriptSearchGeneration;
+    const query = this._searchQuery.trim();
+    if (!append) {
+      this._transcriptSearchResults = [];
+      this._transcriptSearchCursor = null;
+      this._transcriptSearchComplete = true;
+    }
+    this._transcriptSearchHasMore = false;
+    this._transcriptSearchError = "";
+    if (!query || !this._config?.capabilities?.includes("transcript_search_v1")) {
+      this._renderTranscriptSearch();
+      return;
+    }
+    this._transcriptSearchError = "Searching messages…";
+    this._renderTranscriptSearch();
+    try {
+      const response = await this._callWS("search_transcript", { q: query, include_archived: this._searchArchived, limit: 50, ...this._transcriptSearchCursor ? { before_cursor: this._transcriptSearchCursor } : {} });
+      if (generation !== this._transcriptSearchGeneration) return;
+      this._transcriptSearchResults = [...this._transcriptSearchResults, ...response.results || []];
+      this._transcriptSearchCursor = response.next_cursor || null;
+      this._transcriptSearchHasMore = response.has_more === true;
+      this._transcriptSearchComplete = response.complete !== false;
+      this._transcriptSearchError = "";
+    } catch {
+      if (generation === this._transcriptSearchGeneration) this._transcriptSearchError = "Message search failed. Change the search to retry.";
+    }
+    if (generation === this._transcriptSearchGeneration) this._renderTranscriptSearch();
+  }
+  _renderTranscriptSearch() {
+    const section2 = this.shadowRoot.getElementById("transcript-search");
+    if (!section2) return;
+    section2.hidden = !this._searchQuery.trim() || !this._config?.capabilities?.includes("transcript_search_v1");
+    this.shadowRoot.getElementById("transcript-search-more").hidden = !this._transcriptSearchHasMore;
+    const results = this.shadowRoot.getElementById("transcript-search-results");
+    results.replaceChildren();
+    if (!this._transcriptSearchComplete) results.append(this._textElement("p", "row-meta", "Some earlier messages are outside this installation's retained searchable history."));
+    for (const result of this._transcriptSearchResults) {
+      const button4 = this._actionButton("transcript-search-result", "open-search-result", "Go to matching message");
+      button4.dataset.threadId = result.thread_id;
+      button4.dataset.sequence = String(result.sequence);
+      button4.append(this._textElement("strong", "", `${result.title || "Chat"}${result.archived_at ? " (archived)" : ""}`), this._textElement("span", "row-meta", result.excerpt));
+      results.append(button4);
+    }
+    if (this._transcriptSearchError || !this._transcriptSearchResults.length) results.append(this._textElement("p", "row-meta", this._transcriptSearchError || "No matching messages."));
+  }
+  async _openTranscriptSearchResult(button4) {
+    const threadId = button4.dataset.threadId;
+    const sequence2 = Number(button4.dataset.sequence);
+    await this._selectThread(threadId);
+    if (this._selectedThreadId !== threadId) return;
+    if (!this.shadowRoot.querySelector(`#message-list [data-sequence="${sequence2}"]`)) {
+      try {
+        const message = await this._callWS("get_transcript_message", { thread_id: threadId, sequence: sequence2 });
+        if (this._selectedThreadId !== threadId) return;
+        const article = this._renderMessage(message.role, message.text, sequence2, "Search match from earlier history", message.timestamp);
+        const list = this.shadowRoot.getElementById("message-list");
+        const next = [...list.querySelectorAll("[data-sequence]")].find((node2) => Number(node2.dataset.sequence) > sequence2);
+        list.insertBefore(article, next || null);
+      } catch {
+        this._setError("This matching message is no longer available. Search again to refresh the results.");
+        return;
+      }
+    }
+    this._jumpToConversationTurn(button4);
+    const target = this.shadowRoot.querySelector(`#message-list [data-sequence="${Number(button4.dataset.sequence)}"]`);
+    if (target) {
+      target.tabIndex = -1;
+      target.focus({ preventScroll: true });
+    }
+  }
+  _renderPromptQueue(thread) {
+    const section2 = this.shadowRoot.getElementById("prompt-queue");
+    if (!section2) return;
+    const prompts = this._promptQueues.get(thread?.thread_id) || [];
+    section2.hidden = !prompts.length || !this._config?.capabilities?.includes("prompt_queue_v1");
+    if (section2.contains(this.shadowRoot.activeElement)) return;
+    section2.replaceChildren(this._textElement("strong", "", "Queued messages"));
+    for (const item of prompts) {
+      const row = document.createElement("div");
+      row.className = "queued-prompt";
+      const input2 = document.createElement("textarea");
+      input2.value = item.prompt;
+      input2.setAttribute("aria-label", "Edit queued message");
+      const save = this._actionButton("", "save-queued-prompt", "Save queued message");
+      save.textContent = "Save";
+      const remove = this._actionButton("", "cancel-queued-prompt", "Remove queued message");
+      remove.textContent = "Remove";
+      for (const button4 of [save, remove]) {
+        button4.dataset.runId = item.run_id;
+        button4.dataset.revision = String(item.revision || 1);
+      }
+      row.append(input2, save, remove);
+      section2.append(row);
+    }
+  }
+  async _mutateQueuedPrompt(button4, remove) {
+    const threadId = this._selectedThreadId;
+    const row = button4.closest(".queued-prompt");
+    for (const control2 of row.querySelectorAll("button")) control2.disabled = true;
+    try {
+      await this._callWS(remove ? "cancel_queued_prompt" : "update_queued_prompt", { thread_id: threadId, run_id: button4.dataset.runId, expected_revision: Number(button4.dataset.revision), ...remove ? {} : { prompt: row.querySelector("textarea").value } });
+      row.querySelector("textarea")?.blur();
+      if (threadId === this._selectedThreadId) {
+        await this._refreshActiveThread();
+        await this._loadPromptQueue(threadId);
+      }
+    } catch (error) {
+      this._setError(error);
+    } finally {
+      for (const control2 of row.querySelectorAll("button")) control2.disabled = false;
+    }
+  }
+  async _loadGitReview() {
+    if (!this._selectedThreadId || !this._config?.capabilities?.includes("git_review_v1")) return;
+    const generation = ++this._gitReviewGeneration;
+    const threadId = this._selectedThreadId;
+    this._gitReviewThreadId = threadId;
+    const scope = this.shadowRoot.getElementById("git-review-scope").value;
+    const ref = this.shadowRoot.getElementById("git-review-ref").value.trim();
+    const parameters = { thread_id: threadId, scope, ...scope === "branch" && ref ? { base_ref: ref } : {}, ...scope === "commit" && ref ? { commit_ref: ref } : {} };
+    const results = this.shadowRoot.getElementById("git-review-results");
+    results.replaceChildren(this._textElement("p", "", "Loading Git diff…"));
+    try {
+      const response = await this._callWS("git_review", parameters);
+      if (generation !== this._gitReviewGeneration || threadId !== this._selectedThreadId) return;
+      results.replaceChildren();
+      for (const file of response.files || []) {
+        const details = document.createElement("details");
+        details.append(this._textElement("summary", "", `${file.path} (${file.status})`));
+        const load = this._actionButton("", "load-git-file", "Load file diff");
+        load.textContent = "Load diff";
+        load._gitParameters = { ...parameters, path: file.path, expected_state_token: response.state_token };
+        load._gitGeneration = generation;
+        details.append(load);
+        if (file.patch) details.append(this._textElement("pre", "git-diff", file.patch));
+        if (file.binary) details.append(this._textElement("p", "row-meta", "Binary file: text diff unavailable."));
+        if (file.patch_truncated || file.large) details.append(this._textElement("p", "row-meta", "Large file: the diff may be truncated."));
+        results.append(details);
+      }
+      if (response.files_truncated) results.append(this._textElement("p", "row-meta", "File list truncated: more changes exist."));
+      if (!results.childElementCount) results.append(this._textElement("p", "", "No changes in this scope."));
+    } catch {
+      if (generation === this._gitReviewGeneration && threadId === this._selectedThreadId) results.replaceChildren(this._textElement("p", "", "Git review unavailable. Check the repository and reference, then refresh."));
+    }
+  }
+  async _loadGitFile(button4) {
+    const parameters = button4._gitParameters;
+    if (!parameters || parameters.thread_id !== this._selectedThreadId || button4._gitGeneration !== this._gitReviewGeneration) return;
+    button4.disabled = true;
+    const details = button4.closest("details");
+    try {
+      const response = await this._callWS("git_review", parameters);
+      if (parameters.thread_id !== this._selectedThreadId || button4._gitGeneration !== this._gitReviewGeneration) return;
+      for (const node2 of details.querySelectorAll("pre, p")) node2.remove();
+      const file = response.files?.find((item) => item.path === parameters.path);
+      details.append(this._textElement("pre", "git-diff", file?.patch || (file?.binary ? "Binary file: text diff unavailable." : "No changes remain for this file. Refresh the file list.")));
+      if (file?.patch_truncated || file?.large) details.append(this._textElement("p", "row-meta", "Diff truncated: this file exceeds the review limit."));
+      details.open = true;
+    } catch {
+      details.append(this._textElement("p", "row-meta", "Unable to load this diff. Refresh and retry."));
+    } finally {
+      button4.disabled = false;
+    }
+  }
+  async _implementReviewedPlan() {
+    if (!this._config?.capabilities?.includes("plan_mode_v1") || this._activeThread?.collaboration_mode !== "plan" || this._runActivityForThread().busy) return;
+    this._collaborationMode = "default";
+    this._collaborationChoices.set(this._selectedThreadId, "default");
+    const input2 = this.shadowRoot.getElementById("prompt-input");
+    if (!input2.value.trim()) {
+      input2.value = "Implement the reviewed plan within this chat's selected workspace and permissions.";
+      this._setDraftForThread(this._selectedThreadId, input2.value);
+    }
+    await this._sendPrompt();
+  }
+  async _loadPromptQueue(threadId = this._selectedThreadId) {
+    if (!threadId || !this._config?.capabilities?.includes("prompt_queue_v1")) return;
+    const generation = (this._promptQueueGenerations.get(threadId) || 0) + 1;
+    this._promptQueueGenerations.set(threadId, generation);
+    try {
+      const prompts = await this._callWS("prompt_queue", { thread_id: threadId });
+      if (generation !== this._promptQueueGenerations.get(threadId)) return;
+      this._promptQueues.set(threadId, Array.isArray(prompts) ? prompts : []);
+      if (threadId === this._selectedThreadId) this._renderPromptQueue(this._activeThread);
+    } catch {
+      if (generation === this._promptQueueGenerations.get(threadId) && threadId === this._selectedThreadId) {
+        const section2 = this.shadowRoot.getElementById("prompt-queue");
+        section2.hidden = false;
+        section2.replaceChildren(this._textElement("p", "row-meta", "Unable to refresh queued messages. Refresh the chat to retry."));
+      }
+    }
+  }
   async _sendPrompt() {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const threadId = this._selectedThreadId;
@@ -49332,7 +50031,9 @@ var CodexBridgePanel = class extends HTMLElement {
       threadId,
       prompt,
       clientRequestId: this._createClientRequestId("prompt"),
-      state: "sending"
+      state: "sending",
+      followUpMode: this._config?.capabilities?.includes("prompt_queue_v1") ? this._followUpMode : null,
+      collaborationMode: this._config?.capabilities?.includes("plan_mode_v1") ? this._collaborationMode : null
     };
     mutation.state = "sending";
     this._promptMutations.set(threadId, mutation);
@@ -49344,7 +50045,9 @@ var CodexBridgePanel = class extends HTMLElement {
       await this._callWS("send_prompt", {
         thread_id: threadId,
         prompt,
-        client_request_id: mutation.clientRequestId
+        client_request_id: mutation.clientRequestId,
+        ...mutation.followUpMode ? { follow_up_mode: mutation.followUpMode } : {},
+        ...mutation.collaborationMode ? { collaboration_mode: mutation.collaborationMode } : {}
       });
       if (this._promptMutation === mutation) {
         this._promptMutation = null;
@@ -49362,6 +50065,15 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     } catch (error) {
       if (this._promptMutations.get(threadId) !== mutation) {
+        return;
+      }
+      if (["collaboration_mode_requires_queue", "capabilities_unavailable", "no_active_run", "queue_revision_conflict"].includes(this._bridgeErrorCode(error))) {
+        this._promptMutations.delete(threadId);
+        if (this._promptMutation === mutation) this._promptMutation = null;
+        if (threadId === this._selectedThreadId) {
+          this._setError(error);
+          this._renderComposerState(this._activeThread);
+        }
         return;
       }
       if (this._bridgeErrorCode(error) === "assist_policy_invalid") {
@@ -49883,6 +50595,8 @@ var CodexBridgePanel = class extends HTMLElement {
     try {
       await this._callWS("delete_thread", { thread_id: threadId });
       this._threads = this._threads.filter((thread) => thread.thread_id !== threadId);
+      this._transcriptSearchResults = this._transcriptSearchResults.filter((result) => result.thread_id !== threadId);
+      this._renderTranscriptSearch();
       if (this._selectedThreadId === threadId) {
         const replacement = this._threads.find((thread) => !thread.archived_at) || null;
         const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
@@ -50833,6 +51547,10 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const acceptedEvent = result.event;
     this._events = result.state.events;
+    if (["message.updated", "message.removed"].includes(acceptedEvent.event_type)) {
+      this._forceMessageRebuild = true;
+      void this._searchTranscript();
+    }
     if (acceptedEvent.event_type === "context.updated" && this._activeThread) {
       this._activeThread = { ...this._activeThread, context_usage: acceptedEvent.payload.context_usage };
       this._renderUsagePanel();
@@ -50845,7 +51563,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderActivityCenter();
     this._renderThreadRunState();
     this._renderComposerState(this._activeThread);
-    if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
+    if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued", "run.queue_cleared", "run.queue_item_updated"].includes(acceptedEvent.event_type)) {
+      void this._loadPromptQueue(this._selectedThreadId);
       this._renderNavigationSections();
       this._renderProgress();
     }
@@ -51347,12 +52066,12 @@ var CodexBridgePanel = class extends HTMLElement {
     return changed;
   }
   _textElement(tagName, className, value) {
-    const element3 = document.createElement(tagName);
+    const element4 = document.createElement(tagName);
     if (className) {
-      element3.className = className;
+      element4.className = className;
     }
-    element3.textContent = String(value ?? "");
-    return element3;
+    element4.textContent = String(value ?? "");
+    return element4;
   }
   _actionButton(className, action, accessibleLabel) {
     const button4 = document.createElement("button");

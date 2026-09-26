@@ -68,6 +68,13 @@ _FEATURE_ERROR_MESSAGES = {
     "account_profile_invalid": "Review the saved account and try again",
     "account_profile_reauthentication_required": "This saved account needs a fresh sign-in",
     "account_profiles_unavailable": "Saved accounts are unavailable in this App version",
+    "git_base_ref_required": "Choose a base branch before reviewing branch changes",
+    "git_state_changed": "Git changed while you were opening the diff. Refresh the file list and try again",
+    "git_unavailable": "Git review is unavailable in this App",
+    "collaboration_mode_requires_queue": "Choose Queue to change Plan or Execute mode after the active response",
+    "queued_prompt_not_found": "This message has already started or was removed. Refresh the queue.",
+    "queued_prompt_revision_conflict": "This queued message changed. Refresh the queue before saving again.",
+    "client_request_id_required": "The queued message could not be confirmed. Retry from the chat.",
 }
 
 
@@ -96,6 +103,9 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_browse_paths,
         ws_create_folder,
         ws_list_threads,
+        ws_search_transcript,
+        ws_get_transcript_message,
+        ws_git_review,
         ws_list_chat_sections,
         ws_create_chat_section,
         ws_update_chat_section,
@@ -109,6 +119,9 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_fork_thread,
         ws_move_thread_project,
         ws_send_prompt,
+        ws_prompt_queue,
+        ws_update_queued_prompt,
+        ws_cancel_queued_prompt,
         ws_cancel_run,
         ws_get_events,
         ws_subscribe_events,
@@ -620,6 +633,89 @@ async def ws_list_threads(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/search_transcript",
+        vol.Required("query"): vol.All(str, vol.Length(min=1, max=256)),
+        vol.Optional("include_archived", default=False): bool,
+        vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=100)),
+        vol.Optional("before_cursor"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+    }
+)
+@websocket_api.async_response
+async def ws_search_transcript(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_search_transcript(
+            msg["query"],
+            include_archived=msg["include_archived"],
+            limit=msg["limit"],
+            before_cursor=msg.get("before_cursor"),
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/get_transcript_message",
+        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("sequence"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+    }
+)
+@websocket_api.async_response
+async def ws_get_transcript_message(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_get_transcript_message(
+            msg["thread_id"], msg["sequence"]
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/git_review",
+        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("scope"): vol.In(["unstaged", "staged", "commit", "branch"]),
+        vol.Optional("base_ref"): vol.All(str, vol.Length(min=1, max=256)),
+        vol.Optional("commit_ref"): vol.All(str, vol.Length(min=1, max=256)),
+        vol.Optional("path"): vol.All(str, vol.Length(min=1, max=2048)),
+        vol.Optional("expected_state_token"): vol.Match(r"^[a-f0-9]{64}$"),
+    }
+)
+@websocket_api.async_response
+async def ws_git_review(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_git_review(
+            msg["thread_id"],
+            scope=msg["scope"],
+            base_ref=msg.get("base_ref"),
+            commit_ref=msg.get("commit_ref"),
+            path=msg.get("path"),
+            expected_state_token=msg.get("expected_state_token"),
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/get_thread",
         vol.Required("thread_id"): str,
     }
@@ -837,6 +933,8 @@ async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.
         vol.Required("thread_id"): str,
         vol.Required("prompt"): str,
         vol.Optional("client_request_id"): str,
+        vol.Optional("follow_up_mode"): vol.In({"queue", "steer"}),
+        vol.Optional("collaboration_mode"): vol.In({"default", "plan"}),
     }
 )
 @websocket_api.async_response
@@ -845,6 +943,24 @@ async def ws_send_prompt(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
+    async def _send(runtime):
+        if msg.get("follow_up_mode") is not None and not runtime.supports_capability(
+            "prompt_queue_v1"
+        ):
+            raise BridgeApiError("capabilities_unavailable")
+        if msg.get("collaboration_mode") is not None and not runtime.supports_capability(
+            "plan_mode_v1"
+        ):
+            raise BridgeApiError("capabilities_unavailable")
+        return await runtime.client.async_send_prompt(
+            msg["thread_id"],
+            msg["prompt"],
+            client_request_id=msg.get("client_request_id"),
+            follow_up_mode=msg.get("follow_up_mode"),
+            collaboration_mode=msg.get("collaboration_mode"),
+            **runtime.web_search_payload(),
+        )
+
     await _async_handle(
         hass,
         connection,
@@ -853,16 +969,84 @@ async def ws_send_prompt(
             msg["thread_id"],
             msg["prompt"],
             client_request_id=msg.get("client_request_id"),
+            follow_up_mode=msg.get("follow_up_mode"),
+            collaboration_mode=msg.get("collaboration_mode"),
         ),
-        runtime_handler=lambda runtime: runtime.client.async_send_prompt(
-            msg["thread_id"],
-            msg["prompt"],
-            client_request_id=msg.get("client_request_id"),
-            **runtime.web_search_payload(),
-        ),
+        runtime_handler=_send,
         safe_error_messages={
             "assist_policy_invalid": "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.",
         },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/prompt_queue",
+        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_prompt_queue(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_get_prompt_queue(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/update_queued_prompt",
+        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("run_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1024 * 1024)),
+        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+    }
+)
+@websocket_api.async_response
+async def ws_update_queued_prompt(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_update_queued_prompt(
+            msg["thread_id"],
+            msg["run_id"],
+            msg["prompt"],
+            msg["expected_revision"],
+        ),
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/cancel_queued_prompt",
+        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+        vol.Required("run_id"): vol.All(str, vol.Length(min=1, max=128)),
+    }
+)
+@websocket_api.async_response
+async def ws_cancel_queued_prompt(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_cancel_queued_prompt(
+            msg["thread_id"], msg["run_id"]
+        ),
     )
 
 

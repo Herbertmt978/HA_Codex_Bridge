@@ -199,6 +199,8 @@ class ThreadRecord(BaseModel):
     workspace_path: str
     status: str
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    # Codex collaboration style is separate from the Bridge execution grant.
+    collaboration_mode: Literal["default", "plan"] = "default"
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     # ``codex_session_id`` belongs to the deprecated ``codex exec`` adapter.
     # The app-server thread identifier is deliberately separate so a fresh HA
@@ -252,6 +254,7 @@ class PublicThreadRecord(BaseModel):
     status: str
     schedule_eligible: bool = True
     mode: RunMode = Field(default=RunMode.FULL_AUTO)
+    collaboration_mode: Literal["default", "plan"] = "default"
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     last_error: str | None = None
     context_usage: ContextUsageRecord | None = None
@@ -295,6 +298,18 @@ class RunRecord(BaseModel):
     run_id: str
     thread_id: str
     status: str
+    collaboration_mode: Literal["default", "plan"] = "default"
+
+
+class QueuedPromptRecord(BaseModel):
+    """Editable, durable projection of one accepted queued prompt."""
+
+    run_id: str
+    prompt: str
+    created_at: str
+    revision: int = Field(ge=1)
+    position: int = Field(ge=1)
+    collaboration_mode: Literal["default", "plan"] = "default"
 
 
 class LimitsWindowRecord(BaseModel):
@@ -590,6 +605,10 @@ class BridgeReadinessRecord(BaseModel):
             "office_preview_v1",
             "discord_channel_v1",
             "chat_operations_v1",
+            "transcript_search_v1",
+            "git_review_v1",
+            "prompt_queue_v1",
+            "plan_mode_v1",
             "attachment_downloads",
         ],
         ...,

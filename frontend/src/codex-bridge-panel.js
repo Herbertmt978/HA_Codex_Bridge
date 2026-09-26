@@ -1,5 +1,6 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
 import { contextUsage } from "./context-usage.js";
+import { renderAssistantMarkdown, assistantMarkdownStyles } from "./markdown.js";
 import { authenticatedChatUrl, chatResources } from "./chat-resources.js";
 import { fetchHomeAssistantApi } from "./ha-http.js";
 import { WorkspaceTerminalView, terminalCss } from "./workspace-terminal.js";
@@ -17,7 +18,7 @@ import {
   visiblePdfPageCount,
 } from "./pdf-preview.js";
 import { getRunActivityViewModel, getSafeRunFailureMessage } from "./run-activity.js";
-import { projectConversationTurns, readConversationBookmarks, saveConversationBookmarks } from "./conversation-timeline.js";
+import { projectConversationTurns, projectTranscriptMessages, readConversationBookmarks, saveConversationBookmarks } from "./conversation-timeline.js";
 import { InlineImageController, inlineImageCss, isInlineImage } from "./inline-images.js";
 import {
   PDF_MIME_TYPE,
@@ -303,6 +304,18 @@ async function readBoundedPreviewResponse(response, maximumBytes) {
 const template = document.createElement("template");
 template.innerHTML = `
   <style>
+    ${assistantMarkdownStyles}
+    #transcript-search { padding: 8px; }
+    .transcript-search-result { display: flex; flex-direction: column; text-align: left; width: 100%; margin: 6px 0; white-space: normal; overflow-wrap: anywhere; }
+    #collaboration-controls { flex-wrap: wrap; padding: 6px; }
+    #collaboration-controls[hidden], #prompt-queue[hidden], #git-composer-review[hidden], #git-review-button[hidden], #implement-plan-button[hidden], #plan-availability[hidden] { display: none !important; }
+    #prompt-queue { max-height: 220px; overflow: auto; padding: 8px; }
+    .queued-prompt textarea { display: block; width: 100%; box-sizing: border-box; }
+    #git-review { padding: 10px; min-width: 0; }
+    #git-review .row-actions { flex-wrap: wrap; }
+    #git-review input { max-width: 180px; }
+    .git-diff { max-width: 100%; overflow: auto; white-space: pre; font-size: 12px; }
+    #git-review summary { overflow-wrap: anywhere; cursor: pointer; padding: 6px; }
     ${SELECTION_STYLES}
     :host {
       --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -4516,6 +4529,7 @@ template.innerHTML = `
     .composer-shell .composer .send-button:hover:not(:disabled) { background: color-mix(in srgb, var(--text-color) 85%, var(--surface-bg)); transform: none; }
 
     .composer-shell .composer-diagnostics {
+      display: block;
       grid-column: 2;
       grid-row: 2;
       min-width: 0;
@@ -5718,6 +5732,11 @@ template.innerHTML = `
         </label>
       </div>
       <nav class="desktop-destinations" aria-label="Application destinations" id="desktop-destinations"></nav>
+      <section id="transcript-search" aria-label="Search messages" hidden>
+        <label><input type="checkbox" id="search-archived" /> Include archived chats</label>
+        <div id="transcript-search-results" role="status"></div>
+        <button type="button" id="transcript-search-more" data-action="more-transcript-results" hidden>More matching messages</button>
+      </section>
       <div class="forms-stack">
         <section class="panel-form" id="project-form-panel"></section>
         <section class="panel-form" id="thread-form-panel"></section>
@@ -5785,6 +5804,8 @@ template.innerHTML = `
         </div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
+        <section id="prompt-queue" aria-label="Queued messages" hidden></section>
+
       </div>
       <div class="composer-shell">
         <div class="add-menu" id="add-menu" role="group" aria-label="Add to chat" hidden>
@@ -5814,6 +5835,14 @@ template.innerHTML = `
         </div>
         <details class="composer-diagnostics" id="composer-diagnostics" open>
           <summary>Chat settings and limits</summary>
+        <div class="row-actions" id="collaboration-controls">
+          <label id="follow-up-control" hidden>Follow-up <select id="follow-up-mode"><option value="queue">Queue after response</option><option value="steer">Steer active response</option></select></label>
+          <label id="collaboration-control">Collaboration <select id="collaboration-mode"><option value="default">Implement</option><option value="plan" disabled>Plan — unavailable</option></select></label>
+          <button type="button" id="implement-plan-button" data-action="implement-reviewed-plan" hidden>Implement reviewed plan</button>
+          <button type="button" id="git-composer-review" data-action="open-git-review" hidden>Review changes</button>
+          <details class="row-meta" id="plan-availability"><summary>Plan unavailable</summary><p>This runtime does not support selecting native Plan mode. Update the paired App and Integration to use it.</p></details>
+        </div>
+
           <div class="compact-toolbar" id="compact-toolbar"></div>
         </details>
         <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
@@ -5823,6 +5852,12 @@ template.innerHTML = `
       </div>
       <section class="bottom-panel" id="bottom-panel" aria-label="Workspace panel" hidden>
         <div class="bottom-panel-header"><div class="row-actions"><button type="button" data-action="bottom-preview" aria-pressed="true" id="bottom-preview-button">File preview</button><button type="button" data-action="bottom-terminal" aria-pressed="false" id="bottom-terminal-button">Terminal</button></div><button class="icon-button small" type="button" data-action="toggle-bottom-panel" aria-label="Hide bottom panel">×</button></div>
+        <div class="row-actions"><button type="button" data-action="open-git-review" id="git-review-button" hidden>Review Git changes</button></div>
+        <section id="git-review" aria-label="Git review" hidden>
+          <div class="row-actions"><label>Scope <select id="git-review-scope"><option value="unstaged">Unstaged</option><option value="staged">Staged</option><option value="commit">Commit</option><option value="branch">Branch</option><option disabled>Last turn — unavailable</option></select></label><label>Reference <input id="git-review-ref" placeholder="HEAD (commit) or branch base" /></label><button type="button" data-action="refresh-git-review">Refresh diff</button></div>
+          <p class="row-meta">Git repository state at refresh. Last-turn review is unavailable because a trusted baseline is not recorded.</p>
+          <div id="git-review-results"></div>
+        </section>
         <div id="bottom-preview"></div>
         <div id="bottom-terminal" hidden>
           <p class="terminal-note">Commands run immediately in this chat's workspace. Network access and private Home Assistant files stay blocked, including in host-access chats. Close the terminal before running Codex or changing workspace files elsewhere.</p>
@@ -6041,6 +6076,20 @@ class CodexBridgePanel extends HTMLElement {
     this._draft = "";
     this._drafts = new Map();
     this._searchQuery = "";
+    this._transcriptSearchGeneration = 0;
+    this._transcriptSearchResults = [];
+    this._transcriptSearchError = "";
+    this._transcriptSearchCursor = null;
+    this._transcriptSearchHasMore = false;
+    this._transcriptSearchComplete = true;
+    this._searchArchived = false;
+    this._followUpMode = "queue";
+    this._collaborationMode = "default";
+    this._collaborationChoices = new Map();
+    this._promptQueues = new Map();
+    this._promptQueueGenerations = new Map();
+    this._gitReviewGeneration = 0;
+    this._gitReviewThreadId = null;
     this._showProjectForm = false;
     this._showThreadForm = false;
     this._projectFormMode = "create";
@@ -6644,6 +6693,14 @@ class CodexBridgePanel extends HTMLElement {
       case "toggle-bottom-panel": this._toggleBottomPanel(); break;
       case "bottom-preview": this._selectBottomTab("preview"); break;
       case "bottom-terminal": this._selectBottomTab("terminal"); break;
+      case "open-git-review": if (!this._bottomPanelOpen) this._toggleBottomPanel(); this._selectBottomTab("preview"); this.shadowRoot.getElementById("git-review").hidden = false; void this._loadGitReview(); break;
+      case "refresh-git-review": void this._loadGitReview(); break;
+      case "load-git-file": void this._loadGitFile(actionTarget); break;
+      case "open-search-result": void this._openTranscriptSearchResult(actionTarget); break;
+      case "more-transcript-results": void this._searchTranscript(true); break;
+      case "save-queued-prompt": void this._mutateQueuedPrompt(actionTarget, false); break;
+      case "cancel-queued-prompt": void this._mutateQueuedPrompt(actionTarget, true); break;
+      case "implement-reviewed-plan": void this._implementReviewedPlan(); break;
       case "open-terminal": void this._terminal.open(this._selectedThreadId); break;
       case "close-terminal": void this._terminal.close(); break;
       case "toggle-app-menu":
@@ -6952,6 +7009,7 @@ class CodexBridgePanel extends HTMLElement {
       this._searchQuery = target.value;
       this._expandedProjectActions = {};
       this._render();
+      void this._searchTranscript();
       return;
     }
     if (target.id === "project-name-input") {
@@ -6976,6 +7034,9 @@ class CodexBridgePanel extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (target.id === "search-archived") { this._searchArchived = target.checked; void this._searchTranscript(); return; }
+    if (target.id === "follow-up-mode") { this._followUpMode = target.value; this._renderComposerState(this._activeThread); return; }
+    if (target.id === "collaboration-mode") { this._collaborationMode = target.value; this._collaborationChoices.set(this._selectedThreadId, target.value); this._renderComposerState(this._activeThread); return; }
     if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
       this._hostAccessDialog[target.id === "host-access-acknowledged" ? "acknowledged" : "unattended"] = target.checked;
       this._renderHostAccess();
@@ -8477,6 +8538,7 @@ class CodexBridgePanel extends HTMLElement {
     );
     this._renderNavigationSections();
     this._renderNavigationEmptyState();
+    this._renderTranscriptSearch();
     this._renderToolbar();
     this._renderAttachmentChips();
     this._renderMessages();
@@ -8765,6 +8827,29 @@ class CodexBridgePanel extends HTMLElement {
     promptInput.setAttribute("aria-describedby", assistManaged
       ? "assist-conversation-notice composer-shortcut-hint composer-status"
       : "composer-shortcut-hint composer-status");
+    const queueSupported = this._config?.capabilities?.includes("prompt_queue_v1");
+    this.shadowRoot.getElementById("collaboration-controls").hidden = !activeThread || assistManaged;
+    this.shadowRoot.getElementById("follow-up-control").hidden = !queueSupported || !isRunning || assistManaged;
+    this.shadowRoot.getElementById("follow-up-mode").value = this._followUpMode;
+    const planSupported = this._config?.capabilities?.includes("plan_mode_v1");
+    this.shadowRoot.getElementById("collaboration-control").hidden = !planSupported;
+    this._collaborationMode = this._collaborationChoices.get(this._selectedThreadId) || activeThread?.collaboration_mode || "default";
+    this.shadowRoot.getElementById("collaboration-mode").value = this._collaborationMode;
+    const planOption = this.shadowRoot.querySelector('#collaboration-mode option[value="plan"]');
+    planOption.disabled = !planSupported;
+    planOption.textContent = planSupported ? "Plan" : "Plan — unavailable";
+    this.shadowRoot.getElementById("collaboration-mode").disabled = !activeThread || Boolean(mutation) || assistManaged;
+    this.shadowRoot.getElementById("plan-availability").hidden = planSupported;
+    const implement = this.shadowRoot.getElementById("implement-plan-button");
+    implement.hidden = !planSupported || activeThread?.collaboration_mode !== "plan" || isRunning || assistManaged;
+    implement.disabled = Boolean(mutation);
+    this.shadowRoot.getElementById("git-review-button").hidden = !activeThread || !this._config?.capabilities?.includes("git_review_v1");
+    this.shadowRoot.getElementById("git-composer-review").hidden = !activeThread || !this._config?.capabilities?.includes("git_review_v1");
+    if (this._gitReviewThreadId !== this._selectedThreadId) {
+      this.shadowRoot.getElementById("git-review").hidden = true;
+      this.shadowRoot.getElementById("git-review-results").replaceChildren();
+    }
+    this._renderPromptQueue(activeThread);
     const retryable = !assistManaged && mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
     const cancelling = this._cancellingThreads.has(this._selectedThreadId);
@@ -8774,7 +8859,7 @@ class CodexBridgePanel extends HTMLElement {
       promptInput.value = draft;
     }
     promptInput.placeholder = assistManaged ? "Continue this conversation in Assist" : isRunning
-      ? "Steer the running Codex turn"
+      ? queueSupported && this._followUpMode === "queue" ? "Queue a message after this response" : "Steer the running Codex turn"
       : "Message Codex through Home Assistant";
     promptInput.disabled = !activeThread || locked || assistManaged;
     if (this._speechRecognition && (this._speechThreadId !== this._selectedThreadId || promptInput.disabled)) {
@@ -8791,11 +8876,12 @@ class CodexBridgePanel extends HTMLElement {
     const hasDraft = Boolean(promptInput.value.trim());
     const stop = isRunning && (!hasDraft || assistManaged) && !mutation;
     sendButton.disabled = !activeThread || cancelling || (assistManaged && !stop) || (locked && !retryable) || (!stop && !retryable && !hasDraft);
-    const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? "Steer" : "Send";
+    const followUpLabel = queueSupported && this._followUpMode === "queue" ? "Queue" : "Steer";
+    const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? followUpLabel : "Send";
     const actionTitle = cancelling ? "Stopping the running Codex turn" : retryable
       ? "Retry this message safely"
       : stop ? "Stop the running Codex turn"
-        : isRunning ? "Steer the running Codex turn" : "Send message to Codex";
+        : isRunning ? followUpLabel === "Queue" ? "Queue after the active response" : "Steer the running Codex turn" : "Send message to Codex";
     sendButton.dataset.action = stop || cancelling ? "stop-run" : "send-prompt";
     this._setTrustedButtonContent(sendButton, stop || cancelling ? icons.stop : icons.send, actionLabel);
     const stopButton = this.shadowRoot.getElementById("stop-run-button");
@@ -10882,10 +10968,11 @@ class CodexBridgePanel extends HTMLElement {
 
     const shouldStick =
       shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
+    const transcriptEvents = projectTranscriptMessages(this._events);
     const eventsToRender =
       this._renderedSequence === 0
-        ? this._events
-        : this._events.filter((item) => item.sequence > this._renderedSequence);
+        ? transcriptEvents
+        : transcriptEvents.filter((item) => item.sequence > this._renderedSequence);
 
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
@@ -10928,7 +11015,7 @@ class CodexBridgePanel extends HTMLElement {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const relevant = new Set(["message.created", "message.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const relevant = new Set(["message.created", "message.completed", "message.updated", "message.removed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
     const sameThread = this._timelineProjectedThread === this._selectedThreadId;
     const unchangedPrefix = this._timelineEvents === this._events || (this._timelineEventCount > 0
       && this._events[this._timelineEventCount - 1] === this._timelineLastEvent);
@@ -11237,6 +11324,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _renderEvent(event) {
+    if (["message.updated", "message.removed"].includes(event.event_type)) return null;
     const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
     if (event.event_type === "message.created") {
       return this._renderMessage(
@@ -11449,7 +11537,8 @@ class CodexBridgePanel extends HTMLElement {
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     if (label) bubble.append(this._textElement("span", "message-state row-meta", label));
-    this._renderMessageBody(bubble, String(text ?? ""));
+    if (role === "user") this._renderMessageBody(bubble, String(text ?? ""));
+    else bubble.append(renderAssistantMarkdown(document, String(text ?? ""), { createCodeBlock: (_document, code, language) => this._markdownCodeBlock(code, language) }));
     article.append(bubble);
     return article;
   }
@@ -11481,6 +11570,17 @@ class CodexBridgePanel extends HTMLElement {
     if (lastIndex < text.length || !renderedPart) {
       container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex)));
     }
+  }
+
+  _markdownCodeBlock(code, language) {
+    const block = document.createElement("div"); block.className = "code-block";
+    const head = document.createElement("div"); head.className = "code-head";
+    head.append(this._textElement("span", "", language || "code"));
+    const copy = this._actionButton("copy-button", "copy-code-block", "Copy code");
+    this._appendTrustedIcon(copy, icons.copy);
+    copy.append(this._textElement("span", "", "Copy code"));
+    head.append(copy); block.append(head, this._textElement("pre", "code-text", code));
+    return block;
   }
 
   _renderProgress() {
@@ -12869,6 +12969,7 @@ class CodexBridgePanel extends HTMLElement {
         return false;
       }
       this._activeThread = thread;
+      void this._loadPromptQueue(threadId);
       this._selectedProjectId = thread.project_id;
       const authoritativeEvents = parseEvents(events).filter(
         (event) => !event.thread_id || event.thread_id === threadId
@@ -13435,6 +13536,173 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
+  async _searchTranscript(append = false) {
+    const generation = ++this._transcriptSearchGeneration;
+    const query = this._searchQuery.trim();
+    if (!append) { this._transcriptSearchResults = []; this._transcriptSearchCursor = null; this._transcriptSearchComplete = true; }
+    this._transcriptSearchHasMore = false;
+    this._transcriptSearchError = "";
+    if (!query || !this._config?.capabilities?.includes("transcript_search_v1")) { this._renderTranscriptSearch(); return; }
+    this._transcriptSearchError = "Searching messages…";
+    this._renderTranscriptSearch();
+    try {
+      const response = await this._callWS("search_transcript", { q: query, include_archived: this._searchArchived, limit: 50, ...(this._transcriptSearchCursor ? { before_cursor: this._transcriptSearchCursor } : {}) });
+      if (generation !== this._transcriptSearchGeneration) return;
+      this._transcriptSearchResults = [...this._transcriptSearchResults, ...(response.results || [])];
+      this._transcriptSearchCursor = response.next_cursor || null;
+      this._transcriptSearchHasMore = response.has_more === true;
+      this._transcriptSearchComplete = response.complete !== false;
+      this._transcriptSearchError = "";
+    } catch { if (generation === this._transcriptSearchGeneration) this._transcriptSearchError = "Message search failed. Change the search to retry."; }
+    if (generation === this._transcriptSearchGeneration) this._renderTranscriptSearch();
+  }
+
+  _renderTranscriptSearch() {
+    const section = this.shadowRoot.getElementById("transcript-search");
+    if (!section) return;
+    section.hidden = !this._searchQuery.trim() || !this._config?.capabilities?.includes("transcript_search_v1");
+    this.shadowRoot.getElementById("transcript-search-more").hidden = !this._transcriptSearchHasMore;
+    const results = this.shadowRoot.getElementById("transcript-search-results");
+    results.replaceChildren();
+    if (!this._transcriptSearchComplete) results.append(this._textElement("p", "row-meta", "Some earlier messages are outside this installation's retained searchable history."));
+    for (const result of this._transcriptSearchResults) {
+      const button = this._actionButton("transcript-search-result", "open-search-result", "Go to matching message");
+      button.dataset.threadId = result.thread_id;
+      button.dataset.sequence = String(result.sequence);
+      button.append(this._textElement("strong", "", `${result.title || "Chat"}${result.archived_at ? " (archived)" : ""}`), this._textElement("span", "row-meta", result.excerpt));
+      results.append(button);
+    }
+    if (this._transcriptSearchError || !this._transcriptSearchResults.length) results.append(this._textElement("p", "row-meta", this._transcriptSearchError || "No matching messages."));
+  }
+
+  async _openTranscriptSearchResult(button) {
+    const threadId = button.dataset.threadId;
+    const sequence = Number(button.dataset.sequence);
+    await this._selectThread(threadId);
+    if (this._selectedThreadId !== threadId) return;
+    if (!this.shadowRoot.querySelector(`#message-list [data-sequence="${sequence}"]`)) {
+      try {
+        const message = await this._callWS("get_transcript_message", { thread_id: threadId, sequence });
+        if (this._selectedThreadId !== threadId) return;
+        const article = this._renderMessage(message.role, message.text, sequence, "Search match from earlier history", message.timestamp);
+        const list = this.shadowRoot.getElementById("message-list");
+        const next = [...list.querySelectorAll("[data-sequence]")].find((node) => Number(node.dataset.sequence) > sequence);
+        list.insertBefore(article, next || null);
+      } catch { this._setError("This matching message is no longer available. Search again to refresh the results."); return; }
+    }
+    this._jumpToConversationTurn(button);
+    const target = this.shadowRoot.querySelector(`#message-list [data-sequence="${Number(button.dataset.sequence)}"]`);
+    if (target) { target.tabIndex = -1; target.focus({ preventScroll: true }); }
+  }
+
+  _renderPromptQueue(thread) {
+    const section = this.shadowRoot.getElementById("prompt-queue");
+    if (!section) return;
+    const prompts = this._promptQueues.get(thread?.thread_id) || [];
+    section.hidden = !prompts.length || !this._config?.capabilities?.includes("prompt_queue_v1");
+    // Preserve an in-progress edit while unrelated runtime events render.
+    if (section.contains(this.shadowRoot.activeElement)) return;
+    section.replaceChildren(this._textElement("strong", "", "Queued messages"));
+    for (const item of prompts) {
+      const row = document.createElement("div"); row.className = "queued-prompt";
+      const input = document.createElement("textarea"); input.value = item.prompt; input.setAttribute("aria-label", "Edit queued message");
+      const save = this._actionButton("", "save-queued-prompt", "Save queued message"); save.textContent = "Save";
+      const remove = this._actionButton("", "cancel-queued-prompt", "Remove queued message"); remove.textContent = "Remove";
+      for (const button of [save, remove]) { button.dataset.runId = item.run_id; button.dataset.revision = String(item.revision || 1); }
+      row.append(input, save, remove); section.append(row);
+    }
+  }
+
+  async _mutateQueuedPrompt(button, remove) {
+    const threadId = this._selectedThreadId;
+    const row = button.closest(".queued-prompt");
+    for (const control of row.querySelectorAll("button")) control.disabled = true;
+    try {
+      await this._callWS(remove ? "cancel_queued_prompt" : "update_queued_prompt", { thread_id: threadId, run_id: button.dataset.runId, expected_revision: Number(button.dataset.revision), ...(remove ? {} : { prompt: row.querySelector("textarea").value }) });
+      row.querySelector("textarea")?.blur();
+      if (threadId === this._selectedThreadId) { await this._refreshActiveThread(); await this._loadPromptQueue(threadId); }
+    } catch (error) { this._setError(error); }
+    finally { for (const control of row.querySelectorAll("button")) control.disabled = false; }
+  }
+
+  async _loadGitReview() {
+    if (!this._selectedThreadId || !this._config?.capabilities?.includes("git_review_v1")) return;
+    const generation = ++this._gitReviewGeneration;
+    const threadId = this._selectedThreadId;
+    this._gitReviewThreadId = threadId;
+    const scope = this.shadowRoot.getElementById("git-review-scope").value;
+    const ref = this.shadowRoot.getElementById("git-review-ref").value.trim();
+    const parameters = { thread_id: threadId, scope, ...(scope === "branch" && ref ? { base_ref: ref } : {}), ...(scope === "commit" && ref ? { commit_ref: ref } : {}) };
+    const results = this.shadowRoot.getElementById("git-review-results");
+    results.replaceChildren(this._textElement("p", "", "Loading Git diff…"));
+    try {
+      const response = await this._callWS("git_review", parameters);
+      if (generation !== this._gitReviewGeneration || threadId !== this._selectedThreadId) return;
+      results.replaceChildren();
+      for (const file of response.files || []) {
+        const details = document.createElement("details");
+        details.append(this._textElement("summary", "", `${file.path} (${file.status})`));
+        const load = this._actionButton("", "load-git-file", "Load file diff"); load.textContent = "Load diff";
+        load._gitParameters = { ...parameters, path: file.path, expected_state_token: response.state_token };
+        load._gitGeneration = generation;
+        details.append(load);
+        if (file.patch) details.append(this._textElement("pre", "git-diff", file.patch));
+        if (file.binary) details.append(this._textElement("p", "row-meta", "Binary file: text diff unavailable."));
+        if (file.patch_truncated || file.large) details.append(this._textElement("p", "row-meta", "Large file: the diff may be truncated."));
+        results.append(details);
+      }
+      if (response.files_truncated) results.append(this._textElement("p", "row-meta", "File list truncated: more changes exist."));
+      if (!results.childElementCount) results.append(this._textElement("p", "", "No changes in this scope."));
+    } catch { if (generation === this._gitReviewGeneration && threadId === this._selectedThreadId) results.replaceChildren(this._textElement("p", "", "Git review unavailable. Check the repository and reference, then refresh.")); }
+  }
+
+  async _loadGitFile(button) {
+    const parameters = button._gitParameters;
+    if (!parameters || parameters.thread_id !== this._selectedThreadId || button._gitGeneration !== this._gitReviewGeneration) return;
+    button.disabled = true;
+    const details = button.closest("details");
+    try {
+      const response = await this._callWS("git_review", parameters);
+      if (parameters.thread_id !== this._selectedThreadId || button._gitGeneration !== this._gitReviewGeneration) return;
+      for (const node of details.querySelectorAll("pre, p")) node.remove();
+      const file = response.files?.find((item) => item.path === parameters.path);
+      details.append(this._textElement("pre", "git-diff", file?.patch || (file?.binary ? "Binary file: text diff unavailable." : "No changes remain for this file. Refresh the file list.")));
+      if (file?.patch_truncated || file?.large) details.append(this._textElement("p", "row-meta", "Diff truncated: this file exceeds the review limit."));
+      details.open = true;
+    } catch { details.append(this._textElement("p", "row-meta", "Unable to load this diff. Refresh and retry.")); }
+    finally { button.disabled = false; }
+  }
+
+  async _implementReviewedPlan() {
+    if (!this._config?.capabilities?.includes("plan_mode_v1") || this._activeThread?.collaboration_mode !== "plan" || this._runActivityForThread().busy) return;
+    this._collaborationMode = "default";
+    this._collaborationChoices.set(this._selectedThreadId, "default");
+    const input = this.shadowRoot.getElementById("prompt-input");
+    if (!input.value.trim()) {
+      input.value = "Implement the reviewed plan within this chat's selected workspace and permissions.";
+      this._setDraftForThread(this._selectedThreadId, input.value);
+    }
+    await this._sendPrompt();
+  }
+
+  async _loadPromptQueue(threadId = this._selectedThreadId) {
+    if (!threadId || !this._config?.capabilities?.includes("prompt_queue_v1")) return;
+    const generation = (this._promptQueueGenerations.get(threadId) || 0) + 1;
+    this._promptQueueGenerations.set(threadId, generation);
+    try {
+      const prompts = await this._callWS("prompt_queue", { thread_id: threadId });
+      if (generation !== this._promptQueueGenerations.get(threadId)) return;
+      this._promptQueues.set(threadId, Array.isArray(prompts) ? prompts : []);
+      if (threadId === this._selectedThreadId) this._renderPromptQueue(this._activeThread);
+    } catch {
+      if (generation === this._promptQueueGenerations.get(threadId) && threadId === this._selectedThreadId) {
+        const section = this.shadowRoot.getElementById("prompt-queue");
+        section.hidden = false;
+        section.replaceChildren(this._textElement("p", "row-meta", "Unable to refresh queued messages. Refresh the chat to retry."));
+      }
+    }
+  }
+
   async _sendPrompt() {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const threadId = this._selectedThreadId;
@@ -13456,6 +13724,8 @@ class CodexBridgePanel extends HTMLElement {
       prompt,
       clientRequestId: this._createClientRequestId("prompt"),
       state: "sending",
+      followUpMode: this._config?.capabilities?.includes("prompt_queue_v1") ? this._followUpMode : null,
+      collaborationMode: this._config?.capabilities?.includes("plan_mode_v1") ? this._collaborationMode : null,
     };
     mutation.state = "sending";
     this._promptMutations.set(threadId, mutation);
@@ -13468,6 +13738,8 @@ class CodexBridgePanel extends HTMLElement {
         thread_id: threadId,
         prompt,
         client_request_id: mutation.clientRequestId,
+        ...(mutation.followUpMode ? { follow_up_mode: mutation.followUpMode } : {}),
+        ...(mutation.collaborationMode ? { collaboration_mode: mutation.collaborationMode } : {}),
       });
       if (this._promptMutation === mutation) {
         this._promptMutation = null;
@@ -13485,6 +13757,15 @@ class CodexBridgePanel extends HTMLElement {
       }
     } catch (error) {
       if (this._promptMutations.get(threadId) !== mutation) {
+        return;
+      }
+      if (["collaboration_mode_requires_queue", "capabilities_unavailable", "no_active_run", "queue_revision_conflict"].includes(this._bridgeErrorCode(error))) {
+        this._promptMutations.delete(threadId);
+        if (this._promptMutation === mutation) this._promptMutation = null;
+        if (threadId === this._selectedThreadId) {
+          this._setError(error);
+          this._renderComposerState(this._activeThread);
+        }
         return;
       }
       if (this._bridgeErrorCode(error) === "assist_policy_invalid") {
@@ -14079,6 +14360,8 @@ class CodexBridgePanel extends HTMLElement {
     try {
       await this._callWS("delete_thread", { thread_id: threadId });
       this._threads = this._threads.filter((thread) => thread.thread_id !== threadId);
+      this._transcriptSearchResults = this._transcriptSearchResults.filter((result) => result.thread_id !== threadId);
+      this._renderTranscriptSearch();
       if (this._selectedThreadId === threadId) {
         const replacement = this._threads.find((thread) => !thread.archived_at) || null;
         const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
@@ -15155,6 +15438,10 @@ class CodexBridgePanel extends HTMLElement {
     }
     const acceptedEvent = result.event;
     this._events = result.state.events;
+    if (["message.updated", "message.removed"].includes(acceptedEvent.event_type)) {
+      this._forceMessageRebuild = true;
+      void this._searchTranscript();
+    }
     if (acceptedEvent.event_type === "context.updated" && this._activeThread) {
       this._activeThread = { ...this._activeThread, context_usage: acceptedEvent.payload.context_usage };
       this._renderUsagePanel();
@@ -15170,7 +15457,8 @@ class CodexBridgePanel extends HTMLElement {
     this._renderActivityCenter();
     this._renderThreadRunState();
     this._renderComposerState(this._activeThread);
-    if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued"].includes(acceptedEvent.event_type)) {
+    if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued", "run.queue_cleared", "run.queue_item_updated"].includes(acceptedEvent.event_type)) {
+      void this._loadPromptQueue(this._selectedThreadId);
       this._renderNavigationSections();
       this._renderProgress();
     }

@@ -81,6 +81,13 @@ class RuntimeRunState(BaseModel):
     # distinct from ``disabled`` so older checkpoints and callers that do not
     # negotiate the capability retain Codex's managed default.
     web_search: Literal["live", "disabled"] | None = None
+    # User-selected Queue/Steer behaviour. ``auto`` is retained for callers
+    # that predate the explicit follow-up control.
+    follow_up_mode: Literal["auto", "queue", "steer"] = "auto"
+    collaboration_mode: Literal["default", "plan"] = "default"
+    restore_execution_sandbox: bool = False
+    queue_revision: int = Field(default=1, ge=1)
+    message_sequence: int | None = Field(default=None, ge=1)
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
     mode: RunMode
@@ -146,6 +153,8 @@ class RuntimeRequestOutcome(BaseModel):
     kind: Literal["prompt", "steer"]
     unattended: bool = False
     web_search: Literal["live", "disabled"] | None = None
+    follow_up_mode: Literal["auto", "queue", "steer"] = "auto"
+    collaboration_mode: Literal["default", "plan"] = "default"
     fingerprint: str = Field(min_length=64, max_length=64)
     status: Literal["accepted", "uncertain"] = "accepted"
     run_status: RunStatus

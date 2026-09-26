@@ -97,6 +97,15 @@ to the App or Bridge.
 
 ## Product language
 
+- Capability-gated conversation enhancements are described in
+  [Conversation and Git review enhancements](docs/selected-enhancements.md).
+  Assistant Markdown stays sanitised, transcript search covers retained public
+  messages, and explicit Queue/Steer controls retain durable queued identities.
+  Native Plan uses read-only execution independently of the selected permission
+  mode; implementing a reviewed plan requires a deliberate new default-mode turn.
+  Git review presents authentic bounded scoped patches from confined metadata,
+  with raw-byte semantics and explicit unavailable states.
+
 - Conversation navigation uses a slim rail of content-sized turn markers on
   desktop and touch screens. Scroll position owns the current marker; previews
   expose the prompt, response excerpt, jump and bookmark actions. Bookmarks

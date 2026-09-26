@@ -110,7 +110,7 @@
   ],
   "codexVersion": "codex-cli 0.157.1",
   "contractVersion": 1,
-  "schemaBundleSha256": "4b1f3f0b35c0c940f07779a7dc7c38fc8c2d9c573b4688d01fc742d44081ddbd",
+  "schemaBundleSha256": "28b7bb7eb476abfa56d21e1a27ee0b520a20b6fbe9a222b403c0c9fe026da1a8",
   "serverNotifications": [
     "account/gatewayOAuth/changed",
     "account/login/completed",
@@ -208,6 +208,6 @@
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request"
   ],
-  "stableSchemaSha256": "8eb52e0f1d39c5b2263753bfadbbccb74032eab0639b8ca79eb5349e16ac8d73",
-  "v2SchemaSha256": "91f37a5530258330e62340829a9bbc5700ad604c599bbf0fe251c8b0cfadb9db"
+  "stableSchemaSha256": "84cd691f6c91aab5ae62e6a20450dde3acb66371cc1b3b7d87633e207acf7ab8",
+  "v2SchemaSha256": "fc133512f2a45d847c9e43d2cae1943b4787aa6305fe40aee0cfc4588669e2ad"
 }
