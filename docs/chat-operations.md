@@ -48,6 +48,13 @@ be removed. Known retained bytes are committed to the ledger. Uncertain file
 identity blocks new reservations and growth through existing reservations in
 that pool; restarting the Bridge requires fresh bounded disk measurements.
 
+A pending durable projection or unconfirmed native rollback returns
+`runtime_thread_operation_unknown`. The panel blocks further writes until the
+administrator refreshes and inspects the result; an outbox intent may finish
+recovery after restart. A missing destination, scheduled-chat restriction or
+other definitive operation conflict leaves the chat available for a revised
+action. Missing destinations are rejected before a native fork is attempted.
+
 Chats with scheduled continuation automations cannot move until those
 automations are explicitly retargeted or removed. This preserves their existing
 workspace trust boundary. Section membership is separate from project

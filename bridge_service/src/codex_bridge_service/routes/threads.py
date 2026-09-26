@@ -4,9 +4,13 @@ from pydantic import BaseModel, Field, field_validator
 from ..auth import require_bridge_token
 from ..automations import AutomationConflictError
 from ..models import PublicThreadRecord, RunMode, RuntimeProfile, ThreadViewRecord
-from ..runtime_broker import RuntimeUnavailableError
+from ..runtime_broker import (
+    RuntimeThreadOperationUnknownError,
+    RuntimeUnavailableError,
+)
 from ..storage import (
     ChatNavigationRevisionConflict,
+    DurableMutationPendingError,
     ProjectMutationError,
     ProjectNotFoundError,
     ThreadNotFoundError,
@@ -393,6 +397,11 @@ def fork_thread(
         raise HTTPException(status_code=503, detail={"code": "runtime_unavailable"})
     try:
         return _public_thread(fork(thread_id))
+    except (DurableMutationPendingError, RuntimeThreadOperationUnknownError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "runtime_thread_operation_unknown"},
+        ) from exc
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except ProjectMutationError as exc:
@@ -430,6 +439,15 @@ def move_thread_project(
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except AutomationConflictError as exc:
         raise HTTPException(status_code=409, detail={"code": "thread_has_scheduled_automation"}) from exc
+    except (DurableMutationPendingError, RuntimeThreadOperationUnknownError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "runtime_thread_operation_unknown"},
+        ) from exc
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found"}
+        ) from exc
     except ProjectMutationError as exc:
         raise HTTPException(status_code=409, detail={"code": "runtime_thread_operation_conflict"}) from exc
 

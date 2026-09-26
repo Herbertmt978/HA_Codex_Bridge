@@ -788,7 +788,15 @@ async def ws_delete_thread(
 @websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/fork_thread", vol.Required("thread_id"): str})
 @websocket_api.async_response
 async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
-    await _async_handle(hass, connection, msg, lambda client: client.async_fork_thread(msg["thread_id"]))
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_fork_thread(msg["thread_id"]),
+        safe_error_messages={
+            "not_found": "The requested chat or project no longer exists"
+        },
+    )
 
 
 @websocket_api.websocket_command({
@@ -812,6 +820,9 @@ async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.
             msg["navigation_revision"],
             msg["workspace_artifact_ids"],
         ),
+        safe_error_messages={
+            "not_found": "The requested chat or project no longer exists"
+        },
     )
 
 

@@ -695,7 +695,7 @@ class RuntimeBroker:
                         timeout_seconds=self.control_request_timeout_seconds,
                     )
                 except Exception:
-                    pass
+                    raise RuntimeThreadOperationUnknownError() from None
             raise
         finally:
             lease.release()
@@ -794,7 +794,7 @@ class RuntimeBroker:
                         timeout_seconds=self.control_request_timeout_seconds,
                     )
                 except Exception:
-                    pass
+                    raise RuntimeThreadOperationUnknownError() from None
             raise
         finally:
             lease.release()

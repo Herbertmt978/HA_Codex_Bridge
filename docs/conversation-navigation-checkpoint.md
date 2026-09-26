@@ -21,3 +21,7 @@ when the actual conversation area lacks room, it uses the compact disclosure.
 Header, message and composer alignment, target spacing and the narrow desktop
 fallback are asserted in real Chromium layout checks. These local browser
 checks use synthetic events and do not establish native provider acceptance.
+
+The final PR #153 review build passed all 610 frontend units and 102 Chromium
+scenarios. The review corrections preserve unknown native outcomes across
+the Bridge, Home Assistant and panel and distinguish definitive rejection.

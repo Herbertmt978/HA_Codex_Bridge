@@ -35387,7 +35387,7 @@ var ChatContextMenu = class {
   }
   knownFailure(error) {
     const code2 = error?.code || error?.body?.code || error?.body?.detail?.code;
-    return ["navigation_revision_conflict", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable"].includes(code2);
+    return ["navigation_revision_conflict", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable", "thread_has_scheduled_automation", "runtime_thread_operation_conflict", "not_found"].includes(code2);
   }
   errorMessage(error, write = false) {
     return `${normalizeDesktopError(error) || "The action could not be completed."}${write ? " Refresh the chat list and check the result before trying again." : ""}`;

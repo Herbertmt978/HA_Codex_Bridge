@@ -74,6 +74,7 @@ from codex_bridge_service.runtime_state import (
 )
 from codex_bridge_service.storage import BridgeStorage, ProjectMutationError
 from codex_bridge_service.routes import task_actions
+from codex_bridge_service.routes import threads as thread_routes
 from codex_bridge_service.routes.prompts import PromptRequest
 from codex_bridge_service.model_catalog import ModelCatalogError
 
@@ -576,6 +577,17 @@ def _broker(
     )
     broker.start()
     return broker
+
+
+def _thread_operations_http(tmp_path: Path, storage: BridgeStorage, broker: RuntimeBroker):
+    app = FastAPI()
+    app.state.auth_token = "secret"
+    app.state.storage = storage
+    app.state.runner = broker
+    app.state.automations = AutomationStore(tmp_path / "automations")
+    app.state.feature_capabilities = ("chat_operations_v1",)
+    app.include_router(thread_routes.router)
+    return TestClient(app)
 
 
 def _requests(
@@ -3824,6 +3836,155 @@ def test_native_fork_and_project_move_commit_verified_provider_threads(tmp_path:
             "thread/fork",
         ]
         assert not _requests(client, "turn/start")
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("operation", ["fork", "move"])
+def test_thread_operation_route_reports_durable_outbox_uncertainty(
+    tmp_path: Path, operation: str
+) -> None:
+    if os.name == "nt":
+        pytest.skip("secure Home Assistant workspace operations require POSIX dir_fd support")
+    fail_outbox = {"enabled": False}
+
+    def inject(stage: str) -> None:
+        if fail_outbox["enabled"] and stage == "before_event_append":
+            raise OSError("injected event append interruption")
+
+    storage = BridgeStorage(
+        root_path=tmp_path / "private-state",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=tmp_path / "workspaces",
+        outbox_failure_injector=inject,
+    )
+    source = storage.create_thread(title="Route operation", mode=RunMode.FULL_AUTO)
+    source_record = storage.load_thread(source.thread_id)
+    source_record.codex_thread_id = "provider-source"
+    storage.save_thread(source_record)
+    destination = storage.create_project(
+        name="Route destination", root_path="projects/route-destination"
+    )
+    native_id = f"provider-{operation}-pending"
+    cwd = (
+        str(storage.resolve_workspace_path(source.workspace_path))
+        if operation == "fork"
+        else str(storage.resolve_workspace_path(destination.root_path))
+    )
+    peer = ValidatorBackedAppServer()
+    peer.script("thread/fork", _thread_fork_response(native_id, cwd))
+    broker = _broker(
+        storage, peer, provider_admission_check=lambda: True
+    )
+    http = _thread_operations_http(tmp_path, storage, broker)
+    headers = {
+        "Authorization": "Bearer secret",
+        "X-Codex-Bridge-Api": "1",
+    }
+    fail_outbox["enabled"] = True
+
+    try:
+        if operation == "fork":
+            response = http.post(
+                f"/threads/{source.thread_id}/fork", headers=headers, json={}
+            )
+        else:
+            response = http.post(
+                f"/threads/{source.thread_id}/move-project",
+                headers=headers,
+                json={
+                    "project_id": destination.project_id,
+                    "navigation_revision": source.navigation_revision,
+                },
+            )
+
+        assert response.status_code == 503
+        assert response.json() == {
+            "detail": {"code": "runtime_thread_operation_unknown"}
+        }
+        assert storage.durable_outbox.pending_count() == 1
+        assert _requests(peer, "thread/fork")
+        assert not _requests(peer, "thread/delete")
+
+        fail_outbox["enabled"] = False
+        storage.durable_outbox.reconcile()
+        if operation == "fork":
+            forks = [
+                record
+                for record in storage.list_threads(include_archived=True)
+                if record.thread_id != source.thread_id
+            ]
+            assert len(forks) == 1
+            assert forks[0].codex_thread_id == native_id
+        else:
+            moved = storage.load_thread(source.thread_id)
+            assert moved.codex_thread_id == native_id
+            assert moved.project_id == destination.project_id
+    finally:
+        fail_outbox["enabled"] = False
+        broker.close()
+
+
+def test_fork_route_reports_unknown_when_native_cleanup_is_unconfirmed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    storage, source, _destination = _home_assistant_operation_thread(tmp_path)
+    cwd = str(storage.resolve_workspace_path(source.workspace_path))
+    peer = ValidatorBackedAppServer()
+    peer.script("thread/fork", _thread_fork_response("provider-fork-cleanup", cwd))
+    peer.script("thread/delete", AppServerTimeoutError("thread/delete"))
+    broker = _broker(storage, peer, provider_admission_check=lambda: True)
+    http = _thread_operations_http(tmp_path, storage, broker)
+    original_prepare = storage._prepare_thread_for_save_locked
+
+    def reject_fork_projection(record, *args, **kwargs):
+        if record.thread_id != source.thread_id:
+            raise ProjectMutationError("injected projection rejection")
+        return original_prepare(record, *args, **kwargs)
+
+    monkeypatch.setattr(
+        storage, "_prepare_thread_for_save_locked", reject_fork_projection
+    )
+    try:
+        response = http.post(
+            f"/threads/{source.thread_id}/fork",
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+            json={},
+        )
+
+        assert response.status_code == 503
+        assert response.json() == {
+            "detail": {"code": "runtime_thread_operation_unknown"}
+        }
+        assert _requests(peer, "thread/fork")
+        assert _requests(peer, "thread/delete")
+        assert len(storage.list_threads(include_archived=True)) == 1
+    finally:
+        broker.close()
+
+
+def test_thread_move_missing_project_is_not_found_before_provider_fork(
+    tmp_path: Path,
+) -> None:
+    storage, source, destination = _home_assistant_operation_thread(tmp_path)
+    storage.delete_project(destination.project_id)
+    peer = ValidatorBackedAppServer()
+    broker = _broker(storage, peer, provider_admission_check=lambda: True)
+    http = _thread_operations_http(tmp_path, storage, broker)
+    try:
+        response = http.post(
+            f"/threads/{source.thread_id}/move-project",
+            headers={"Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1"},
+            json={
+                "project_id": destination.project_id,
+                "navigation_revision": source.navigation_revision,
+            },
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": {"code": "not_found"}}
+        assert peer.requests == []
+        assert storage.load_thread(source.thread_id).codex_thread_id == "provider-source"
     finally:
         broker.close()
 

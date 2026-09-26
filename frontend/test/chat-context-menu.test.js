@@ -181,6 +181,56 @@ describe("shared chat context actions", () => {
     await menu.perform("refresh"); expect(menu.uncertain.has("two")).toBe(false);
   });
 
+  it.each(["thread_has_scheduled_automation", "runtime_thread_operation_conflict"])("keeps other chat actions available after a definitive %s move rejection", async (code) => {
+    const { panel, menu, show } = setup(); await show(); const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation((operation, payload) => operation === "move_thread_project" ? Promise.reject({ code, message: "This move was rejected." }) : original(operation, payload));
+    await menu.perform("move", "other");
+    menu.dialog.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(menu.dialog.querySelector('button[type="submit"]').hidden).toBe(true));
+    expect(panel._callWS.mock.calls.filter(([operation]) => operation === "move_thread_project")).toHaveLength(1);
+    expect(menu.uncertain.has("two")).toBe(false); expect(menu.busy.has("two")).toBe(false);
+    menu.closeDialog(); await show();
+    expect(menu.menu.querySelector('[data-chat-action="pin"]').disabled).toBe(false);
+    await menu.perform("pin");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", { thread_id: "two", pinned: true, navigation_revision: 1 });
+  });
+
+  it("keeps chat actions available after a definitive native fork conflict", async () => {
+    const { panel, menu, show } = setup(); await show(); const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation((operation, payload) => operation === "fork_thread" ? Promise.reject({ code: "runtime_thread_operation_conflict", message: "The chat changed." }) : original(operation, payload));
+    await menu.perform("fork");
+    expect(menu.uncertain.has("two")).toBe(false); expect(menu.busy.has("two")).toBe(false);
+    expect(menu.menu.querySelector('[data-chat-action="pin"]').disabled).toBe(false);
+    await menu.perform("pin");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", { thread_id: "two", pinned: true, navigation_revision: 1 });
+  });
+
+  it("keeps the existing source writable when the move destination disappears before server dispatch", async () => {
+    const { panel, menu, show } = setup(); await show(); const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation((operation, payload) => operation === "move_thread_project" ? Promise.reject({ code: "not_found", message: "The destination no longer exists." }) : original(operation, payload));
+    await menu.perform("move", "other");
+    menu.dialog.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+    await vi.waitFor(() => expect(menu.dialog.querySelector('button[type="submit"]').hidden).toBe(true));
+    expect(panel._callWS).toHaveBeenCalledWith("move_thread_project", { thread_id: "two", project_id: "other", navigation_revision: 1, workspace_artifact_ids: [] });
+    expect(menu.uncertain.has("two")).toBe(false); expect(panel._threads.find((item) => item.thread_id === "two").project_id).toBe("home");
+    menu.closeDialog(); await show(); await menu.perform("pin");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", { thread_id: "two", pinned: true, navigation_revision: 1 });
+  });
+
+  it.each(["move", "fork"])("blocks duplicate native writes after an explicitly unknown %s outcome", async (action) => {
+    const { panel, menu, show } = setup(); await show(); const original = panel._callWS.getMockImplementation();
+    panel._callWS.mockImplementation((operation, payload) => ["move_thread_project", "fork_thread"].includes(operation) ? Promise.reject({ code: "runtime_thread_operation_unknown", message: "The native result could not be confirmed." }) : original(operation, payload));
+    if (action === "move") {
+      await menu.perform("move", "other"); menu.dialog.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }));
+      await vi.waitFor(() => expect(menu.dialog.querySelector('button[type="submit"]').hidden).toBe(true)); menu.closeDialog();
+    } else await menu.perform("fork");
+    expect(menu.uncertain.has("two")).toBe(true); await show();
+    await menu.perform("fork"); await menu.perform("move", "other"); await menu.perform("pin");
+    expect(panel._callWS.mock.calls.filter(([operation]) => operation === "move_thread_project")).toHaveLength(action === "move" ? 1 : 0);
+    expect(panel._callWS.mock.calls.filter(([operation]) => operation === "fork_thread")).toHaveLength(action === "fork" ? 1 : 0);
+    expect(panel._callWS).not.toHaveBeenCalledWith("update_thread", expect.anything());
+  });
+
   it("provides a trapped accessible move dialog and reachable cancellation while loading on mobile", async () => {
     const originalWidth = window.innerWidth; Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     try {

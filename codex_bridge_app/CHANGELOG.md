@@ -10,7 +10,8 @@ All notable App changes are recorded here.
 - Adds same-account native forks sharing the current workspace and bounded
   moves into an existing project with copies of chat-owned files and a review
   for selecting shared project files. Failed copy cleanup retains its storage
-  accounting. Active work,
+  accounting. Pending native outcomes remain unverified until inspected;
+  definitive rejection leaves other chat actions available. Active work,
   scheduled references, uncertain identity and unsafe files prevent a move.
 - Adds a conversation tick rail with animated hover previews and keyboard jumps;
   phones and touch tablets use a compact Jump to message disclosure.

@@ -63,3 +63,12 @@ The integrated conversation checks also cover empty chats, scrollable large
 histories, 24-pixel desktop targets, alignment with the composer/header, and a
 compact disclosure when the actual desktop chat area has insufficient space.
 Provider, filesystem and managed release acceptance remain separate.
+
+PR #153 review corrections passed 52 focused action tests, all 610 frontend
+unit tests, lint, a regenerated bundle and all 102 Chromium scenarios.
+Definitive scheduled-chat restrictions, operation conflicts and missing
+destinations preserve other actions; genuinely unknown outcomes continue to
+block repeated writes. The full Python 3.14 Linux gate passed 2,248 Bridge
+tests (27 skipped), 425 Integration tests and eight root restore checks. Real
+outbox failures verify pending fork and move recovery without a duplicate
+provider call. These checks do not replace managed native acceptance.

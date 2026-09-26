@@ -44,6 +44,8 @@ from custom_components.codex_bridge.websocket_api import (
     ws_unsubscribe_events,
     ws_update_stdio_mcp,
     ws_update_thread,
+    ws_fork_thread,
+    ws_move_thread_project,
     ws_create_chat_section,
     ws_update_chat_section,
     ws_delete_chat_section,
@@ -227,6 +229,76 @@ async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits()
                 "revision": 0,
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("operation", "error_code", "status", "safe_message"),
+    [
+        (
+            "fork",
+            "not_found",
+            404,
+            "The requested chat or project no longer exists",
+        ),
+        (
+            "move",
+            "not_found",
+            404,
+            "The requested chat or project no longer exists",
+        ),
+        (
+            "move",
+            "runtime_thread_operation_unknown",
+            503,
+            "Codex could not confirm the chat operation. Refresh before retrying",
+        ),
+    ],
+)
+async def test_chat_operation_websocket_preserves_definitive_and_unknown_errors(
+    operation: str,
+    error_code: str,
+    status: int,
+    safe_message: str,
+) -> None:
+    runtime, _broker = _runtime()
+    hass = _Hass(runtime)
+    connection = _Connection()
+    problem = ProblemRecord.from_payload(
+        status, {"detail": {"code": error_code}}
+    )
+    if operation == "fork":
+        runtime.client.async_fork_thread.side_effect = BridgeApiProblemError(
+            problem=problem
+        )
+        ws_fork_thread(
+            hass,
+            connection,
+            {
+                "id": 92,
+                "type": f"{DOMAIN}/fork_thread",
+                "thread_id": "thr_missing",
+            },
+        )
+    else:
+        runtime.client.async_move_thread_project.side_effect = BridgeApiProblemError(
+            problem=problem
+        )
+        ws_move_thread_project(
+            hass,
+            connection,
+            {
+                "id": 92,
+                "type": f"{DOMAIN}/move_thread_project",
+                "thread_id": "thr_missing",
+                "project_id": "prj_missing",
+                "navigation_revision": 4,
+                "workspace_artifact_ids": [],
+            },
+        )
+    await hass.finish()
+
+    assert connection.errors == [(92, error_code, safe_message)]
+    assert connection.results == []
 
 
 async def test_start_auth_login_defaults_to_non_destructive_mode() -> None:
