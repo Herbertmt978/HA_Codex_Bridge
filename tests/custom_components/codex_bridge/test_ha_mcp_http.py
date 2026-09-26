@@ -58,6 +58,7 @@ async def test_connect_uses_authenticated_user_and_never_reflects_private_metada
     assert json.loads(response.text) == view.public
     assert response.headers["Cache-Control"] == "no-store"
     view.helper.async_connect.assert_awaited_once_with(view.user, acknowledged=True)
+    view.runtime.async_refresh_capabilities.assert_awaited_once_with()
     assert "synthetic-private-secret" not in response.text
 
 
@@ -75,6 +76,7 @@ async def test_unknown_identity_destination_and_credential_fields_are_rejected(v
     assert json.loads(response.text) == {"code": "mcp_request_invalid"}
     view.helper.async_connect.assert_not_called()
     view.helper.async_disconnect.assert_not_called()
+    view.runtime.async_refresh_capabilities.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -94,6 +96,10 @@ async def test_existing_grant_actions_do_not_reauthorise(view, operation):
     assert response.status == 200
     getattr(view.helper, f"async_{operation}").assert_awaited_once_with()
     view.helper.async_connect.assert_not_called()
+    if operation == "disconnect":
+        view.runtime.async_refresh_capabilities.assert_not_awaited()
+    else:
+        view.runtime.async_refresh_capabilities.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio

@@ -446,10 +446,10 @@ class CodexBridgeHaMcpView(HomeAssistantView):
         headers = {"Cache-Control": "no-store"}
         try:
             runtime = async_get_runtime(self.hass)
-            await runtime.async_refresh_capabilities()
             shortcut = runtime.ha_mcp_shortcut
             if shortcut is None:
                 raise HaMcpShortcutError()
+            operation = None
             if mutation:
                 if request.content_type != "application/json":
                     raise ValueError()
@@ -466,11 +466,18 @@ class CodexBridgeHaMcpView(HomeAssistantView):
                 if operation == "connect":
                     if set(payload) != {"operation", "acknowledged"} or payload["acknowledged"] is not True:
                         raise ValueError()
-                    result = await shortcut.async_connect(request["hass_user"], acknowledged=True)
-                elif operation in {"disconnect", "refresh"} and set(payload) == {"operation"}:
-                    result = await (shortcut.async_disconnect() if operation == "disconnect" else shortcut.async_refresh())
-                else:
+                elif operation not in {"disconnect", "refresh"} or set(payload) != {"operation"}:
                     raise ValueError()
+            # Local revocation must precede any App discovery or network wait.
+            # The helper retains the existing bounded, retryable remote cleanup.
+            if operation != "disconnect":
+                await runtime.async_refresh_capabilities()
+            if operation == "connect":
+                result = await shortcut.async_connect(request["hass_user"], acknowledged=True)
+            elif operation == "disconnect":
+                result = await shortcut.async_disconnect()
+            elif operation == "refresh":
+                result = await shortcut.async_refresh()
             else:
                 result = await shortcut.async_status()
             return web.json_response(_ha_mcp_public_status(result), headers=headers)

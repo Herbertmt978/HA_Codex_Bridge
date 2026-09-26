@@ -1356,6 +1356,109 @@ async def test_ha_mcp_shortcut_uses_ha_admin_boundary(hass, hass_client, hass_cl
     assert owner.is_admin and owner.is_active
 
 
+@pytest.fixture
+async def ha_mcp_http_grant(hass, hass_admin_user, monkeypatch):
+    """A real HA-owned grant with only the remote MCP availability faked."""
+    from custom_components.codex_bridge.const import CONNECTION_TYPE_SUPERVISOR
+    from custom_components.codex_bridge.ha_mcp_shortcut import HaMcpShortcut
+
+    bridge = SimpleNamespace(async_add_mcp=AsyncMock(return_value={}),
+                             async_remove_managed_mcp=AsyncMock())
+    helper = HaMcpShortcut(hass, "http-owned", bridge,
+        connection_type=CONNECTION_TYPE_SUPERVISOR,
+        supports_capability=lambda _capability: True,
+        selection_callback=AsyncMock())
+    monkeypatch.setattr(helper, "_environment", lambda: True)
+    previous = set(hass_admin_user.refresh_tokens)
+    result = await helper.async_connect(hass_admin_user, acknowledged=True)
+    created = set(hass_admin_user.refresh_tokens) - previous
+    assert len(created) == 1
+    token_id = created.pop()
+    await _install_runtime(hass, bridge)
+    runtime = hass.data[DOMAIN][DATA_ENTRIES]["entry"]
+    runtime.ha_mcp_shortcut = helper
+    runtime.async_refresh_capabilities = AsyncMock()
+    yield SimpleNamespace(helper=helper, runtime=runtime, bridge=bridge,
+                          token_id=token_id, server_name=result["server_name"])
+    await helper.async_close()
+    token = hass.auth.async_get_refresh_token(token_id)
+    if token is not None:
+        hass.auth.async_remove_refresh_token(token)
+
+
+async def test_ha_mcp_http_disconnect_revokes_without_app_readiness(
+    hass, hass_client, ha_mcp_http_grant,
+):
+    case = ha_mcp_http_grant
+    case.runtime.async_refresh_capabilities.side_effect = AssertionError("App readiness must not precede revocation")
+    client = await hass_client()
+    response = await client.post("/api/codex_bridge/mcp/home_assistant", json={"operation": "disconnect"})
+    assert response.status == 200
+    assert await response.json() == {"state": "not_connected", "code": "not_connected",
+        "available": False, "configured": False, "requires_tool_selection": True,
+        "server_name": None}
+    assert response.headers["Cache-Control"] == "no-store"
+    assert hass.auth.async_get_refresh_token(case.token_id) is None
+    case.runtime.async_refresh_capabilities.assert_not_awaited()
+    case.bridge.async_remove_managed_mcp.assert_awaited_once()
+
+
+async def test_ha_mcp_http_cancelled_disconnect_keeps_grant_revoked_and_cleanup_retryable(
+    hass, hass_client, ha_mcp_http_grant,
+):
+    case = ha_mcp_http_grant
+    cleanup_started = asyncio.Event()
+    handler = None
+
+    async def stalled_readiness():
+        await asyncio.Event().wait()
+
+    async def stalled_cleanup(*_args):
+        nonlocal handler
+        assert hass.auth.async_get_refresh_token(case.token_id) is None
+        handler = asyncio.current_task()
+        cleanup_started.set()
+        await asyncio.Event().wait()
+
+    case.runtime.async_refresh_capabilities.side_effect = stalled_readiness
+    case.bridge.async_remove_managed_mcp.side_effect = stalled_cleanup
+    client = await hass_client()
+    request = asyncio.create_task(client.post("/api/codex_bridge/mcp/home_assistant", json={"operation": "disconnect"}))
+    try:
+        await asyncio.wait_for(cleanup_started.wait(), timeout=1)
+        case.runtime.async_refresh_capabilities.assert_not_awaited()
+        assert handler is not None
+        handler.cancel()
+        await asyncio.gather(handler, return_exceptions=True)
+    finally:
+        if not request.done():
+            request.cancel()
+        await asyncio.gather(request, return_exceptions=True)
+    assert hass.auth.async_get_refresh_token(case.token_id) is None
+    journal = await case.helper._store.async_load()
+    assert journal["record"]["state"] == "disconnecting"
+    case.bridge.async_remove_managed_mcp.side_effect = None
+    response = await client.post("/api/codex_bridge/mcp/home_assistant", json={"operation": "disconnect"})
+    assert response.status == 200
+    assert (await response.json())["state"] == "not_connected"
+    assert await case.helper._store.async_load() == {"record": None}
+    assert hass.auth.async_get_refresh_token(case.token_id) is None
+    case.runtime.async_refresh_capabilities.assert_not_awaited()
+
+
+async def test_ha_mcp_http_invalid_disconnect_does_not_revoke_or_refresh(
+    hass, hass_client, ha_mcp_http_grant,
+):
+    case = ha_mcp_http_grant
+    client = await hass_client()
+    response = await client.post("/api/codex_bridge/mcp/home_assistant", json={"operation": "disconnect", "unknown": True})
+    assert response.status == 400
+    assert await response.json() == {"code": "mcp_request_invalid"}
+    assert hass.auth.async_get_refresh_token(case.token_id) is not None
+    case.runtime.async_refresh_capabilities.assert_not_awaited()
+    case.bridge.async_remove_managed_mcp.assert_not_awaited()
+
+
 @pytest.mark.parametrize("payload", [[], {"operation":"create", "name":"secured", "authentication":{"mode":"bearer", "token":"synthetic-secret"}, "unknown":"synthetic-secret"}, {"operation":"replace", "name":"secured", "url":"https://different.example.com", "authentication":{}}, {"operation":"remove", "name":"secured", "token":"synthetic-secret"}, {"operation":[], "name":"secured"}])
 async def test_mcp_credential_http_errors_are_fixed(hass, hass_client, payload, caplog):
     from unittest.mock import Mock
