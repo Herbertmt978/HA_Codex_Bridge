@@ -135,10 +135,10 @@ async def test_panel_transcript_search_contract_is_accepted_and_forwarded(search
     connection = _Connection()
     runtime.client.async_search_transcript.return_value = {"results": []}
     message = ws_search_transcript._ws_schema(
-        {"type": f"{DOMAIN}/search_transcript", **search_request}
+        {"id": 92, "type": f"{DOMAIN}/search_transcript", **search_request}
     )
 
-    ws_search_transcript(hass, connection, {"id": 92, **message})
+    ws_search_transcript(hass, connection, message)
     await hass.finish()
 
     runtime.client.async_search_transcript.assert_awaited_once_with(
@@ -151,7 +151,7 @@ async def test_panel_transcript_search_contract_is_accepted_and_forwarded(search
     assert connection.results == [(92, {"results": []})]
     with pytest.raises(vol.Invalid):
         ws_search_transcript._ws_schema(
-            {"type": f"{DOMAIN}/search_transcript", "q": search_request["query"]}
+            {"id": 92, "type": f"{DOMAIN}/search_transcript", "q": search_request["query"]}
         )
 
 
