@@ -11,6 +11,7 @@ from uuid import uuid4
 from homeassistant.components.conversation import (
     ChatLog,
     ConversationEntity,
+    ConversationEntityFeature,
     ConversationInput,
     ConversationResult,
 )
@@ -20,11 +21,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .bridge_api import BridgeApiConnectionError, BridgeApiError
 from .assist_settings import (
     MAX_ASSIST_INSTRUCTIONS,
     assist_prompt,
+    assist_mcp_selection,
     assist_selection_supported,
     live_assist_models,
 )
@@ -35,6 +38,7 @@ from .const import (
     CONF_ASSIST_MODEL,
     CONF_ASSIST_REASONING,
     CONF_ASSIST_INSTRUCTIONS,
+    CONF_ASSIST_MCP_SERVERS,
     CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
@@ -53,6 +57,7 @@ _TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 class _AssistSession:
     thread_id: str | None
     owner_id: str | None
+    mcp_fingerprint: tuple[str, ...]
     pending_task_id: str | None = None
     pending_prompt: str | None = None
     pending_payload: dict | None = None
@@ -96,9 +101,27 @@ class CodexAssistConversation(ConversationEntity):
         # Reject concurrent voice requests rather than queueing unbounded work.
         self._request_lock = asyncio.Lock()
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(async_dispatcher_connect(
+            self.hass, f"{DOMAIN}.{self._entry.entry_id}.assist_settings",
+            self.async_write_ha_state,
+        ))
+
     @property
     def supported_languages(self) -> Literal["*"]:
         return "*"
+
+    @property
+    def supported_features(self) -> ConversationEntityFeature:
+        """Advertise control only when selected MCP servers can be sent."""
+
+        selected = assist_mcp_selection(
+            self._entry.options.get(CONF_ASSIST_MCP_SERVERS, [])
+        ) or ()
+        if selected and self._runtime.supports_capability("assist_mcp_selection_v1"):
+            return ConversationEntityFeature.CONTROL
+        return ConversationEntityFeature(0)
 
     async def _async_handle_message(
         self, user_input: ConversationInput, chat_log: ChatLog
@@ -139,6 +162,22 @@ class CodexAssistConversation(ConversationEntity):
                 chat_log,
                 "Update the Codex Bridge App to use Assist conversations.",
             )
+        selected_mcp = assist_mcp_selection(
+            self._entry.options.get(CONF_ASSIST_MCP_SERVERS, [])
+        )
+        if selected_mcp is None:
+            return self._reply(
+                user_input,
+                chat_log,
+                "Ask a Home Assistant administrator to review the Codex Bridge Assist MCP server selection.",
+            )
+        mcp_supported = self._runtime.supports_capability("assist_mcp_selection_v1")
+        if selected_mcp and not mcp_supported:
+            return self._reply(
+                user_input,
+                chat_log,
+                "Update the Codex Bridge App to use Assist MCP server selections.",
+            )
         if self._request_lock.locked():
             return self._reply(
                 user_input,
@@ -152,6 +191,13 @@ class CodexAssistConversation(ConversationEntity):
             # the authoritative session identity, not the incoming ID.
             conversation_id = chat_log.conversation_id
             session = self._sessions.get(conversation_id)
+            if session is not None and session.mcp_fingerprint != selected_mcp:
+                self._sessions.pop(conversation_id, None)
+                return self._reply(
+                    user_input,
+                    chat_log,
+                    "The Assist settings changed. Start a new conversation to continue.",
+                )
             if (session is not None and session.owner_id != owner) or (
                 session is None
                 and any(
@@ -181,7 +227,7 @@ class CodexAssistConversation(ConversationEntity):
                             "Codex Bridge Assist is at capacity. Please try again later.",
                         )
                     self._sessions.pop(old_id)
-                session = _AssistSession(None, owner)
+                session = _AssistSession(None, owner, selected_mcp)
                 self._sessions[conversation_id] = session
             else:
                 self._sessions.move_to_end(conversation_id)
@@ -242,6 +288,8 @@ class CodexAssistConversation(ConversationEntity):
                 "assist": True,
                 "web_search": "disabled",
             }
+            if mcp_supported:
+                payload["assist_mcp_servers"] = list(selected_mcp)
             if session.thread_id is None:
                 payload.update(
                     {
@@ -292,7 +340,13 @@ class CodexAssistConversation(ConversationEntity):
                 if session.thread_id is None:
                     self._sessions.pop(conversation_id, None)
                 if error.code == "assist_mcp_unavailable":
-                    speech = "Assist conversations need MCP to be disabled in the Codex Bridge App."
+                    speech = (
+                        "One or more selected Assist MCP servers are unavailable or paused. Ask a Home Assistant administrator to review Codex Bridge settings."
+                        if selected_mcp
+                        else "Assist conversations need MCP to be disabled in the Codex Bridge App."
+                    )
+                elif error.code == "assist_selection_changed":
+                    speech = "The Assist MCP server selection changed. Start a new conversation to continue."
                 elif error.code in {"authentication_required", "authentication_failed"}:
                     speech = "Sign in to Codex Bridge before using Assist."
                 elif error.code in {"assist_model_unavailable", "task_model_unavailable"}:

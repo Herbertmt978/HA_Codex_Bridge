@@ -20,6 +20,7 @@ from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
 
 if TYPE_CHECKING:
+    from .ha_mcp_shortcut import HaMcpShortcut
     from .entity_coordinator import BridgeEntityCoordinator
     from .task_events import TaskEventForwarder
 
@@ -40,6 +41,7 @@ class CodexBridgeRuntime:
     automation_scheduler: AutomationScheduler | None = None
     automation_notifications: AutomationNotificationCoordinator | None = None
     entity_coordinator: BridgeEntityCoordinator | None = None
+    ha_mcp_shortcut: HaMcpShortcut | None = None
     capabilities: tuple[str, ...] = ()
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
     _capability_refresh_lock: asyncio.Lock = field(
@@ -123,6 +125,8 @@ class CodexBridgeRuntime:
         """Provide a lifecycle seam without taking ownership of HA's session."""
 
         try:
+            if self.ha_mcp_shortcut is not None:
+                await self.ha_mcp_shortcut.async_close()
             if self.task_event_forwarder is not None:
                 await self.task_event_forwarder.async_close()
             if self.entity_coordinator is not None:

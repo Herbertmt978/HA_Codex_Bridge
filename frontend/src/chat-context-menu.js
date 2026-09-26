@@ -293,6 +293,13 @@ export class ChatContextMenu {
         node.dataset.chatAction = entry.action; node._chatValue = entry.value;
         node.disabled = this.busy.has(this.threadId) || (this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action));
         if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) node.disabled = true;
+        const assistOwned = this.thread()?.assist_origin === true;
+        const changesAssistRoute = ["move", "fork"].includes(entry.action)
+          || (entry.action === "submenu" && ["project", "fork"].includes(entry.value));
+        if (assistOwned && changesAssistRoute) {
+          node.title = "Home Assistant manages this conversation's project and history. Start a regular chat for independent work.";
+          node.disabled = true;
+        } else node.removeAttribute("title");
         if (entry.action === "section" && !this.sectionsLoaded) node.disabled = true;
         node.hidden = entry.action === "back" && !this.compact;
         if (entry.action === "submenu") {
@@ -347,7 +354,9 @@ export class ChatContextMenu {
     }
     if (this.submenu) this.reconcilePage(this.submenu, this.entries());
     if (!this.status) { this.status = document.createElement("p"); this.status.className = "chat-menu-status"; this.status.setAttribute("role", "status"); }
-    const notice = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
+    const notice = this.notice || (this.thread()?.assist_origin === true
+      ? "Home Assistant manages this conversation's project and history. Start a regular chat for independent work."
+      : this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
     if (this.status.textContent !== notice) this.status.textContent = notice;
     const statusParent = this.submenu || this.menu;
     if (this.status.parentNode !== statusParent) statusParent.append(this.status);
@@ -433,6 +442,8 @@ export class ChatContextMenu {
     }
     if (["pin", "unread", "section", "move", "fork", "create-section", "rename-section", "remove-section"].includes(action) && !this.supported) return;
     if (["move", "fork"].includes(action) && this.panel._runActivityForThread(thread).busy) return;
+    if (thread.assist_origin === true && (["move", "fork"].includes(action)
+      || (action === "submenu" && ["project", "fork"].includes(value)))) return;
     if (action === "move" && !this.panel._projects.some((project) => project.project_id === value && project.kind === "project" && !project.archived_at && project.project_id !== thread.project_id)) return;
     if (this.uncertain.has(thread.thread_id) && !["refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown"].includes(action)) return;
     if (action === "rename") { this.openDialog("Rename chat", "Chat title", thread.title || "", async (title) => this.mutate(thread, "update_thread", { title })); return; }

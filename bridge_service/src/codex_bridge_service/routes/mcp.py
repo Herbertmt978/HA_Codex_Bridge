@@ -59,6 +59,14 @@ class McpCredentialRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     authentication: object = Field(repr=False)
     auth_acknowledged: StrictBool = False
+    expected_url: str | None = Field(default=None, max_length=2048, repr=False)
+    expected_token_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$", repr=False)
+
+
+class McpCredentialBindingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_url: str = Field(min_length=1, max_length=2048, repr=False)
+    expected_token_sha256: str = Field(pattern=r"^[a-f0-9]{64}$", repr=False)
 
 
 class McpStateRequest(BaseModel):
@@ -192,7 +200,10 @@ def replace_mcp_credential(name: str, payload: McpCredentialRequest, request: Re
     _authorize(request, authorization)
     response.headers["Cache-Control"] = "no-store"
     try:
-        return _manager(request).replace_credential(name, payload.authentication, acknowledged=payload.auth_acknowledged)
+        return _manager(request).replace_credential(
+            name, payload.authentication, acknowledged=payload.auth_acknowledged,
+            expected_url=payload.expected_url, expected_token_sha256=payload.expected_token_sha256,
+        )
     except McpManagerError as error:
         raise _problem(error) from None
 
@@ -261,6 +272,21 @@ def delete_mcp_server(
     _authorize(request, authorization)
     try:
         _manager(request).remove_server(name)
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/servers/{name}/managed/remove", status_code=status.HTTP_204_NO_CONTENT)
+def remove_managed_mcp_server(
+    name: str, payload: McpCredentialBindingRequest, request: Request,
+    response: Response, authorization: str | None = Header(default=None),
+) -> None:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        _manager(request).remove_server(
+            name, expected_url=payload.expected_url, expected_token_sha256=payload.expected_token_sha256,
+        )
     except McpManagerError as error:
         raise _problem(error) from None
 

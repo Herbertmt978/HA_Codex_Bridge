@@ -252,6 +252,10 @@ def create_app(
                 # One bounded callback worker preserves app-server FIFO order.
                 callback_workers=1,
                 enable_mcp=enable_mcp,
+                # Assist explicitly detaches idle provider sessions so a new
+                # turn cannot inherit old MCP permissions. Ordinary subscribed
+                # chats are unaffected by this native unload delay.
+                thread_unload_delay_seconds=0,
                 # Negotiate namespace support, but register privileged tools
                 # only for a run with a current explicit host grant. This flag
                 # alone changes no sandbox or App privileges.
@@ -841,6 +845,7 @@ def create_app(
             feature_capabilities.append("mcp_tool_permissions_v1")
             if resolved_local_mcp is not None:
                 feature_capabilities.append("mcp_credentials_v1")
+                feature_capabilities.append("mcp_credential_binding_v1")
                 if resolved_local_mcp.local_enabled:
                     feature_capabilities.append("mcp_local_v1")
             if resolved_stdio_mcp is not None:
@@ -970,6 +975,13 @@ def create_app(
             "plan_mode_v1",
         )
         app.state.feature_capabilities = tuple(negotiated_capabilities)
+    if (
+        isinstance(resolved_runner, RuntimeBroker)
+        and resolved_mcp_manager is not None
+        and resolved_mcp_manager.elicitation_handler_registered
+        and resolved_runner.supports_assist_mcp_selection
+    ):
+        app.state.feature_capabilities += ("assist_mcp_selection_v1",)
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         resolved_discord = DiscordChannelManager(app, Path(root_path))
         app.state.discord_channel = resolved_discord

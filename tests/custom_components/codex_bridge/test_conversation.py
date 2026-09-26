@@ -5,7 +5,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
-from homeassistant.components.conversation import ConversationInput
+from homeassistant.components.conversation import (
+    ConversationEntityFeature,
+    ConversationInput,
+)
 from homeassistant.core import Context
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -21,6 +24,7 @@ from custom_components.codex_bridge.const import (
     CONF_ASSIST_MODEL,
     CONF_ASSIST_REASONING,
     CONF_ASSIST_INSTRUCTIONS,
+    CONF_ASSIST_MCP_SERVERS,
     CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
@@ -41,7 +45,7 @@ def _input(user_id=None, conversation_id=None, text="Hello"):
     )
 
 
-def _agent(hass, *, allow_voice=False, settings=None):
+def _agent(hass, *, allow_voice=False, settings=None, mcp_capability=False):
     entry = MockConfigEntry(
         domain=DOMAIN,
         options={
@@ -83,7 +87,8 @@ def _agent(hass, *, allow_voice=False, settings=None):
         client=client,
         discovery_uuid="app_discovery",
         title="Codex Bridge App",
-        supports_capability=lambda capability: capability == "assist_conversation_v1",
+        supports_capability=lambda capability: capability == "assist_conversation_v1"
+        or (mcp_capability and capability == "assist_mcp_selection_v1"),
     )
     agent = CodexAssistConversation(entry, runtime)
     agent.hass = hass
@@ -357,6 +362,72 @@ async def test_explicit_model_reasoning_and_plain_instructions_are_used(hass):
     assert client.async_get_status.await_count == 2
 
 
+async def test_selected_mcp_names_are_sent_on_start_and_continuation(hass):
+    admin = await hass.auth.async_create_user("Administrator", group_ids=[GROUP_ID_ADMIN])
+    agent, client = _agent(
+        hass,
+        mcp_capability=True,
+        settings={CONF_ASSIST_MCP_SERVERS: ["z_server", "ha_mcp"]},
+    )
+    assert agent.supported_features == ConversationEntityFeature.CONTROL
+    first = await agent._async_handle_message(
+        _input(admin.id), Mock(conversation_id="mcp-session", content=[])
+    )
+    started = client.async_start_task.await_args.args[0]
+    assert started["assist_mcp_servers"] == ["ha_mcp", "z_server"]
+    assert started["mode"] == "observe"
+    await agent._async_handle_message(
+        _input(admin.id, first.conversation_id, "Again"), Mock(conversation_id="mcp-session", content=[])
+    )
+    assert client.async_continue_task.await_args.args[0]["assist_mcp_servers"] == [
+        "ha_mcp", "z_server"
+    ]
+
+
+async def test_supported_app_receives_explicit_empty_mcp_selection(hass):
+    admin = await hass.auth.async_create_user("Administrator", group_ids=[GROUP_ID_ADMIN])
+    agent, client = _agent(hass, mcp_capability=True)
+    assert agent.supported_features == ConversationEntityFeature(0)
+    await agent._async_handle_message(
+        _input(admin.id), Mock(conversation_id="empty-mcp-selection", content=[])
+    )
+    assert client.async_start_task.await_args.args[0]["assist_mcp_servers"] == []
+
+
+async def test_saved_mcp_selection_requires_new_app_capability(hass):
+    admin = await hass.auth.async_create_user("Administrator", group_ids=[GROUP_ID_ADMIN])
+    agent, client = _agent(
+        hass, settings={CONF_ASSIST_MCP_SERVERS: ["ha_mcp"]}
+    )
+    assert agent.supported_features == ConversationEntityFeature(0)
+    chat_log = Mock(conversation_id="old-app", content=[])
+    await agent._async_handle_message(_input(admin.id), chat_log)
+    assert chat_log.async_add_assistant_content_without_tools.call_args.args[0].content == (
+        "Update the Codex Bridge App to use Assist MCP server selections."
+    )
+    client.async_start_task.assert_not_awaited()
+
+
+async def test_changed_mcp_selection_expires_existing_session(hass):
+    admin = await hass.auth.async_create_user("Administrator", group_ids=[GROUP_ID_ADMIN])
+    agent, client = _agent(
+        hass,
+        mcp_capability=True,
+        settings={CONF_ASSIST_MCP_SERVERS: ["ha_mcp"]},
+    )
+    agent._entry.add_to_hass(hass)
+    chat_log = Mock(conversation_id="changed-selection", content=[])
+    first = await agent._async_handle_message(_input(admin.id), chat_log)
+    hass.config_entries.async_update_entry(
+        agent._entry, options={**agent._entry.options, CONF_ASSIST_MCP_SERVERS: ["other"]},
+    )
+    await agent._async_handle_message(
+        _input(admin.id, first.conversation_id, "Again"), chat_log
+    )
+    assert client.async_continue_task.await_count == 0
+    assert "settings changed" in chat_log.async_add_assistant_content_without_tools.call_args.args[0].content
+
+
 async def test_unset_assist_model_preserves_existing_project_defaults(hass):
     admin = await hass.auth.async_create_user("Administrator", group_ids=[GROUP_ID_ADMIN])
     agent, client = _agent(hass)
@@ -364,6 +435,7 @@ async def test_unset_assist_model_preserves_existing_project_defaults(hass):
     payload = client.async_start_task.await_args.args[0]
     assert "model_override" not in payload
     assert "thinking_override" not in payload
+    assert "assist_mcp_servers" not in payload
     assert payload["prompt"] == "Hello"
     client.async_get_status.assert_not_awaited()
 

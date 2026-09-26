@@ -2,9 +2,12 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import re
 
 
 MAX_ASSIST_INSTRUCTIONS = 4096
+_ASSIST_MCP_NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z", re.ASCII)
+MAX_ASSIST_MCP_SERVERS = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,3 +81,37 @@ def assist_prompt(question: str, instructions: str) -> str:
     if not instructions:
         return question
     return f"Conversation instructions:\n{instructions}\n\nUser question:\n{question}"
+
+
+def assist_mcp_server_choices(servers: object) -> dict[str, tuple[str, bool]]:
+    """Return bounded labels and enabled state for configured servers."""
+
+    if not isinstance(servers, list):
+        return {}
+    choices: dict[str, tuple[str, bool]] = {}
+    for server in servers[:256]:
+        if not isinstance(server, Mapping):
+            continue
+        name = _text(server.get("name"), 128)
+        if name is None or not _ASSIST_MCP_NAME.fullmatch(name):
+            continue
+        if type(server.get("enabled")) is not bool:
+            continue
+        title = _text(server.get("title"), 160)
+        enabled = server["enabled"]
+        choices[name] = (title or name, enabled)
+    return choices
+
+
+def assist_mcp_selection(value: object) -> tuple[str, ...] | None:
+    """Validate and canonicalise a bounded list of MCP server names."""
+
+    if not isinstance(value, (list, tuple)) or len(value) > MAX_ASSIST_MCP_SERVERS:
+        return None
+    if not all(
+        isinstance(item, str) and _ASSIST_MCP_NAME.fullmatch(item) for item in value
+    ):
+        return None
+    if len(set(value)) != len(value):
+        return None
+    return tuple(sorted(value))

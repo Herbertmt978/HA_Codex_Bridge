@@ -4,6 +4,8 @@ from copy import deepcopy
 
 from custom_components.codex_bridge.assist_settings import (
     assist_prompt,
+    assist_mcp_selection,
+    assist_mcp_server_choices,
     assist_selection_supported,
     live_assist_models,
 )
@@ -51,3 +53,19 @@ def test_recovery_unverified_and_configured_only_models_are_not_choices():
 def test_instructions_are_plain_text_and_empty_preserves_original_prompt():
     assert assist_prompt("Hello", "") == "Hello"
     assert "{{ states('sensor.private') }}" in assist_prompt("Hello", "{{ states('sensor.private') }}")
+
+
+def test_assist_mcp_choices_use_safe_names_and_keep_pause_state():
+    assert assist_mcp_server_choices([
+        {"name": "home_assistant", "title": "Home Assistant", "enabled": True},
+        {"name": "clock", "enabled": False},
+        {"name": "bad\nname", "enabled": True},
+        {"name": "ignored", "enabled": 1},
+    ]) == {
+        "home_assistant": ("Home Assistant", True),
+        "clock": ("clock", False),
+    }
+    assert assist_mcp_selection(["z_server", "a_server"]) == ("a_server", "z_server")
+    assert assist_mcp_selection(["a_server", "a_server"]) is None
+    assert assist_mcp_selection(["A_server"]) is None
+    assert assist_mcp_selection([f"server_{index}" for index in range(33)]) is None

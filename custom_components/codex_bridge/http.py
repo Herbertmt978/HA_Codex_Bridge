@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import Unauthorized
 
 from .bridge_api import BridgeApiError
+from .ha_mcp_shortcut import HaMcpShortcutError
 from .http_streaming import (
     DOWNLOAD_STREAM_CHUNK_BYTES,
     HttpStreamingError,
@@ -408,6 +409,85 @@ class CodexBridgeMcpConnectionView(CodexBridgeMcpCredentialView):
     operations = frozenset({"edit", "state"})
 
 
+def _ha_mcp_public_status(value: object) -> dict[str, object]:
+    """Expose fixed lifecycle codes and controls, never private grant metadata."""
+    states = {"not_connected", "unavailable", "configured", "paused", "connected",
+              "expired", "retry", "reauthorise", "cleanup_pending", "invalid_journal"}
+    if not isinstance(value, dict) or value.get("state") not in states:
+        raise HaMcpShortcutError()
+    name = value.get("server_name")
+    if name is not None and (not isinstance(name, str) or not re.fullmatch(r"ha-assist-[a-f0-9]{12}", name)):
+        raise HaMcpShortcutError()
+    if any(type(value.get(key)) is not bool for key in ("available", "configured", "requires_tool_selection")):
+        raise HaMcpShortcutError()
+    return {"state": value["state"], "code": value["state"], "server_name": name,
+            **{key: value[key] for key in ("available", "configured", "requires_tool_selection")}}
+
+
+class CodexBridgeHaMcpView(HomeAssistantView):
+    """Authorise the installed HA MCP using the authenticated administrator."""
+
+    url = "/api/codex_bridge/mcp/home_assistant"
+    name = "api:codex_bridge:ha_mcp"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def get(self, request: web.Request) -> web.Response:
+        _require_admin(request)
+        return await self._handle(request, mutation=False)
+
+    async def post(self, request: web.Request) -> web.Response:
+        _require_admin(request)
+        return await self._handle(request, mutation=True)
+
+    async def _handle(self, request: web.Request, *, mutation: bool) -> web.Response:
+        headers = {"Cache-Control": "no-store"}
+        try:
+            runtime = async_get_runtime(self.hass)
+            await runtime.async_refresh_capabilities()
+            shortcut = runtime.ha_mcp_shortcut
+            if shortcut is None:
+                raise HaMcpShortcutError()
+            if mutation:
+                if request.content_type != "application/json":
+                    raise ValueError()
+                body = bytearray()
+                async with asyncio.timeout(15):
+                    async for chunk in request.content.iter_chunked(1024):
+                        body.extend(chunk)
+                        if len(body) > 1024:
+                            raise ValueError()
+                payload = json.loads(body)
+                if not isinstance(payload, dict):
+                    raise ValueError()
+                operation = payload.get("operation")
+                if operation == "connect":
+                    if set(payload) != {"operation", "acknowledged"} or payload["acknowledged"] is not True:
+                        raise ValueError()
+                    result = await shortcut.async_connect(request["hass_user"], acknowledged=True)
+                elif operation in {"disconnect", "refresh"} and set(payload) == {"operation"}:
+                    result = await (shortcut.async_disconnect() if operation == "disconnect" else shortcut.async_refresh())
+                else:
+                    raise ValueError()
+            else:
+                result = await shortcut.async_status()
+            return web.json_response(_ha_mcp_public_status(result), headers=headers)
+        except (ValueError, TypeError, UnicodeError, asyncio.TimeoutError):
+            return web.json_response({"code": "mcp_request_invalid"}, status=400, headers=headers)
+        except HaMcpShortcutError as error:
+            return web.json_response({"code": error.code}, status=409, headers=headers)
+        except BridgeApiError as error:
+            response = bridge_error_response(error)
+            response.headers.update(headers)
+            return response
+        except RuntimeError:
+            response = _runtime_unavailable_response()
+            response.headers.update(headers)
+            return response
+
+
 _DISCORD_DIAGNOSTICS = frozenset({
     "task_recovery_unavailable",
     "discord_dependency_unavailable",
@@ -550,6 +630,7 @@ class CodexBridgeDiscordView(HomeAssistantView):
 
 
 def async_register_http_views(hass: HomeAssistant) -> None:
+    hass.http.register_view(CodexBridgeHaMcpView(hass))
     hass.http.register_view(CodexBridgeDiscordView(hass))
     hass.http.register_view(CodexBridgeMcpCredentialView(hass))
     hass.http.register_view(CodexBridgeMcpConnectionView(hass))

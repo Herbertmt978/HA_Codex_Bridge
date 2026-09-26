@@ -24,6 +24,7 @@ from typing import Callable, Protocol
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from .codex_app_server import mcp_config_is_disabled
+from .assist_mcp import isolation_config, require_assist_layers, validate_selection
 from .mcp_local_policy import LocalMcpError
 from .mcp_relay import McpRelay, McpRelayRecoveryError
 from .mcp_stdio_adapter import StdioAdapterError, StdioMcpAdapter
@@ -85,6 +86,13 @@ class McpNotFoundError(McpManagerError):
 class McpConflictError(McpManagerError):
     code = "mcp_config_conflict"
     retryable = True
+
+
+class McpCredentialBindingConflictError(McpConflictError):
+    """The managed owner no longer owns this exact upstream credential."""
+
+    code = "mcp_credential_binding_conflict"
+    retryable = False
 
 
 class McpUnavailableError(McpManagerError):
@@ -265,6 +273,62 @@ class McpManager:
         # The callback may arrive while a config mutation holds the manager
         # lock and waits for app-server I/O. Read an immutable snapshot here.
         return self._enabled and name in self._active_names and not self._recovery_required
+
+    def assist_thread_config(
+        self, workspace: Path, selected: list[str], *, execution_cwd: Path,
+    ) -> dict[str, object]:
+        """Build a fresh per-thread mask while the caller owns prompt admission.
+
+        The normal MCP manager remains the only configuration/credential owner.
+        Assist cannot add servers or revive paused connections. Include every
+        effective workspace server, including unrecognised entries, in the mask.
+        """
+
+        try:
+            names = validate_selection(selected)
+        except ValueError:
+            raise McpValidationError() from None
+        with self._lock:
+            if self._recovery_required:
+                raise McpRecoveryRequiredError()
+            if names:
+                self._require_enabled()
+            definitions, _ = self._read_definitions(for_assist=True)
+            result = self._request("config/read", {"includeLayers": True, "cwd": str(workspace)})
+            try:
+                require_assist_layers(result)
+            except ValueError:
+                raise McpUnavailableError() from None
+            config = result.get("config") if isinstance(result, Mapping) else None
+            if not isinstance(config, Mapping):
+                raise McpProtocolError()
+            raw = config.get("mcp_servers", {})
+            if raw is None:
+                raw = {}
+            if not isinstance(raw, Mapping) or len(raw) > _MAX_SERVERS:
+                raise McpProtocolError()
+            if any(not _valid_name(name) or not isinstance(value, Mapping) for name, value in raw.items()):
+                raise McpProtocolError()
+            mask: dict[str, object] = {
+                name: {"enabled": False} for name in set(raw) | set(definitions)
+            }
+            for name in names:
+                definition = definitions.get(name)
+                if definition is None or not definition.enabled or name not in raw:
+                    raise McpUnavailableError()
+                try:
+                    effective = _definition_from_config(
+                        name, raw[name], relay=self._relay,
+                        stdio_adapter=self._stdio_adapter, effective=True,
+                    )
+                except McpValidationError:
+                    raise McpUnavailableError() from None
+                # Workspace configuration cannot widen the administrator's
+                # endpoint, credentials, tool selection or pause state.
+                if effective != definition:
+                    raise McpUnavailableError()
+                mask[name] = {**self._native_value(definition), "enabled": True}
+            return isolation_config(mask, workspace, execution_cwd=execution_cwd)
 
     def list_servers(self) -> list[dict[str, object]]:
         """Return only configured safe servers and bounded native status metadata."""
@@ -852,7 +916,10 @@ class McpManager:
             view["revision"] = self._revision(normalized, version)
             return view
 
-    def remove_server(self, name: object) -> None:
+    def remove_server(
+        self, name: object, *, expected_url: object = None,
+        expected_token_sha256: object = None,
+    ) -> None:
         self._require_enabled()
         normalized_name = _validate_name(name)
         with self._mutation_lease():
@@ -860,6 +927,9 @@ class McpManager:
                 definitions, version = self._read_definitions()
                 if normalized_name not in definitions:
                     raise McpNotFoundError()
+                self._require_credential_binding(
+                    definitions[normalized_name], expected_url, expected_token_sha256,
+                )
                 # Codex's native config writer treats a replace with null as
                 # deletion of the key.  Keep this operation inside the same CAS
                 # write/reload sequence as creation.
@@ -1056,7 +1126,10 @@ class McpManager:
                 definition.package_id, definition.package_revision))
         return view
 
-    def replace_credential(self, name: object, authentication: object = None, *, acknowledged: bool = False, remove: bool = False) -> dict[str, object]:
+    def replace_credential(
+        self, name: object, authentication: object = None, *, acknowledged: bool = False,
+        remove: bool = False, expected_url: object = None, expected_token_sha256: object = None,
+    ) -> dict[str, object]:
         self._require_enabled()
         normalized = _validate_name(name)
         try:
@@ -1071,6 +1144,7 @@ class McpManager:
                 definition = definitions.get(normalized)
                 if definition is None:
                     raise McpNotFoundError()
+                self._require_credential_binding(definition, expected_url, expected_token_sha256)
                 if not definition.relayed or definition.auth_mode == "none" or self._relay is None:
                     raise McpValidationError()
                 # Rotation may persist before reload fails. Invalidate open
@@ -1085,6 +1159,20 @@ class McpManager:
                 self._startup.pop(normalized, None)
         return {"name": normalized, "auth": credential.mode if credential else definition.auth_mode,
                 "credential_configured": credential is not None}
+
+    def _require_credential_binding(
+        self, definition: McpServerDefinition, url: object, token_sha256: object,
+    ) -> None:
+        if url is None and token_sha256 is None:
+            return
+        if (not isinstance(url, str) or not 1 <= len(url) <= 2048
+                or not isinstance(token_sha256, str)
+                or re.fullmatch(r"[a-f0-9]{64}", token_sha256, re.ASCII) is None):
+            raise McpValidationError()
+        if (self._relay is None or not definition.relayed or not definition.local
+                or definition.auth_mode != "bearer" or definition.url != url
+                or not self._relay.credential_binding_matches(definition.name, url, token_sha256)):
+            raise McpCredentialBindingConflictError()
 
     def _native_value(self, definition: McpServerDefinition) -> dict[str, object]:
         if definition.stdio:
@@ -1173,10 +1261,15 @@ class McpManager:
         # registers its exact-turn interaction handler.
         return {"action": "decline"}
 
-    def _read_definitions(self) -> tuple[dict[str, McpServerDefinition], str]:
+    def _read_definitions(self, *, for_assist: bool = False) -> tuple[dict[str, McpServerDefinition], str]:
         result = self._request("config/read", {"includeLayers": True})
         if not isinstance(result, Mapping):
             raise McpProtocolError()
+        if for_assist:
+            try:
+                require_assist_layers(result)
+            except ValueError:
+                raise McpUnavailableError() from None
         version = _user_config_version(result.get("layers"))
         config = result.get("config")
         if not isinstance(config, Mapping):

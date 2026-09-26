@@ -100,6 +100,37 @@ def fake_server(tmp_path: Path) -> FakeAppServer:
     return FakeAppServer(tmp_path)
 
 
+def test_assist_unload_delay_is_explicit_and_verified_before_ready(fake_server: FakeAppServer) -> None:
+    module = _load_module()
+    fake_server.configure(bootstrap_config={"config": {"thread_unload_delay_secs": 0}, "origins": {}})
+    client = _client(module, fake_server, thread_unload_delay_seconds=0)
+    try:
+        client.start()
+        assert client.ready
+        assert "thread_unload_delay_secs=0" in fake_server.process()["argv"]
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("value", [None, True, 1, "0"])
+def test_assist_unload_delay_mismatch_never_opens_admission(fake_server: FakeAppServer, value: object) -> None:
+    module = _load_module()
+    fake_server.configure(bootstrap_config={"config": {"thread_unload_delay_secs": value}, "origins": {}})
+    client = _client(module, fake_server, thread_unload_delay_seconds=0)
+    try:
+        with pytest.raises(module.CodexAppServerError):
+            client.start()
+        assert not client.ready
+    finally:
+        client.close()
+
+
+@pytest.mark.parametrize("value", [True, -1, 61, "0"])
+def test_unload_delay_rejects_invalid_local_settings(fake_server: FakeAppServer, value: object) -> None:
+    with pytest.raises(ValueError):
+        _client(_load_module(), fake_server, thread_unload_delay_seconds=value)
+
+
 def _load_module() -> ModuleType:
     try:
         return importlib.import_module("codex_bridge_service.codex_app_server")

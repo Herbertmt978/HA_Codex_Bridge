@@ -1328,6 +1328,34 @@ async def test_mcp_credentials_require_admin_and_do_not_reflect_provider_data(ha
     assert secret not in caplog.text
 
 
+async def test_ha_mcp_shortcut_uses_ha_admin_boundary(hass, hass_client, hass_client_no_auth, hass_read_only_access_token):
+    await _install_runtime(hass, SimpleNamespace())
+    runtime = hass.data[DOMAIN][DATA_ENTRIES]["entry"]
+    runtime.async_refresh_capabilities = AsyncMock()
+    result = {"state": "paused", "available": False, "configured": True,
+              "requires_tool_selection": True, "server_name": "ha-assist-0123456789ab"}
+    runtime.ha_mcp_shortcut = SimpleNamespace(
+        async_connect=AsyncMock(return_value={**result, "token_id": "private-metadata"}),
+        async_status=AsyncMock(return_value=result),
+    )
+    path = "/api/codex_bridge/mcp/home_assistant"
+    payload = {"operation": "connect", "acknowledged": True}
+    anonymous = await hass_client_no_auth()
+    readonly = await hass_client(hass_read_only_access_token)
+    assert (await anonymous.post(path, json=payload)).status == 401
+    assert (await readonly.post(path, json=payload)).status in {401, 403}
+    assert (await readonly.get(path)).status in {401, 403}
+    runtime.ha_mcp_shortcut.async_connect.assert_not_called()
+    client = await hass_client()
+    response = await client.post(path, json=payload)
+    assert response.status == 200
+    assert await response.json() == {**result, "code": "paused"}
+    assert response.headers["Cache-Control"] == "no-store"
+    owner = runtime.ha_mcp_shortcut.async_connect.call_args.args[0]
+    assert owner is await hass.auth.async_get_user(owner.id)
+    assert owner.is_admin and owner.is_active
+
+
 @pytest.mark.parametrize("payload", [[], {"operation":"create", "name":"secured", "authentication":{"mode":"bearer", "token":"synthetic-secret"}, "unknown":"synthetic-secret"}, {"operation":"replace", "name":"secured", "url":"https://different.example.com", "authentication":{}}, {"operation":"remove", "name":"secured", "token":"synthetic-secret"}, {"operation":[], "name":"secured"}])
 async def test_mcp_credential_http_errors_are_fixed(hass, hass_client, payload, caplog):
     from unittest.mock import Mock

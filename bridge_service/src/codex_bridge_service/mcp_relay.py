@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field, replace
 import hmac
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -207,6 +208,18 @@ class McpRelay:
             record = self._records[name]
             return {"local": record.local, "auth": record.credential.mode,
                     "credential_configured": record.credential.configured}
+
+    def credential_binding_matches(self, name: str, url: str, token_sha256: str) -> bool:
+        """A managed rotation must not overwrite or retarget a manual edit."""
+
+        with self._lock:
+            record = self._records.get(name)
+            if (record is None or not record.local or record.url != url
+                    or record.credential.mode != "bearer" or not record.credential.configured):
+                return False
+            header = record.credential.headers[0][1]
+            fingerprint = hashlib.sha256(header.removeprefix("Bearer ").encode("ascii")).hexdigest()
+            return hmac.compare_digest(fingerprint, token_sha256)
 
     def replace_credential(self, name: str, credential: McpCredential | None) -> None:
         with self._lock:

@@ -105,7 +105,9 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
 - **Assist conversation agent:** an administrator can opt in to direct Codex
   answers from one selected project, with model, reasoning level and plain-text
   instructions in the Integration's settings. The agent appears on the Bridge
-  device. Assist requests are restricted to observe
+  device. Assist can use the administrator's selected MCP servers, including
+  an explicitly authorised connection to the installed HA MCP integration.
+  Assist requests are restricted to observe
   mode and are separate from ordinary device control. See the
   [Assist setup and access guide](docs/home-assistant-assist.md).
 

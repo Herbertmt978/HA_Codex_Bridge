@@ -34717,6 +34717,88 @@ function scheduleRunHistory(runs, timezone) {
 
 // frontend/src/mcp-setup.js
 var HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+var HA_MCP_CAPABILITIES = ["assist_mcp_selection_v1", "mcp_credential_binding_v1", "mcp_local_v1", "mcp_credentials_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"];
+var HA_MCP_COPY = Object.freeze({
+  not_connected: "Off. Connect only if you want Codex to use Home Assistant tools.",
+  unavailable: "Install and load Home Assistant’s native MCP Server integration. Use a Supervisor connection with Enable MCP and Enable local MCP connections enabled in the Bridge App, then refresh connection options.",
+  configured: "Authorisation is saved. New connections allow no tools. Choose allowed tools and refresh server status before use.",
+  paused: "The server is paused and its tools are blocked. Resume it when you are ready to use the allowed tools.",
+  connected: "Ready to use the allowed Home Assistant tools.",
+  expired: "Access has expired. Refresh the existing authorisation before using the server.",
+  retry: "Codex is busy or its settings changed. Wait for current work to finish, then refresh status before trying again.",
+  reauthorise: "Administrator authorisation is required again. Review the consent below before reconnecting.",
+  cleanup_pending: "Home authorisation was revoked. Retry cleanup when Codex is idle; the saved server may still be listed.",
+  invalid_journal: "Authorisation recovery needs attention. Check the Integration diagnostics; no new authorisation was created."
+});
+function supportsHaMcpShortcut(capabilities = []) {
+  return Array.isArray(capabilities) && HA_MCP_CAPABILITIES.every((capability) => capabilities.includes(capability));
+}
+function normalizeHaMcpShortcut(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.state !== "string" || !Object.hasOwn(HA_MCP_COPY, value.state) || !["available", "configured", "requires_tool_selection"].every((key) => typeof value[key] === "boolean") || value.server_name !== null && (typeof value.server_name !== "string" || !/^ha-assist-[a-f0-9]{12}$/u.test(value.server_name))) return null;
+  return {
+    state: value.state,
+    code: value.state,
+    available: value.available,
+    configured: value.configured,
+    server_name: value.server_name,
+    requires_tool_selection: value.requires_tool_selection
+  };
+}
+function haMcpShortcutMessage(code2) {
+  return Object.hasOwn(HA_MCP_COPY, code2) ? HA_MCP_COPY[code2] : "Could not confirm Home Assistant authorisation. Refresh status before retrying; this action was not replayed.";
+}
+function renderHaMcpShortcut(doc, state, capabilities = []) {
+  const supported = supportsHaMcpShortcut(capabilities);
+  const status = normalizeHaMcpShortcut(state.data.ha_mcp_shortcut);
+  const card = text(doc, "section", "", "schedule-card settings-card mcp-ha-shortcut");
+  card.setAttribute("aria-labelledby", "ha-mcp-shortcut-title");
+  const title = text(doc, "h3", "Installed Home Assistant MCP", "desktop-subheading");
+  title.id = "ha-mcp-shortcut-title";
+  card.append(title, text(doc, "p", "Optional and off by default. This shortcut uses Home Assistant’s native MCP Server integration and its Assist API. Community HA-MCP and other custom servers remain separate choices below.", "desktop-note"));
+  const notice = text(doc, "p", !supported ? "Update the Bridge App and Integration, enable MCP and local MCP connections in the App, then refresh connection options. Manual server setup remains available." : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
+  notice.setAttribute("role", "status");
+  card.append(notice);
+  if (state.haMcpError) {
+    const error = text(doc, "p", haMcpShortcutMessage(state.haMcpError), "desktop-error");
+    error.setAttribute("role", "alert");
+    card.append(error);
+  }
+  if (!supported) return card;
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const connectable = status && ["not_connected", "reauthorise"].includes(status.state);
+  if (connectable) {
+    const warning = text(doc, "div", "", "mcp-local-warning");
+    const detail = text(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.");
+    detail.id = "ha-mcp-consent-detail";
+    const consent = text(doc, "label", "", "mcp-consent");
+    const checkbox = doc.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.haMcpAcknowledged = "";
+    checkbox.setAttribute("aria-describedby", detail.id);
+    checkbox.checked = state.haMcpAcknowledged === true;
+    checkbox.disabled = Boolean(state.haMcpBusy);
+    consent.append(checkbox, text(doc, "span", "I authorise Codex to use my administrator identity for the allowed tools and accept these connection and backup risks."));
+    warning.append(text(doc, "strong", "Allow Codex to control Home Assistant?"), detail, consent);
+    card.append(warning);
+    const connect = button2(doc, status.state === "reauthorise" ? "Reauthorise Home Assistant" : "Connect Home Assistant", "ha-mcp-connect");
+    connect.disabled = state.haMcpBusy || !checkbox.checked;
+    actions.append(connect);
+  }
+  if (status?.server_name) {
+    if (status.configured) {
+      actions.append(button2(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }));
+      const server = state.data.mcp_servers?.find((row) => row.name === status.server_name);
+      if (server?.enabled === false && capabilities.includes("mcp_management_v1")) actions.append(button2(doc, "Resume", "resume-mcp", { id: status.server_name }));
+      actions.append(button2(doc, "Refresh authorisation", "ha-mcp-refresh"));
+    }
+    actions.append(button2(doc, status.state === "cleanup_pending" ? "Retry authorisation cleanup" : "Revoke home authorisation", "ha-mcp-disconnect"));
+  }
+  if (state.haMcpBusy) actions.querySelectorAll("button").forEach((control2) => {
+    control2.disabled = true;
+  });
+  card.append(actions, text(doc, "p", "Connecting does not enable the Assist conversation agent. Configure Assist separately and select only the tools you intend to make available. Revoking this shortcut leaves unrelated servers unchanged.", "desktop-note"));
+  return card;
+}
 function validStdioPackage(item) {
   return item && typeof item.package_id === "string" && item.package_id.length > 0 && typeof item.revision === "string" && item.revision.length > 0 && typeof item.title === "string" && item.title.length > 0 && typeof item.source === "string" && item.source.startsWith("https://") && typeof item.licence === "string" && item.licence.length > 0 && item.python === "3.14" && Array.isArray(item.tools) && item.tools.length > 0 && item.tools.length <= 128 && item.tools.every((tool) => typeof tool === "string" && tool.length > 0 && tool.length <= 128) && /^[a-f0-9]{64}$/iu.test(item.digest || "") && Array.isArray(item.entrypoint) && item.entrypoint.length >= 2 && item.entrypoint.length <= 8 && item.entrypoint.every((part) => typeof part === "string" && part.length > 0 && part.length <= 160 && !Array.from(part).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) && item.network === "none" && item.files === "none" && Array.isArray(item.environment) && item.environment.length === 0;
 }
@@ -35603,9 +35685,10 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text2(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
-    recommendation.append(text2(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text2(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App, then follow the connection guide."));
+    recommendation.append(text2(documentRef, "h3", "Community HA-MCP and custom servers", "desktop-subheading"), text2(documentRef, "p", "Community HA-MCP is a separate optional server with its own tools and permissions, which may include configuration access beyond Assist’s exposed entities. You can also connect another compatible server. Review its access before choosing tools; root host access is separate."));
     const guide = text2(documentRef, "a", "HA-MCP installation and Bridge connection guide");
     guide.href = HA_MCP_GUIDE;
     guide.target = "_blank";
@@ -35631,15 +35714,21 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       td.append(controls);
       const id = row.name || "";
       const oauth = row.auth === "oauth_required" || row.auth === "oauth";
+      const managedHome = id === state.data.ha_mcp_shortcut?.server_name;
       if (management) {
         const paused = row.enabled === false;
         controls.append(button3(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
         const edit = button3(documentRef, "Edit connection", "edit-mcp-connection", { id });
         edit.disabled = !paused;
         edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
-        controls.append(edit, text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (!managedHome) controls.append(edit);
+        controls.append(text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
         if (toolPermissions) controls.append(button3(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
         if (row.failure) controls.append(text2(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
+      }
+      if (managedHome) {
+        controls.append(text2(documentRef, "span", "Managed Home Assistant authorisation · revoke using the shortcut above", "desktop-action-note"));
+        return;
       }
       controls.append(button3(documentRef, "Remove server", "remove-mcp", { id }));
       if (credentials && ["bearer", "headers"].includes(row.auth)) {
@@ -35730,7 +35819,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
 }
 var renderedFeatureInputs = /* @__PURE__ */ new WeakMap();
 function featureDraftInputs(state) {
-  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged });
 }
 function syncDesktopFeatureDrafts(container, state) {
   const rendered = renderedFeatureInputs.get(container);
@@ -35744,6 +35833,12 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
   container.onchange = (event) => {
+    if (event.target?.matches?.("[data-ha-mcp-acknowledged]")) {
+      state.haMcpAcknowledged = event.target.checked;
+      const connect = container.querySelector('[data-desktop-action="ha-mcp-connect"]');
+      if (connect) connect.disabled = !event.target.checked || Boolean(state.haMcpBusy);
+      syncDesktopFeatureDrafts(container, state);
+    }
     if (event.target?.matches?.("[data-mcp-tool]")) {
       state.mcpToolDraft = [...container.querySelectorAll("[data-mcp-tool]:checked")].map((input2) => input2.dataset.mcpTool);
     }
@@ -35756,7 +35851,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   };
   const inputs = JSON.stringify({
     destination,
-    state: { ...state, formDraft: void 0, agentsDrafts: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, haMcpAcknowledged: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
     timezone,
     hasActiveProject,
     activeProjectId,
@@ -36263,6 +36358,12 @@ var ChatContextMenu = class {
         node2._chatValue = entry.value;
         node2.disabled = this.busy.has(this.threadId) || this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action);
         if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) node2.disabled = true;
+        const assistOwned = this.thread()?.assist_origin === true;
+        const changesAssistRoute = ["move", "fork"].includes(entry.action) || entry.action === "submenu" && ["project", "fork"].includes(entry.value);
+        if (assistOwned && changesAssistRoute) {
+          node2.title = "Home Assistant manages this conversation's project and history. Start a regular chat for independent work.";
+          node2.disabled = true;
+        } else node2.removeAttribute("title");
         if (entry.action === "section" && !this.sectionsLoaded) node2.disabled = true;
         node2.hidden = entry.action === "back" && !this.compact;
         if (entry.action === "submenu") {
@@ -36335,7 +36436,7 @@ var ChatContextMenu = class {
       this.status.className = "chat-menu-status";
       this.status.setAttribute("role", "status");
     }
-    const notice = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
+    const notice = this.notice || (this.thread()?.assist_origin === true ? "Home Assistant manages this conversation's project and history. Start a regular chat for independent work." : this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
     if (this.status.textContent !== notice) this.status.textContent = notice;
     const statusParent = this.submenu || this.menu;
     if (this.status.parentNode !== statusParent) statusParent.append(this.status);
@@ -36450,6 +36551,7 @@ var ChatContextMenu = class {
     }
     if (["pin", "unread", "section", "move", "fork", "create-section", "rename-section", "remove-section"].includes(action) && !this.supported) return;
     if (["move", "fork"].includes(action) && this.panel._runActivityForThread(thread).busy) return;
+    if (thread.assist_origin === true && (["move", "fork"].includes(action) || action === "submenu" && ["project", "fork"].includes(value))) return;
     if (action === "move" && !this.panel._projects.some((project) => project.project_id === value && project.kind === "project" && !project.archived_at && project.project_id !== thread.project_id)) return;
     if (this.uncertain.has(thread.thread_id) && !["refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown"].includes(action)) return;
     if (action === "rename") {
@@ -40070,7 +40172,7 @@ template.innerHTML = `
       line-height: 1.45;
       overflow-wrap: anywhere;
     }
-    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 60%, var(--text-color) 40%); }
     .desktop-notice[role="alert"] {
       display: flex;
       align-items: center;
@@ -44478,6 +44580,16 @@ var CodexBridgePanel = class extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (supportsHaMcpShortcut(capabilities) && !state.haMcpBusy) {
+          const shortcut = await this._readHaMcpShortcut();
+          if (!isCurrentSettingsRequest()) return;
+          state.data.ha_mcp_shortcut = shortcut.status;
+          state.haMcpError = shortcut.error;
+        } else if (!supportsHaMcpShortcut(capabilities)) {
+          delete state.data.ha_mcp_shortcut;
+          state.haMcpAcknowledged = false;
+          state.haMcpError = "";
+        }
         if (capabilities.includes("mcp_stdio_v1")) {
           try {
             state.data.stdio_packages = normalizeDesktopList(await this._callWS("list_stdio_packages"));
@@ -44669,6 +44781,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
+    if (["ha-mcp-connect", "ha-mcp-refresh", "ha-mcp-disconnect"].includes(action)) {
+      if (destination !== "settings") return;
+      return this._haMcpShortcutMutation(action.slice(7), state);
+    }
     if (["save-agents", "delete-agents"].includes(action)) {
       const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
       const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
@@ -45134,6 +45250,62 @@ var CodexBridgePanel = class extends HTMLElement {
       state.loading = false;
     }
     return mutationSucceeded;
+  }
+  async _readHaMcpShortcut() {
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(3e4)
+      });
+      const status = response.ok ? normalizeHaMcpShortcut(await response.json()) : null;
+      return { status, error: status ? "" : "unknown" };
+    } catch {
+      return { status: null, error: "unknown" };
+    }
+  }
+  async _haMcpShortcutMutation(operation, state) {
+    if (!supportsHaMcpShortcut(this._config?.capabilities) || state.loading || state.haMcpBusy) return false;
+    if (!["connect", "disconnect", "refresh"].includes(operation)) return false;
+    if (operation === "connect" && this.shadowRoot.querySelector("[data-ha-mcp-acknowledged]")?.checked !== true) return false;
+    state.haMcpBusy = true;
+    state.haMcpError = "";
+    state.haMcpAcknowledged = false;
+    state.notice = "";
+    this._renderDesktopSurface();
+    const payload = operation === "connect" ? { operation, acknowledged: true } : { operation };
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(25e4)
+      });
+      const result = await response.json().catch(() => null);
+      const status = response.ok ? normalizeHaMcpShortcut(result) : null;
+      if (!status) {
+        state.haMcpError = ["unavailable", "retry", "reauthorise", "cleanup_pending", "invalid_journal"].includes(result?.code) ? result.code : "unknown";
+        return false;
+      }
+      state.data.ha_mcp_shortcut = status;
+      state.notice = operation === "disconnect" ? "Home authorisation revoked. Unrelated MCP servers and their permissions are unchanged." : operation === "connect" ? "Home Assistant connected with no tools allowed. Choose the permitted tools before use." : "Existing Home Assistant authorisation refreshed. Its paused state and allowed tools are preserved.";
+      if (status.state === "cleanup_pending") state.notice = "Home authorisation revoked. Server cleanup is pending; retry when Codex is idle.";
+      else if (["retry", "reauthorise", "unavailable"].includes(status.state)) {
+        state.notice = "";
+        state.haMcpError = status.state;
+      }
+      state.haMcpBusy = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.haMcpError = "unknown";
+      return false;
+    } finally {
+      state.haMcpBusy = false;
+      this._renderDesktopSurface();
+    }
   }
   async _mcpCredentialMutation(payload, state, form) {
     if (!this._config?.capabilities?.includes("mcp_credentials_v1") || state.loading) return false;

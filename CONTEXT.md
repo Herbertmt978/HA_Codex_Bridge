@@ -88,6 +88,15 @@ to the App or Bridge.
 - HA-MCP is a recommended optional community server for Home Assistant tasks.
   It is installed separately, uses the existing MCP connection requirements,
   and does not require or imply a host-access grant.
+- Assist's MCP selection is separate from normal chat configuration and defaults
+  to none. Each native Assist session starts in an empty private directory with
+  an explicit read-only workspace grant, selected MCP servers and disabled
+  project instructions, plugins, skills, apps, shell and child-agent tools.
+  Session teardown precedes runtime lease release; uncertain teardown closes
+  admission. The installed native HA MCP integration can be connected through
+  a bounded administrator HTTP action. Its owned grant is revocable, uses
+  short-lived access tokens in the private relay and renews only an unchanged
+  endpoint/credential binding. Custom MCP choices remain supported.
 - The App-owned browser worker requires the explicit enable_browser option
   and a separate root startup proof under ADR 0006. Only new Codex sessions
   receive its typed tools. Native search and local PDF/image previews do not

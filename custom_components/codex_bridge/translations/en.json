@@ -51,7 +51,7 @@
     "step": {
       "init": {
         "title": "Codex task settings",
-        "description": "Choose task permissions and optionally expose a dedicated project to Assist. Assist runs in observe mode without web search or host access. People using voice have no verified HA identity; enable that separately only when everyone with access to Assist may hear answers from this project. Assist is unavailable while MCP is enabled in the App.",
+        "description": "Choose task permissions and optionally expose a dedicated project to Assist. Assist runs without web search or Home Assistant entity access. Selected MCP servers may operate devices or services beyond entities exposed by Home Assistant; configure their permissions in Codex Bridge MCP settings. This options form never stores MCP credentials. People using voice have no verified HA identity; enable that separately only when everyone with access to Assist may hear answers from this project.",
         "data": {
           "web_search_mode": "Web search",
           "allow_unattended_task_actions": "Allow unattended task actions from automations",
@@ -60,14 +60,16 @@
           "assist_allow_voice_without_user": "Allow voice requests without a signed-in HA user",
           "assist_model": "Assist model",
           "assist_reasoning": "Assist reasoning level",
-          "assist_instructions": "Assist instructions (plain text, up to 4,096 characters)"
+          "assist_instructions": "Assist instructions (plain text, up to 4,096 characters)",
+          "assist_mcp_servers": "MCP servers available to Assist"
         }
       }
     },
     "error": {
       "assist_project_required": "Choose an active project before enabling Assist. Create a dedicated project in Codex Bridge if none is listed.",
       "assist_model_unavailable": "This model and reasoning combination is not advertised by the signed-in Codex account. Choose a supported combination or use the project defaults. Saved unavailable choices are not replaced automatically.",
-      "assist_instructions_invalid": "Use plain-text Assist instructions of up to 4,096 characters. Templates are not evaluated."
+      "assist_instructions_invalid": "Use plain-text Assist instructions of up to 4,096 characters. Templates are not evaluated.",
+      "assist_mcp_unavailable": "Selected Assist MCP servers must be configured and enabled. Review paused or unavailable servers in Codex Bridge MCP settings."
     },
     "abort": {
       "supervisor_only": "Native web search settings are available only for the Home Assistant App connection.",

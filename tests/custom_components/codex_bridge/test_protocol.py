@@ -82,6 +82,13 @@ def test_chat_operations_capability_is_accepted_only_when_advertised() -> None:
     assert "chat_operations_v1" in ReadyRecord.from_payload(payload).capabilities
 
 
+def test_assist_mcp_selection_capability_is_accepted_only_when_advertised() -> None:
+    payload = _fixture("ready_v1.json")
+    assert "assist_mcp_selection_v1" not in ReadyRecord.from_payload(payload).capabilities
+    payload["capabilities"].append("assist_mcp_selection_v1")
+    assert "assist_mcp_selection_v1" in ReadyRecord.from_payload(payload).capabilities
+
+
 def test_retains_optional_browser_capability_without_enabling_it_for_older_apps() -> None:
     payload = _fixture("ready_v1.json")
     assert "browser_v1" not in ReadyRecord.from_payload(payload).capabilities
@@ -348,6 +355,16 @@ def test_problem_record_preserves_assist_policy_rejection_without_details() -> N
     assert problem.code == "assist_policy_invalid"
     assert problem.retryable is False
     assert "private-provider-detail" not in repr(problem)
+
+
+def test_problem_record_preserves_assist_selection_changed_code() -> None:
+    problem = ProblemRecord.from_payload(
+        409,
+        {"detail": {"code": "assist_selection_changed", "retryable": False}},
+    )
+
+    assert problem.code == "assist_selection_changed"
+    assert problem.retryable is False
 
 
 def test_problem_record_preserves_account_reauthentication_code_without_details() -> None:

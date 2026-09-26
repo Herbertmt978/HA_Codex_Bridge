@@ -6,6 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -28,12 +29,15 @@ from .const import (
     DOMAIN,
     EVENT_CURSOR_STORAGE_VERSION,
     CONF_WEB_SEARCH_MODE,
+    CONF_ASSIST_MCP_SERVERS,
 )
 from .event_broker import EventBroker
 from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
 from .http import async_register_http_views
+from .ha_mcp_shortcut import HaMcpShortcut
+from .assist_settings import assist_mcp_selection
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
 from .runtime import CodexBridgeRuntime, normalize_web_search_mode
@@ -162,6 +166,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
+        if connection_type == CONNECTION_TYPE_SUPERVISOR:
+            async def select_owned_mcp(name: str, selected: bool) -> None:
+                previous = assist_mcp_selection(entry.options.get(CONF_ASSIST_MCP_SERVERS, []))
+                if previous is None:
+                    raise ValueError("Assist MCP selection is invalid")
+                names = set(previous)
+                if selected:
+                    if len(names) >= 32 and name not in names:
+                        raise ValueError("Assist MCP selection is full")
+                    names.add(name)
+                else:
+                    names.discard(name)
+                hass.config_entries.async_update_entry(
+                    entry, options={**entry.options, CONF_ASSIST_MCP_SERVERS: sorted(names)}
+                )
+                async_dispatcher_send(hass, f"{DOMAIN}.{entry.entry_id}.assist_settings")
+
+            runtime.ha_mcp_shortcut = HaMcpShortcut(
+                hass, entry.entry_id, client, connection_type=connection_type,
+                supports_capability=runtime.supports_capability,
+                selection_callback=select_owned_mcp,
+            )
+            await runtime.ha_mcp_shortcut.async_setup()
         if not hass.services.has_service(DOMAIN, "start_task"):
             async_register_task_services(hass)
         if not domain_data[DATA_VIEWS_REGISTERED]:
@@ -197,6 +224,48 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise
 
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Revoke only this entry's managed Home Assistant MCP authorisation."""
+    if entry.data.get(CONF_CONNECTION_TYPE) != CONNECTION_TYPE_SUPERVISOR:
+        return
+
+    async def detach(_name: str, _selected: bool) -> None:
+        return None
+
+    # HA has already removed the entry and closed its runtime. Revoke local
+    # authority before any network wait, even if App discovery is cancelled.
+    local = HaMcpShortcut(
+        hass, entry.entry_id, None, connection_type=CONNECTION_TYPE_SUPERVISOR,
+        supports_capability=lambda _value: False, selection_callback=detach,
+    )
+    await local.async_remove()
+    try:
+        client = BridgeApiClient(
+            async_get_clientsession(hass), entry.data[CONF_BRIDGE_URL],
+            entry.data[CONF_BRIDGE_TOKEN],
+        )
+    except (BridgeApiError, KeyError):
+        return
+    capabilities: tuple[str, ...] = ()
+    try:
+        ready = await client.async_ready()
+        capabilities = tuple(ready.capabilities)
+    except BridgeApiError:
+        pass
+
+    shortcut = HaMcpShortcut(
+        hass, entry.entry_id, client, connection_type=CONNECTION_TYPE_SUPERVISOR,
+        supports_capability=lambda value: value in capabilities,
+        selection_callback=detach,
+    )
+    try:
+        await shortcut.async_remove()
+    finally:
+        close = getattr(client, "async_close", None)
+        if close is not None:
+            await close()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

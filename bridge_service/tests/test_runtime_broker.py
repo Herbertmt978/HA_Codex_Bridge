@@ -363,6 +363,8 @@ class ValidatorBackedAppServer:
         return True
 
     def _default_result(self, method: str, params: Any) -> dict[str, Any]:
+        if method == "thread/unsubscribe":
+            return {"status": "notLoaded"}
         if method in {"thread/start", "thread/resume"}:
             self._thread_number += 1
             remote_thread_id = (

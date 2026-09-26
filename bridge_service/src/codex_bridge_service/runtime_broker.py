@@ -3,17 +3,18 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Event, RLock, Thread, current_thread
-from time import monotonic
+from time import monotonic, sleep
 from typing import Any, Iterator, Literal, Protocol, cast
 from uuid import uuid4
 
 from .activity_display import command_preview
+from .assist_mcp import private_execution_directory
 
 from .codex_app_server import (
     DEFERRED_RESPONSE,
@@ -578,6 +579,11 @@ class RuntimeBroker:
         )
         self._run_terminal_listener = run_terminal_listener
         self._auth_failure_listener = auth_failure_listener
+        self._assist_mcp_manager = mcp_manager
+        # An acknowledged ID is unavailable after a lost/invalid thread/start
+        # response. Keep the live dispatch fence until validation has finished;
+        # a Bridge restart already replaces the entire native generation.
+        self._assist_loading_runs: set[str] = set()
         self._mcp_manager = mcp_manager if mcp_manager is not None and mcp_manager.enabled else None
         self._image_generation_authority = image_generation_authority
         self._browser_broker = browser_broker
@@ -633,6 +639,14 @@ class RuntimeBroker:
             app_server.register_request_handler(method, self._on_server_request)
         if self._mcp_manager is not None:
             app_server.register_request_handler("mcpServer/elicitation/request", self._on_server_request)
+
+    @property
+    def supports_assist_mcp_selection(self) -> bool:
+        return (
+            getattr(self.app_server, "thread_unload_delay_seconds", None) == 0
+            and type(getattr(self.app_server, "thread_unload_delay_seconds", None)) is int
+            and callable(getattr(self._assist_mcp_manager, "assist_thread_config", None))
+        )
 
     def start(self) -> None:
         with self._lock:
@@ -691,7 +705,8 @@ class RuntimeBroker:
                 raise RuntimeAuthenticationRequiredError()
             source = self.storage.load_thread(thread_id)
             if (
-                not source.codex_thread_id
+                source.assist_origin
+                or not source.codex_thread_id
                 or source.status != "idle"
                 or source.active_run_id
                 or source.active_turn_id
@@ -775,7 +790,8 @@ class RuntimeBroker:
                 raise RuntimeAuthenticationRequiredError()
             source = self.storage.load_thread(thread_id)
             if (
-                not source.codex_thread_id
+                source.assist_origin
+                or not source.codex_thread_id
                 or source.project_id == project_id
                 or source.status != "idle"
                 or source.active_run_id
@@ -2314,6 +2330,25 @@ class RuntimeBroker:
             "approvalsReviewer": "user",
             "config": thread_config,
         }
+        native_cwd = workspace
+        if thread.assist_origin and thread.assist_mcp_servers is not None:
+            manager = self._assist_mcp_manager
+            if manager is None or not self.supports_assist_mcp_selection:
+                raise RuntimeUnavailableError()
+            native_cwd = private_execution_directory(self.storage.root, workspace)
+            thread_params["cwd"] = str(native_cwd)
+            thread_config.update(manager.assist_thread_config(
+                workspace, thread.assist_mcp_servers, execution_cwd=native_cwd,
+            ))
+            if run.codex_thread_id:
+                # A subscribed native thread ignores config overrides on
+                # resume. Detach this sole private client before resuming so
+                # Codex cold-loads the current MCP and tool permissions.
+                self._unload_assist_thread(
+                    run.codex_thread_id, generation,
+                    timeout_seconds=thread_request_timeout,
+                    starting_run=run,
+                )
         host_lease = None
         if (
             run.mode is RunMode.HAOS_FULL_ACCESS
@@ -2332,6 +2367,11 @@ class RuntimeBroker:
                     # and consent this process did not witness.
                     run.codex_thread_id = None
         browser_tools_advertised = False
+        if thread.assist_origin and thread.assist_mcp_servers is not None:
+            with self._lock:
+                if run.status in _TERMINAL_RUN_STATES or generation != self.app_server.generation:
+                    return
+                self._assist_loading_runs.add(run.run_id)
         if run.codex_thread_id:
             thread_params["threadId"] = run.codex_thread_id
             thread_result = self.app_server.request(
@@ -2357,7 +2397,7 @@ class RuntimeBroker:
             )
         codex_thread_id = validate_thread_result(
             thread_result,
-            expected_cwd=workspace,
+            expected_cwd=native_cwd,
             expected_model=run.model,
             policy=policy,
         )
@@ -2370,6 +2410,7 @@ class RuntimeBroker:
             if run.codex_thread_id and run.codex_thread_id != codex_thread_id:
                 raise RuntimeProtocolMismatchError()
             run.codex_thread_id = codex_thread_id
+            self._assist_loading_runs.discard(run.run_id)
             if host_lease is not None:
                 if not self._host_access.active(host_lease):
                     raise HostAccessError("Host access was revoked before the task started.")
@@ -2417,7 +2458,7 @@ class RuntimeBroker:
             "threadId": codex_thread_id,
             "input": inputs,
             "clientUserMessageId": run.client_request_id,
-            "cwd": str(workspace),
+            "cwd": str(native_cwd),
             "model": run.model,
             "effort": run.effort,
             "approvalPolicy": policy.approval_policy,
@@ -2427,7 +2468,10 @@ class RuntimeBroker:
         # policy will precede this dispatch, including after durable recovery.
         # Apply this run's accepted scope on every turn instead of inheriting
         # the previous turn's sandbox or a submission-time restoration flag.
-        turn_params["sandboxPolicy"] = policy.sandbox_policy
+        # Assist starts/resumes with its immutable named permission profile.
+        # A generic read-only turn override would replace that restricted grant.
+        if not (thread.assist_origin and thread.assist_mcp_servers is not None):
+            turn_params["sandboxPolicy"] = policy.sandbox_policy
         if self.supports_plan_mode:
             turn_params["collaborationMode"] = {
                 "mode": run.collaboration_mode,
@@ -3812,6 +3856,70 @@ class RuntimeBroker:
             failure = _safe_failure(classification)
             self._terminalize_locked(run, "failed", failure.message, failure=failure)
 
+    def _unload_assist_thread(
+        self, thread_id: str, generation: int, *, timeout_seconds: float,
+        starting_run: RuntimeRunState | None = None,
+    ) -> None:
+        deadline = monotonic() + timeout_seconds
+        while True:
+            remaining = deadline - monotonic()
+            if remaining <= 0 or generation != self.app_server.generation:
+                raise RuntimeUnavailableError()
+            detached = self.app_server.request(
+                "thread/unsubscribe", {"threadId": thread_id}, timeout_seconds=remaining,
+            )
+            if not isinstance(detached, Mapping) or detached.get("status") not in {
+                "unsubscribed", "notSubscribed", "notLoaded",
+            }:
+                raise RuntimeUnavailableError()
+            if detached["status"] == "notLoaded":
+                return
+            with self._lock:
+                if starting_run is not None and starting_run.status != "starting":
+                    raise RuntimeUnavailableError()
+            sleep(min(0.1, max(0, deadline - monotonic())))
+
+    def _close_assist_mcp_before_release_locked(self, run: RuntimeRunState) -> None:
+        """No idle Assist connection may retain a revoked public MCP binding."""
+
+        loading = run.run_id in self._assist_loading_runs
+        self._assist_loading_runs.discard(run.run_id)
+        if run.generation != self.app_server.generation:
+            return
+        if loading:
+            # A lost or invalid control response may have created a session
+            # whose ID/configuration we cannot trust. Unloading an old ID is
+            # insufficient: retire the whole generation before admission frees.
+            self._abort_assist_generation_locked(run)
+            return
+        if run.codex_thread_id is None:
+            return
+        try:
+            thread = self.storage.load_thread(run.thread_id)
+        except ThreadNotFoundError:
+            return
+        if not thread.assist_origin or thread.assist_mcp_servers is None:
+            return
+        try:
+            self._unload_assist_thread(
+                run.codex_thread_id, run.generation,
+                timeout_seconds=min(5.0, self.control_request_timeout_seconds),
+            )
+        except Exception:
+            # The prompt lease still excludes MCP/auth mutations. Kill the
+            # generation before freeing it if session shutdown is uncertain.
+            self._abort_assist_generation_locked(run)
+
+    def _abort_assist_generation_locked(self, run: RuntimeRunState) -> None:
+        try:
+            aborted = self.app_server.abort_generation(run.generation)
+            if aborted is not True and run.generation == self.app_server.generation:
+                self._fatal_error = True
+                self.gate.close()
+        except Exception:
+            self._fatal_error = True
+            self.gate.close()
+
     def _terminalize_locked(
         self,
         run: RuntimeRunState,
@@ -3824,6 +3932,7 @@ class RuntimeBroker:
         if run.status in _TERMINAL_RUN_STATES:
             return
         self._revoke_browser_turn_locked(run.run_id)
+        self._close_assist_mcp_before_release_locked(run)
         run.status = status  # type: ignore[assignment]
         run.prompt = None
         run.terminal_message = message
@@ -4857,6 +4966,20 @@ class RuntimeBroker:
         if self._fatal_error:
             return
         self._fatal_error = True
+        # A persistence failure makes native session ownership uncertain. Stop
+        # all admissions before teardown, including MCP/auth configuration.
+        self.gate.close()
+        generations = {
+            run.generation for run in self._state.runs.values()
+            if run.status not in _TERMINAL_RUN_STATES and run.generation is not None
+        }
+        for generation in generations:
+            try:
+                self.app_server.abort_generation(generation)
+            except Exception:
+                # The closed gate remains the boundary if teardown is uncertain.
+                pass
+        self._assist_loading_runs.clear()
         for admission in tuple(self._pending_prompt_admissions.values()):
             self._release_prompt_admission_locked(admission)
         for run_id in tuple(self._pre_response_callbacks):
@@ -4879,7 +5002,6 @@ class RuntimeBroker:
             except Exception:
                 pass
             self._server_requests.pop(interaction_id, None)
-        generations: set[int] = set()
         for run in self._state.runs.values():
             if run.status in _TERMINAL_RUN_STATES:
                 continue
@@ -4888,8 +5010,6 @@ class RuntimeBroker:
             run.prompt = None
             run.terminal_message = "The private Codex runtime state is unavailable."
             run.last_activity_at = _now()
-            if run.generation is not None:
-                generations.add(run.generation)
             lease = self._leases.pop(run.run_id, None)
             if lease is not None:
                 if lease.state == "queued":
@@ -4907,8 +5027,6 @@ class RuntimeBroker:
                 self._set_thread_projection_locked(run)
             except (OSError, ValueError):
                 pass
-        for generation in generations:
-            self.app_server.abort_generation(generation)
 
     def _require_started_locked(self) -> None:
         if self._closed:

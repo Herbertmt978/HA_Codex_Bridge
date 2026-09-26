@@ -10,6 +10,8 @@ from homeassistant.helpers import selector
 
 from .assist_settings import (
     MAX_ASSIST_INSTRUCTIONS,
+    assist_mcp_selection,
+    assist_mcp_server_choices,
     assist_selection_supported,
     live_assist_models,
 )
@@ -41,6 +43,7 @@ from .const import (
     CONF_ASSIST_MODEL,
     CONF_ASSIST_REASONING,
     CONF_ASSIST_INSTRUCTIONS,
+    CONF_ASSIST_MCP_SERVERS,
     WEB_SEARCH_MODE_DISABLED,
     WEB_SEARCH_MODE_LIVE,
 )
@@ -382,6 +385,23 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         except BridgeApiError:
             return {}
 
+    async def _assist_mcp_servers(self):
+        """List configured MCP names without exposing endpoints or credentials."""
+
+        data = self.config_entry.data
+        if CONF_BRIDGE_URL not in data or CONF_BRIDGE_TOKEN not in data:
+            return {}
+        client = BridgeApiClient(
+            async_get_clientsession(self.hass),
+            data[CONF_BRIDGE_URL], data[CONF_BRIDGE_TOKEN],
+        )
+        try:
+            await client.async_ready()
+            client.require_capability("assist_mcp_selection_v1")
+            return assist_mcp_server_choices(await client.async_list_mcp())
+        except BridgeApiError:
+            return {}
+
     async def async_step_init(self, user_input=None):
         """Offer the strict native web-search preference to Supervisor entries."""
 
@@ -393,7 +413,22 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
 
         projects = await self._assist_projects()
         models = await self._assist_models()
+        mcp_servers = await self._assist_mcp_servers()
         choices = {"": "Select a dedicated project", **projects}
+        saved_mcp = assist_mcp_selection(
+            self.config_entry.options.get(CONF_ASSIST_MCP_SERVERS, [])
+        ) or ()
+        mcp_choices = {
+            name: f"{label} (enabled)" if enabled else f"{label} (paused)"
+            for name, (label, enabled) in mcp_servers.items() if enabled
+        }
+        for name in saved_mcp:
+            if name not in mcp_choices:
+                state = mcp_servers.get(name)
+                mcp_choices[name] = (
+                    f"{state[0]} (paused)" if state is not None
+                    else f"{name} (unavailable)"
+                )
         errors = {}
         if user_input is not None:
             assist_enabled = user_input.get(CONF_ASSIST_ENABLED, False)
@@ -407,9 +442,19 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             instructions = user_input.get(
                 CONF_ASSIST_INSTRUCTIONS, self.config_entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")
             )
+            selected_mcp = assist_mcp_selection(user_input.get(
+                CONF_ASSIST_MCP_SERVERS, saved_mcp
+            ))
             defaults = getattr(self, "_assist_project_defaults", {}).get(assist_project, (None, None))
             if assist_enabled and assist_project not in projects:
                 errors["base"] = "assist_project_required"
+            elif selected_mcp is None:
+                errors["base"] = "assist_mcp_unavailable"
+            elif assist_enabled and any(
+                name not in mcp_servers or not mcp_servers[name][1]
+                for name in selected_mcp
+            ):
+                errors["base"] = "assist_mcp_unavailable"
             elif not isinstance(instructions, str) or len(instructions) > MAX_ASSIST_INSTRUCTIONS:
                 errors["base"] = "assist_instructions_invalid"
             elif (
@@ -439,6 +484,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         CONF_ASSIST_MODEL: assist_model,
                         CONF_ASSIST_REASONING: assist_reasoning,
                         CONF_ASSIST_INSTRUCTIONS: instructions.strip(),
+                        CONF_ASSIST_MCP_SERVERS: list(selected_mcp),
                     },
                 )
 
@@ -465,6 +511,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             model_choices[current_model] = f"{current_model} (unavailable)"
         if current_reasoning and current_reasoning not in reasoning_choices:
             reasoning_choices[current_reasoning] = f"{current_reasoning} (unavailable)"
+        form_mcp = assist_mcp_selection(submitted.get(CONF_ASSIST_MCP_SERVERS, saved_mcp))
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
@@ -506,6 +553,13 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         CONF_ASSIST_INSTRUCTIONS,
                         default=submitted.get(CONF_ASSIST_INSTRUCTIONS, self.config_entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")),
                     ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
+                    vol.Optional(
+                        CONF_ASSIST_MCP_SERVERS,
+                        default=list(form_mcp if form_mcp is not None else saved_mcp),
+                    ): selector.SelectSelector(selector.SelectSelectorConfig(
+                        options=[{"value": name, "label": label} for name, label in sorted(mcp_choices.items())],
+                        multiple=True,
+                    )),
                 }
             ),
             errors=errors,

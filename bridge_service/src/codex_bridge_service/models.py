@@ -6,6 +6,7 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .api_contract import API_CONTRACT, ApiContractRecord
+from .assist_mcp import AssistMcpServers
 from .workspace import normalize_portable_relative_path
 
 DEFAULT_MODEL = "gpt-5.5"
@@ -220,6 +221,9 @@ class ThreadRecord(BaseModel):
     task_action_fingerprint: str | None = None
     # Private origin marker: Assist chats can only continue under Assist's constrained policy.
     assist_origin: bool = False
+    # None identifies the historical globally-disabled Assist contract. An
+    # explicit list (including []) opts into isolated, immutable MCP selection.
+    assist_mcp_servers: AssistMcpServers | None = None
     created_at: str | None = None
     updated_at: str | None = None
     archived_at: str | None = None
@@ -582,12 +586,14 @@ class BridgeReadinessRecord(BaseModel):
             "automation_notifications_v1",
             "task_actions_v1",
             "assist_conversation_v1",
+            "assist_mcp_selection_v1",
             "automation_proposals_v1",
             "automation_text_edits_v1",
             "reset_credits_v1",
             "mcp_admin_v1",
             "mcp_local_v1",
             "mcp_credentials_v1",
+            "mcp_credential_binding_v1",
             "mcp_management_v1",
             "mcp_tool_permissions_v1",
             "mcp_elicitation_v1",

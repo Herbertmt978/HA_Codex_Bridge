@@ -2,6 +2,84 @@ import { selection } from "./selection.js";
 
 export const HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
 
+const HA_MCP_CAPABILITIES = ["assist_mcp_selection_v1", "mcp_credential_binding_v1", "mcp_local_v1", "mcp_credentials_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"];
+const HA_MCP_COPY = Object.freeze({
+  not_connected: "Off. Connect only if you want Codex to use Home Assistant tools.",
+  unavailable: "Install and load Home Assistant’s native MCP Server integration. Use a Supervisor connection with Enable MCP and Enable local MCP connections enabled in the Bridge App, then refresh connection options.",
+  configured: "Authorisation is saved. New connections allow no tools. Choose allowed tools and refresh server status before use.",
+  paused: "The server is paused and its tools are blocked. Resume it when you are ready to use the allowed tools.",
+  connected: "Ready to use the allowed Home Assistant tools.",
+  expired: "Access has expired. Refresh the existing authorisation before using the server.",
+  retry: "Codex is busy or its settings changed. Wait for current work to finish, then refresh status before trying again.",
+  reauthorise: "Administrator authorisation is required again. Review the consent below before reconnecting.",
+  cleanup_pending: "Home authorisation was revoked. Retry cleanup when Codex is idle; the saved server may still be listed.",
+  invalid_journal: "Authorisation recovery needs attention. Check the Integration diagnostics; no new authorisation was created.",
+});
+
+export function supportsHaMcpShortcut(capabilities = []) {
+  return Array.isArray(capabilities) && HA_MCP_CAPABILITIES.every((capability) => capabilities.includes(capability));
+}
+
+/** Keep upstream messages, credentials and arbitrary identifiers out of UI state. */
+export function normalizeHaMcpShortcut(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.state !== "string" || !Object.hasOwn(HA_MCP_COPY, value.state)
+    || !["available", "configured", "requires_tool_selection"].every((key) => typeof value[key] === "boolean")
+    || (value.server_name !== null && (typeof value.server_name !== "string" || !/^ha-assist-[a-f0-9]{12}$/u.test(value.server_name)))) return null;
+  return { state: value.state, code: value.state, available: value.available, configured: value.configured,
+    server_name: value.server_name, requires_tool_selection: value.requires_tool_selection };
+}
+
+export function haMcpShortcutMessage(code) {
+  return Object.hasOwn(HA_MCP_COPY, code) ? HA_MCP_COPY[code] : "Could not confirm Home Assistant authorisation. Refresh status before retrying; this action was not replayed.";
+}
+
+export function renderHaMcpShortcut(doc, state, capabilities = []) {
+  const supported = supportsHaMcpShortcut(capabilities);
+  const status = normalizeHaMcpShortcut(state.data.ha_mcp_shortcut);
+  const card = text(doc, "section", "", "schedule-card settings-card mcp-ha-shortcut");
+  card.setAttribute("aria-labelledby", "ha-mcp-shortcut-title");
+  const title = text(doc, "h3", "Installed Home Assistant MCP", "desktop-subheading");
+  title.id = "ha-mcp-shortcut-title";
+  card.append(title, text(doc, "p", "Optional and off by default. This shortcut uses Home Assistant’s native MCP Server integration and its Assist API. Community HA-MCP and other custom servers remain separate choices below.", "desktop-note"));
+  const notice = text(doc, "p", !supported
+    ? "Update the Bridge App and Integration, enable MCP and local MCP connections in the App, then refresh connection options. Manual server setup remains available."
+    : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
+  notice.setAttribute("role", "status"); card.append(notice);
+  if (state.haMcpError) { const error = text(doc, "p", haMcpShortcutMessage(state.haMcpError), "desktop-error"); error.setAttribute("role", "alert"); card.append(error); }
+  if (!supported) return card;
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const connectable = status && ["not_connected", "reauthorise"].includes(status.state);
+  if (connectable) {
+    const warning = text(doc, "div", "", "mcp-local-warning");
+    const detail = text(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.");
+    detail.id = "ha-mcp-consent-detail";
+    const consent = text(doc, "label", "", "mcp-consent");
+    const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
+    checkbox.dataset.haMcpAcknowledged = "";
+    checkbox.setAttribute("aria-describedby", detail.id);
+    checkbox.checked = state.haMcpAcknowledged === true;
+    checkbox.disabled = Boolean(state.haMcpBusy);
+    consent.append(checkbox, text(doc, "span", "I authorise Codex to use my administrator identity for the allowed tools and accept these connection and backup risks."));
+    warning.append(text(doc, "strong", "Allow Codex to control Home Assistant?"), detail, consent);
+    card.append(warning);
+    const connect = button(doc, status.state === "reauthorise" ? "Reauthorise Home Assistant" : "Connect Home Assistant", "ha-mcp-connect");
+    connect.disabled = state.haMcpBusy || !checkbox.checked;
+    actions.append(connect);
+  }
+  if (status?.server_name) {
+    if (status.configured) {
+      actions.append(button(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }));
+      const server = state.data.mcp_servers?.find((row) => row.name === status.server_name);
+      if (server?.enabled === false && capabilities.includes("mcp_management_v1")) actions.append(button(doc, "Resume", "resume-mcp", { id: status.server_name }));
+      actions.append(button(doc, "Refresh authorisation", "ha-mcp-refresh"));
+    }
+    actions.append(button(doc, status.state === "cleanup_pending" ? "Retry authorisation cleanup" : "Revoke home authorisation", "ha-mcp-disconnect"));
+  }
+  if (state.haMcpBusy) actions.querySelectorAll("button").forEach((control) => { control.disabled = true; });
+  card.append(actions, text(doc, "p", "Connecting does not enable the Assist conversation agent. Configure Assist separately and select only the tools you intend to make available. Revoking this shortcut leaves unrelated servers unchanged.", "desktop-note"));
+  return card;
+}
+
 /** Do not offer approval for a partial or unexpected App catalogue record. */
 export function validStdioPackage(item) {
   return item && typeof item.package_id === "string" && item.package_id.length > 0

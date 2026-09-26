@@ -2142,6 +2142,7 @@ class BridgeStorage:
                         model_override=source.model_override,
                         thinking_override=source.thinking_override,
                         assist_origin=source.assist_origin,
+                        assist_mcp_servers=source.assist_mcp_servers,
                         workspace_id_override=source.workspace_id,
                         persist=False,
                     )
@@ -2593,6 +2594,7 @@ class BridgeStorage:
         thinking_override: str | None = None,
         assist_origin: bool = False,
         model_validator: Callable[[str, str], None] | None = None,
+        assist_mcp_servers: list[str] | None = None,
     ) -> ThreadViewRecord:
         """Create a project chat once, even across a task-action retry or restart."""
 
@@ -2609,7 +2611,8 @@ class BridgeStorage:
             if self._thread_path(thread_id).exists():
                 existing = self.load_thread(thread_id)
                 if (existing.task_action_fingerprint != fingerprint
-                        or existing.assist_origin != assist_origin):
+                        or existing.assist_origin != assist_origin
+                        or existing.assist_mcp_servers != assist_mcp_servers):
                     raise TaskActionConflictError("task action changed during retry")
                 if existing.archived_at is not None:
                     raise ProjectMutationError("task chat is archived")
@@ -2638,6 +2641,7 @@ class BridgeStorage:
                 workspace_id_override=workspace_id,
                 task_action_fingerprint=fingerprint,
                 assist_origin=assist_origin,
+                assist_mcp_servers=assist_mcp_servers,
             )
 
     @contextmanager
@@ -2653,6 +2657,7 @@ class BridgeStorage:
         thinking_override: str | None = None,
         assist_origin: bool = False,
         model_validator: Callable[[str, str], None] | None = None,
+        assist_mcp_servers: list[str] | None = None,
     ) -> Iterator[ThreadViewRecord]:
         """Keep the project reserved until the new task has been submitted."""
 
@@ -2671,6 +2676,7 @@ class BridgeStorage:
                     model_override=model_override,
                     thinking_override=thinking_override,
                     assist_origin=assist_origin,
+                    assist_mcp_servers=assist_mcp_servers,
                     model_validator=model_validator,
                 )
             except BaseException:
@@ -2699,6 +2705,7 @@ class BridgeStorage:
         persist: bool = True,
         task_action_fingerprint: str | None = None,
         assist_origin: bool = False,
+        assist_mcp_servers: list[str] | None = None,
     ) -> ThreadViewRecord:
         if not title.strip():
             raise ValueError("title must not be blank")
@@ -2750,6 +2757,7 @@ class BridgeStorage:
             thinking_override=thinking_override,
             task_action_fingerprint=task_action_fingerprint,
             assist_origin=assist_origin,
+            assist_mcp_servers=assist_mcp_servers,
             created_at=now,
             updated_at=now,
             archived_at=None,

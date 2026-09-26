@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
@@ -83,6 +83,118 @@ test.afterAll(async () => {
     server.close((error) => (error ? reject(error) : resolveClose()));
   });
 });
+
+for (const width of [390, 1280]) for (const theme of ["light", "dark"]) {
+  test(`installed HA MCP shortcut requires consent and starts deny-all at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript(() => { window.shortcutNativeFetch = window.fetch.bind(window); });
+    const serverName = "ha-assist-123456789abc";
+    let shortcutStatus = { state: "not_connected", code: "not_connected", available: false,
+      configured: false, server_name: null, requires_tool_selection: true };
+    const requests = [];
+    let releaseConnect;
+    const connectGate = new Promise((resolveConnect) => { releaseConnect = resolveConnect; });
+    await page.route("**/api/codex_bridge/mcp/home_assistant", async (route) => {
+      const request = route.request();
+      const payload = request.method() === "POST" ? request.postDataJSON() : null;
+      requests.push({ method: request.method(), payload, authenticated: request.headers().authorization === "Bearer synthetic-shortcut-ha-token" });
+      if (payload) {
+        await connectGate;
+        shortcutStatus = { state: "configured", code: "configured", available: false,
+          configured: true, server_name: serverName, requires_tool_selection: true };
+        await page.evaluate((name) => { window.shortcutServer = { name, enabled: true, enabled_tools: [], tool_policy: "selected", auth: "bearer", startup: "ready", tool_count: 0, revision: "a".repeat(64) }; }, serverName);
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(shortcutStatus) });
+    });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate((value) => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._preferences = { ...panel._preferences, theme: value };
+      panel._applyPreferences();
+      panel._config.capabilities = ["assist_mcp_selection_v1", "mcp_credential_binding_v1", "mcp_local_v1", "mcp_credentials_v1", "mcp_admin_v1", "mcp_tool_permissions_v1", "mcp_management_v1"];
+      window.shortcutServer = null;
+      window.shortcutAuthRequests = [];
+      window.shortcutToolRequests = [];
+      panel._hass = { ...panel._hass, fetchWithAuth: async (url, init) => {
+        window.shortcutAuthRequests.push({ method: init.method || "GET", path: url, mode: init.mode, redirect: init.redirect });
+        return window.shortcutNativeFetch(url, { ...init, headers: { ...init.headers, authorization: "Bearer synthetic-shortcut-ha-token" } });
+      } };
+      const originalWs = panel._callWS.bind(panel);
+      panel._callWS = (method, args) => {
+        if (method === "list_mcp") return Promise.resolve({ items: window.shortcutServer ? [{ ...window.shortcutServer }] : [] });
+        if (method === "list_mcp_tools") {
+          window.shortcutToolRequests.push(args);
+          return Promise.resolve({ server: args.name, endpoint: "Home Assistant Assist", mode: "selected", enabled_tools: [], catalogue_available: true,
+            revision: "a".repeat(64), catalogue_revision: "b".repeat(64), stale_tools: [], tools: [{ name: "read_state", description: "Read an exposed entity", read_only: true }] });
+        }
+        return originalWs(method, args);
+      };
+      panel._selectDesktopDestination("settings");
+    }, theme);
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    const card = panel.locator(".mcp-ha-shortcut");
+    const consent = card.getByRole("checkbox");
+    const connect = card.getByRole("button", { name: "Connect Home Assistant", exact: true });
+    await expect(consent).not.toBeChecked();
+    await expect(connect).toBeDisabled();
+    expect(requests.map(({ method }) => method)).toEqual(["GET"]);
+    expect(requests.every(({ authenticated }) => authenticated)).toBe(true);
+    expect(await page.evaluate(() => window.shortcutServer)).toBeNull();
+    await expect(card).toContainText("normal activity expiry");
+    await expect(card).toContainText("renews short-lived access tokens hourly");
+    await consent.check();
+    await consent.focus();
+    await consent.evaluate((node) => { window.shortcutConsentNode = node; });
+    await panel.evaluate((element) => { element.hass = { ...element.hass, states: { ...element.hass.states } }; element._render(true); });
+    await expect(consent).toBeChecked();
+    await expect(consent).toBeFocused();
+    expect(await consent.evaluate((node) => node === window.shortcutConsentNode)).toBe(true);
+    const offBounds = await card.boundingBox();
+    expect(offBounds.x).toBeGreaterThanOrEqual(0);
+    expect(offBounds.x + offBounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.screenshot({ path: testInfo.outputPath("home-assistant-mcp-consent.png") });
+    await connect.click();
+    await expect.poll(() => requests.filter(({ method }) => method === "POST").length).toBe(1);
+    await expect(connect).toBeDisabled();
+    await expect(consent).not.toBeChecked();
+    // Stress the delegated action after a first click, even though the native
+    // disabled control already prevents a second physical click.
+    await connect.dispatchEvent("click");
+    expect(await page.evaluate(() => window.shortcutAuthRequests.filter(({ method }) => method === "POST").length)).toBe(1);
+    releaseConnect();
+    await expect(card.getByRole("button", { name: "Revoke home authorisation", exact: true })).toBeVisible();
+    await expect(panel.getByText("Home Assistant connected with no tools allowed. Choose the permitted tools before use.", { exact: true })).toBeVisible();
+    await expect(card).toContainText("New connections allow no tools");
+    await expect(card).not.toContainText("paused");
+    await expect(card.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    expect(await panel.evaluate((element) => element._desktopFeatures.settings.data.ha_mcp_shortcut.state)).toBe("configured");
+    expect(await page.evaluate(() => ({ enabled: window.shortcutServer.enabled, tools: window.shortcutServer.enabled_tools }))).toEqual({ enabled: true, tools: [] });
+    expect(requests.filter(({ method }) => method === "POST").map(({ payload }) => payload)).toEqual([{ operation: "connect", acknowledged: true }]);
+    expect(await page.evaluate(() => window.shortcutAuthRequests.every(({ mode, redirect }) => mode === "same-origin" && redirect === "error"))).toBe(true);
+    const configuredBounds = await card.boundingBox();
+    expect(configuredBounds.x).toBeGreaterThanOrEqual(0);
+    expect(configuredBounds.x + configuredBounds.width).toBeLessThanOrEqual(width);
+    await panel.screenshot({ path: testInfo.outputPath("home-assistant-mcp-configured-deny-all.png") });
+    await card.getByRole("button", { name: "Choose allowed tools", exact: true }).click();
+    await expect(panel.getByRole("group", { name: "Allowed tools", exact: true })).toBeVisible();
+    await expect(panel.getByRole("checkbox", { name: /read_state/ })).not.toBeChecked();
+    expect(await page.evaluate(() => window.shortcutToolRequests)).toEqual([{ name: serverName }]);
+    const toolBounds = await panel.locator(".mcp-tool-permissions").boundingBox();
+    expect(toolBounds.x).toBeGreaterThanOrEqual(0);
+    expect(toolBounds.x + toolBounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    const toolsForm = panel.locator(".mcp-tool-permissions");
+    await toolsForm.scrollIntoViewIfNeeded();
+    await toolsForm.screenshot({ path: testInfo.outputPath("home-assistant-mcp-tool-selection.png") });
+    const receiptPath = testInfo.outputPath("home-assistant-mcp-shortcut-acceptance.json");
+    await writeFile(receiptPath, JSON.stringify({ boundary: "local_browser_harness", width, theme, authenticated_requests: requests.every(({ authenticated }) => authenticated), initial_post_count: 0, final_connect_post_count: requests.filter(({ method }) => method === "POST").length, fixture_initial_enabled: true, fixture_initial_enabled_tools: [], initial_state: "configured", stable_consent_node: true, viewport_fit: true, axe_violations: 0 }, null, 2));
+    await testInfo.attach("home-assistant-mcp-shortcut-acceptance", { contentType: "application/json", path: receiptPath });
+  });
+}
 
 test("refreshes HA-owned HTTP authentication during PNG upload and image reads without reload or replay", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 844 });

@@ -38,7 +38,7 @@ import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js"
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
-import { readMcpCredential, clearMcpSecrets, validStdioPackage } from "./mcp-setup.js";
+import { readMcpCredential, clearMcpSecrets, validStdioPackage, supportsHaMcpShortcut, normalizeHaMcpShortcut } from "./mcp-setup.js";
 import { proposeAutomationEditDescription, proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
@@ -3327,7 +3327,7 @@ template.innerHTML = `
       line-height: 1.45;
       overflow-wrap: anywhere;
     }
-    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 60%, var(--text-color) 40%); }
     .desktop-notice[role="alert"] {
       display: flex;
       align-items: center;
@@ -7816,6 +7816,16 @@ class CodexBridgePanel extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (supportsHaMcpShortcut(capabilities) && !state.haMcpBusy) {
+          const shortcut = await this._readHaMcpShortcut();
+          if (!isCurrentSettingsRequest()) return;
+          state.data.ha_mcp_shortcut = shortcut.status;
+          state.haMcpError = shortcut.error;
+        } else if (!supportsHaMcpShortcut(capabilities)) {
+          delete state.data.ha_mcp_shortcut;
+          state.haMcpAcknowledged = false;
+          state.haMcpError = "";
+        }
         if (capabilities.includes("mcp_stdio_v1")) {
           try {
             state.data.stdio_packages = normalizeDesktopList(await this._callWS("list_stdio_packages"));
@@ -8006,6 +8016,10 @@ class CodexBridgePanel extends HTMLElement {
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
+    if (["ha-mcp-connect", "ha-mcp-refresh", "ha-mcp-disconnect"].includes(action)) {
+      if (destination !== "settings") return;
+      return this._haMcpShortcutMutation(action.slice(7), state);
+    }
     if (["save-agents", "delete-agents"].includes(action)) {
       const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
       const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
@@ -8384,6 +8398,53 @@ class CodexBridgePanel extends HTMLElement {
     catch (error) { state.error = normalizeDesktopError(error); }
     finally { state.loading = false; }
     return mutationSucceeded;
+  }
+
+  async _readHaMcpShortcut() {
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(30000),
+      });
+      const status = response.ok ? normalizeHaMcpShortcut(await response.json()) : null;
+      return { status, error: status ? "" : "unknown" };
+    } catch { return { status: null, error: "unknown" }; }
+  }
+
+  async _haMcpShortcutMutation(operation, state) {
+    if (!supportsHaMcpShortcut(this._config?.capabilities) || state.loading || state.haMcpBusy) return false;
+    if (!["connect", "disconnect", "refresh"].includes(operation)) return false;
+    if (operation === "connect" && this.shadowRoot.querySelector("[data-ha-mcp-acknowledged]")?.checked !== true) return false;
+    state.haMcpBusy = true; state.haMcpError = ""; state.haMcpAcknowledged = false; state.notice = "";
+    this._renderDesktopSurface();
+    const payload = operation === "connect" ? { operation, acknowledged: true } : { operation };
+    try {
+      // This mutation is sent once. An uncertain result requires a status read.
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(250000),
+      });
+      const result = await response.json().catch(() => null);
+      const status = response.ok ? normalizeHaMcpShortcut(result) : null;
+      if (!status) {
+        state.haMcpError = ["unavailable", "retry", "reauthorise", "cleanup_pending", "invalid_journal"].includes(result?.code) ? result.code : "unknown";
+        return false;
+      }
+      state.data.ha_mcp_shortcut = status;
+      state.notice = operation === "disconnect" ? "Home authorisation revoked. Unrelated MCP servers and their permissions are unchanged."
+        : operation === "connect" ? "Home Assistant connected with no tools allowed. Choose the permitted tools before use."
+        : "Existing Home Assistant authorisation refreshed. Its paused state and allowed tools are preserved.";
+      if (status.state === "cleanup_pending") state.notice = "Home authorisation revoked. Server cleanup is pending; retry when Codex is idle.";
+      else if (["retry", "reauthorise", "unavailable"].includes(status.state)) { state.notice = ""; state.haMcpError = status.state; }
+      state.haMcpBusy = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.haMcpError = "unknown";
+      return false;
+    } finally {
+      state.haMcpBusy = false;
+      this._renderDesktopSurface();
+    }
   }
 
   async _mcpCredentialMutation(payload, state, form) {

@@ -42,6 +42,7 @@ CONF_ASSIST_ALLOW_VOICE = "assist_allow_voice_without_user"
 CONF_ASSIST_MODEL = "assist_model"
 CONF_ASSIST_REASONING = "assist_reasoning"
 CONF_ASSIST_INSTRUCTIONS = "assist_instructions"
+CONF_ASSIST_MCP_SERVERS = "assist_mcp_servers"
 
 CONNECTION_TYPE_SUPERVISOR = "supervisor"
 CONNECTION_TYPE_EXTERNAL_LEGACY = "external_legacy"

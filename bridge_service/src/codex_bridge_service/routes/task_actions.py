@@ -10,6 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
+from ..assist_mcp import AssistMcpServers, validate_selection
 from ..feature_capabilities import supports_web_search
 from ..model_catalog import ModelCatalogError
 from ..models import RunMode, RuntimeProfile
@@ -38,6 +39,12 @@ class StartTaskRequest(BaseModel):
     thinking_override: str | None = Field(default=None, max_length=160)
     web_search: Literal["live", "disabled"] | None = None
     assist: bool = Field(default=False, strict=True)
+    assist_mcp_servers: AssistMcpServers | None = None
+
+    @field_validator("assist_mcp_servers")
+    @classmethod
+    def mcp_selection(cls, value: list[str] | None) -> list[str] | None:
+        return validate_selection(value) if value is not None else None
 
     @field_validator("title", "prompt", "model_override", "thinking_override")
     @classmethod
@@ -55,6 +62,12 @@ class ContinueTaskRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=65_536)
     web_search: Literal["live", "disabled"] | None = None
     assist: bool = Field(default=False, strict=True)
+    assist_mcp_servers: AssistMcpServers | None = None
+
+    @field_validator("assist_mcp_servers")
+    @classmethod
+    def mcp_selection(cls, value: list[str] | None) -> list[str] | None:
+        return validate_selection(value) if value is not None else None
 
     @field_validator("prompt")
     @classmethod
@@ -103,14 +116,26 @@ def _require_assist_safety(
     assist: bool,
     mode: RunMode,
     web_search: str | None,
+    assist_mcp_servers: list[str] | None = None,
 ) -> None:
     if not assist:
+        if assist_mcp_servers is not None:
+            raise HTTPException(422, detail={"code": "assist_policy_invalid", "retryable": False})
         return
     if mode is not RunMode.OBSERVE or web_search != "disabled":
         raise HTTPException(
             422, detail={"code": "assist_policy_invalid", "retryable": False}
         )
-    # MCP tools are configured for the whole native app-server, not isolated
+    if assist_mcp_servers is not None:
+        runner = request.app.state.runner
+        manager = getattr(runner, "_assist_mcp_manager", None)
+        if (
+            "assist_mcp_selection_v1" not in getattr(request.app.state, "feature_capabilities", ())
+            or not callable(getattr(manager, "assist_thread_config", None))
+        ):
+            raise HTTPException(409, detail={"code": "assist_mcp_unavailable", "retryable": False})
+        return
+    # Historical callers have no explicit per-thread mask. MCP tools are
     # per turn. A snapshot of currently active servers is not a security gate:
     # a server could become available between admission and execution.
     manager = getattr(request.app.state, "mcp_manager", None)
@@ -185,12 +210,15 @@ def start_task(
     _require_assist_safety(
         request, assist=payload.assist,
         mode=RunMode(payload.mode), web_search=payload.web_search,
+        assist_mcp_servers=payload.assist_mcp_servers,
     )
     storage = request.app.state.storage
     fingerprint = hashlib.sha256(
         json.dumps(
             payload.model_dump(
-                exclude={"task_id"} if payload.assist else {"task_id", "assist"}
+                exclude=({"task_id"} if payload.assist else {"task_id", "assist"}) | (
+                    {"assist_mcp_servers"} if payload.assist_mcp_servers is None else set()
+                )
             ),
             sort_keys=True,
             separators=(",", ":"),
@@ -276,6 +304,7 @@ def start_task(
                     model_override=payload.model_override,
                     thinking_override=payload.thinking_override,
                     assist_origin=payload.assist,
+                    assist_mcp_servers=payload.assist_mcp_servers,
                     model_validator=(
                         lambda model, reasoning: _require_assist_model(request, model, reasoning)
                     ) if payload.assist else None,
@@ -305,11 +334,11 @@ def continue_task(
     authorization: str | None = Header(default=None),
 ) -> dict[str, str]:
     runner = _authorize(request, authorization)
-    if payload.assist:
-        _require_assist_safety(
-            request, assist=True, mode=RunMode.OBSERVE,
-            web_search=payload.web_search,
-        )
+    _require_assist_safety(
+        request, assist=payload.assist, mode=RunMode.OBSERVE,
+        web_search=payload.web_search,
+        assist_mcp_servers=payload.assist_mcp_servers,
+    )
     if runner.get_task_action_run(payload.task_id) is None:
         _require_ready(request, payload.web_search)
     storage = request.app.state.storage
@@ -321,6 +350,8 @@ def continue_task(
         raise HTTPException(
             409, detail={"code": "task_target_unavailable", "retryable": False}
         )
+    if target.assist_mcp_servers != payload.assist_mcp_servers:
+        raise HTTPException(409, detail={"code": "assist_selection_changed", "retryable": False})
     if payload.assist and target.mode is not RunMode.OBSERVE:
         raise HTTPException(
             409, detail={"code": "assist_policy_invalid", "retryable": False}
