@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-09-26-ha01-native",
+  "currentTodo": "Publish 1.8.3 candidate and repeat managed DEV acceptance",
+  "completedTodos": [
+    "Local Bridge 2195 passed with 27 skips; HA 413 passed; frontend 478 unit and 85 browser; Windows 22; static, hassfest and image checks"
+  ],
+  "activeSlice": "Publication and managed acceptance",
+  "evidenceRefs": [
+    "docs/verification/ha-01-native-2026-09-26.md"
+  ],
+  "blockedOn": null,
+  "nextStep": "Inspect and stage only intended files, commit and push",
+  "updatedAt": "2026-09-26"
+}

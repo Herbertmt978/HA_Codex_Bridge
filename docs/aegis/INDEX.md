@@ -28,3 +28,17 @@
 | ADR | 2026-09-22 | Accepted and implemented | [Private MCP credentials](adr/0008-mcp-credentials.md) |
 | Work record | 2026-09-22 | Build preparation verified; native ARM64 hardware unavailable | [ARM64 qualification](work/2026-09-22-arm64/20-checkpoint.md) |
 | Verification evidence | 2026-09-22 | Emulated ARM64 and native amd64 development checks | [ARM64 build evidence](work/2026-09-22-arm64/90-evidence.md) |
+| 2026-09-26 | work | docs/aegis/work/2026-09-26-ha01-native/10-intent.md | HA-01 native task-action qualification intent |
+| 2026-09-26 | work | docs/aegis/work/2026-09-26-ha01-native/20-checkpoint.md | HA-01 native task-action qualification checkpoint |
+| 2026-09-26 | work | docs/aegis/work/2026-09-26-ha01-native/90-evidence.md | HA-01 native task-action qualification evidence |
+| 2026-09-26 | work | docs/aegis/work/2026-09-26-ha01-native/99-reflection.md | HA-01 native task-action qualification reflection |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/task-intent-draft.json | HA-01 native task-action qualification task intent draft |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/baseline-read-set-hint.json | HA-01 native task-action qualification baseline read-set hint |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/baseline-usage-draft.json | HA-01 native task-action qualification baseline usage draft |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/impact-statement-draft.json | HA-01 native task-action qualification impact statement draft |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/todo-checkpoint-draft.json | HA-01 native task-action qualification todo checkpoint draft |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/drift-check-draft.json | HA-01 native task-action qualification drift check draft |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/evidence-bundle-draft-native-and-candidate.json | 2026-09-26-ha01-native evidence native-and-candidate |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/resume-state-hint.json | 2026-09-26-ha01-native resume state hint |
+| 2026-09-26 | artifact | docs/aegis/work/2026-09-26-ha01-native/gate-input-pack.json | 2026-09-26-ha01-native gate input pack |
+| 2026-09-26 | work | docs/aegis/work/2026-09-26-ha01-native/proof-bundle.md | 2026-09-26-ha01-native proof bundle |

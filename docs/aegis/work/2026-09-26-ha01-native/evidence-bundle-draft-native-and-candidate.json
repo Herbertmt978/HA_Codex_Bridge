@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "artifactKey": "native-and-candidate",
+  "type": "verification",
+  "source": "docs/verification/ha-01-native-2026-09-26.md",
+  "summary": "Native 1.8.2 fixture exposed cancellation race; candidate regression, HA, frontend and image checks pass; publication and native repeat pending",
+  "verifier": "Local test suites and managed DEV fixture"
+}

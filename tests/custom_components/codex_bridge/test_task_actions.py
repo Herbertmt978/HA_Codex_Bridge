@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+import asyncio
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
 from homeassistant.core import Context
-from homeassistant.exceptions import Unauthorized
+from homeassistant.exceptions import ServiceValidationError, Unauthorized
+from homeassistant.helpers import entity_registry as er
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.codex_bridge.const import (
     CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
+    CONF_BRIDGE_TOKEN,
+    CONF_BRIDGE_URL,
+    CONF_CONNECTION_TYPE,
+    CONNECTION_TYPE_SUPERVISOR,
     DATA_ENTRIES,
     DOMAIN,
 )
@@ -138,7 +145,8 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
     runtime = SimpleNamespace(
         entry_id=entry.entry_id,
         client=client,
-        supports_capability=lambda capability: capability == "task_actions_v1",
+        supports_capability=lambda capability: False,
+        async_refresh_capabilities=AsyncMock(),
         web_search_payload=lambda: {},
     )
     hass.data[DOMAIN] = {DATA_ENTRIES: {entry.entry_id: runtime}}
@@ -154,8 +162,12 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
             context=Context(),
         )
     client.async_start_task.assert_not_awaited()
+    runtime.async_refresh_capabilities.assert_not_awaited()
+    runtime.supports_capability = lambda capability: capability == "task_actions_v1"
 
-    admin = await hass.auth.async_create_user("Bridge administrator", group_ids=[GROUP_ID_ADMIN])
+    admin = await hass.auth.async_create_user(
+        "Bridge administrator", group_ids=[GROUP_ID_ADMIN]
+    )
     user = await hass.auth.async_create_user("Ordinary user", group_ids=[GROUP_ID_USER])
     admin_result = await hass.services.async_call(
         DOMAIN,
@@ -171,6 +183,7 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
     hass.config_entries.async_update_entry(
         entry, options={CONF_ALLOW_UNATTENDED_TASK_ACTIONS: True}
     )
+    runtime.supports_capability = lambda capability: False
     with pytest.raises(Unauthorized):
         await hass.services.async_call(
             DOMAIN,
@@ -181,6 +194,8 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
             context=Context(user_id=user.id),
         )
     assert client.async_start_task.await_count == 1
+    runtime.async_refresh_capabilities.assert_not_awaited()
+    runtime.supports_capability = lambda capability: capability == "task_actions_v1"
     result = await hass.services.async_call(
         DOMAIN,
         "start_task",
@@ -213,3 +228,112 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
         context=shared_context,
     )
     assert client.async_start_task.await_args.args[0]["task_id"] != first_id
+
+
+@pytest.mark.parametrize("advertised", (True, False))
+async def test_task_action_refreshes_upgrade_capability_without_opening_panel(
+    hass, advertised
+):
+    """A normal config entry and service call recover an upgraded private App."""
+    assert await async_setup_component(hass, "homeassistant", {})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        source="hassio",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: "a" * 48,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+        },
+        options={CONF_ALLOW_UNATTENDED_TASK_ACTIONS: True},
+        unique_id="task-upgrade-test",
+    )
+    entry.add_to_hass(hass)
+    client = Mock()
+    client.negotiated_api_version = 1
+    client.async_ready = AsyncMock(return_value=Mock(capabilities=("api_v1",)))
+    client.async_refresh_ready = AsyncMock(
+        return_value=Mock(
+            capabilities=("api_v1", "task_actions_v1") if advertised else ("api_v1",),
+        )
+    )
+    client.async_get_status = AsyncMock(
+        return_value={
+            "auth": {"state": "ok", "auth_mode": "chatgpt", "auth_required": False},
+        }
+    )
+    client.async_list_threads = AsyncMock(return_value=[])
+    client.async_replay_events = AsyncMock(
+        return_value={
+            "events": [],
+            "next_cursor": 0,
+            "minimum_cursor": 0,
+            "has_more": False,
+            "heartbeat": True,
+        }
+    )
+
+    async def wait_events(*, after):
+        await asyncio.Event().wait()
+
+    client.async_wait_events = AsyncMock(side_effect=wait_events)
+    client.async_close = AsyncMock()
+    client.async_start_task = AsyncMock(return_value=TASK_REFERENCE)
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+        # The fixture excludes HA's separately packaged frontend assets.
+        # Keep the real config-entry and task-service lifecycle under test.
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        registry = er.async_get(hass)
+        connection = next(
+            item.entity_id
+            for item in registry.entities.values()
+            if item.config_entry_id == entry.entry_id
+            and item.unique_id.endswith("_connection")
+        )
+        assert hass.states.get(connection).state == "on"
+        service_data = {
+            "project_id": "prj_fixture",
+            "title": "Fixture",
+            "prompt": "Hello",
+        }
+        if advertised:
+            result = await hass.services.async_call(
+                DOMAIN,
+                "start_task",
+                service_data,
+                blocking=True,
+                return_response=True,
+                context=Context(),
+            )
+            assert result == TASK_REFERENCE
+            client.async_start_task.assert_awaited_once()
+            # A working advertised capability does not add readiness polling.
+            await hass.services.async_call(
+                DOMAIN,
+                "start_task",
+                service_data,
+                blocking=True,
+                return_response=True,
+                context=Context(),
+            )
+        else:
+            with pytest.raises(
+                ServiceValidationError, match="Update the Codex Bridge App"
+            ):
+                await hass.services.async_call(
+                    DOMAIN,
+                    "start_task",
+                    service_data,
+                    blocking=True,
+                    return_response=True,
+                    context=Context(),
+                )
+            client.async_start_task.assert_not_awaited()
+        client.async_refresh_ready.assert_awaited_once()
+        assert hass.states.get(connection).state == "on"
+        assert await hass.config_entries.async_unload(entry.entry_id)

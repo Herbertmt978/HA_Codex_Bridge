@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "taskId": "2026-09-26-ha01-native",
+  "requiredBaselineRefs": [
+    "docs/planned-releases/ha-01-actions-events.md",
+    "docs/home-assistant-task-actions.md"
+  ],
+  "deliveredContextRefs": [],
+  "acknowledgedBeforePlanRefs": [
+    "docs/planned-releases/ha-01-actions-events.md",
+    "docs/home-assistant-task-actions.md"
+  ],
+  "citedInPlanRefs": [
+    "docs/verification/ha-01-native-2026-09-26.md"
+  ],
+  "missingRefs": [],
+  "decision": "continue"
+}

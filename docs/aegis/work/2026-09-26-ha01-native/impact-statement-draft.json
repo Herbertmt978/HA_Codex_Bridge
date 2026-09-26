@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "affectedLayers": [],
+  "owners": [
+    "HA Integration runtime and Bridge RuntimeBroker"
+  ],
+  "invariants": [
+    "Authorisation and capability gating precede task calls; exactly one terminal result per task"
+  ],
+  "compatBoundary": "Existing private App API; no new grant or endpoint",
+  "nonGoals": []
+}

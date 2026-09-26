@@ -5,6 +5,7 @@ codex_bridge_app/config.yaml text eol=lf
 codex_bridge_app/CHANGELOG.md text eol=lf
 codex_bridge_app/*.txt text eol=lf
 codex_bridge_app/rootfs/** text eol=lf
+codex_bridge_app/stdio_packages/** text eol=lf
 bridge_service/*.toml text eol=lf
 bridge_service/**/*.json text eol=lf
 bridge_service/**/*.py text eol=lf

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "aegis.schema.v0",
+  "baselineRefs": [],
+  "impactStatement": "docs/aegis/work/2026-09-26-ha01-native/impact-statement-draft.json",
+  "compatPlan": "Existing private App API; no new grant or endpoint",
+  "retirementPlan": "No duplicate owner or fallback added",
+  "evidenceBundle": [
+    "docs/aegis/work/2026-09-26-ha01-native/evidence-bundle-draft-native-and-candidate.json"
+  ]
+}

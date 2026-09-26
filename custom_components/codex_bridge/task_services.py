@@ -92,6 +92,8 @@ async def _runtime_for_action(
         if user is None or not user.is_admin:
             raise Unauthorized(context=call.context, user_id=user_id)
     if not runtime.supports_capability("task_actions_v1"):
+        await runtime.async_refresh_capabilities()
+    if not runtime.supports_capability("task_actions_v1"):
         raise ServiceValidationError("Update the Codex Bridge App to use task actions.")
     return runtime
 
