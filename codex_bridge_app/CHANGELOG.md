@@ -2,7 +2,7 @@
 
 All notable App changes are recorded here.
 
-## 1.8.4
+## 1.8.5
 
 - Explains scheduled run outcomes, including overlap and missed-window skips,
   with fixed safe text rather than raw provider errors or private identifiers.
@@ -12,8 +12,14 @@ All notable App changes are recorded here.
   during a response body, retaining its cursor and duplicate-event protection.
 - Preserves scheduler behaviour and existing grants. This TASK-01 history
   improvement leaves conversational editing, pause and cancellation open.
-- Pairs App, Integration and panel `1.8.4` with unchanged Bridge `0.14.3`
-  and verified Codex runtime `0.157.0`.
+- Pairs App, Integration and panel `1.8.5` with unchanged Bridge `0.14.3`
+  and verified Codex runtime `0.157.1`.
+
+## 1.8.4
+
+- Bundles the Sigstore-verified Codex runtime `0.157.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.14.3` without changing its Integration API compatibility.
 
 ## 1.8.3
 
