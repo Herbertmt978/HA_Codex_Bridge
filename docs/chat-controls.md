@@ -40,6 +40,48 @@ the browser's local time.
 
 ## Sidebar and sharing
 
+Right-click a chat, or select its ellipsis on a phone, to open the same chat
+actions menu. Opening the menu keeps your current conversation selected.
+Rename, archive/restore and permanent deletion use the existing chat controls;
+deletion still requires the confirmation dialog. The header menu also provides
+Chat settings and Refresh.
+
+When the App advertises chat operations, the menu also offers Pin/Unpin,
+Mark as unread/read, Project, Section and Fork. Pinning, read markers and named
+sections are saved by the Bridge, shared across the Home Assistant panel, and
+survive account changes. Explicitly opening an unread chat clears its marker;
+background refreshes leave it alone. Section management can rename or remove
+an empty group. Removing a section keeps its chats.
+
+Moving a chat opens a review showing the destination. Its owned uploads and
+private generated images, captures and archives are copied automatically.
+Ordinary project files are shared across chats: choose the files you want to
+copy from the optional list. These checkboxes start unchecked; at most 100
+files are shown and can be selected. Unselected files stay in the source
+workspace, and originals remain available. Direct and imported chat groups
+are not move destinations. Busy chats, unsafe or colliding files, stale changes and
+scheduled references can prevent a move. Fork creates a real Codex conversation
+in the same project workspace, using the same verified signed-in account.
+Detached or busy provider conversations cannot be forked; the Bridge never
+replays their history to a different account.
+
+Copy offers the title, authenticated chat link, conversation text or conversation
+Markdown. Conversation copies contain only user and assistant messages, with a
+two-million-character limit; tool output, terminal data and hidden runtime
+context are excluded. Open in new window uses the same authenticated Home
+Assistant route. Sharing does not publish a public snapshot.
+
+Desktop submenus expand on hover or Right arrow. Arrow keys, Home and End move
+through menu items; Left returns from a submenu and Escape closes it. On narrow
+screens and touch tablets, submenus show a Back button and touch-sized controls. Reduced-motion
+preferences remove expansion animation. Rename uses Alt+Ctrl+R, Pin/Unpin uses
+Alt+Ctrl+P, Mark unread/read uses Ctrl+Shift+U and Archive/Restore uses
+Ctrl+Shift+A. These shortcuts apply only to the selected Bridge chat outside
+text fields, the composer, terminals and dialogs.
+
+If a mutation loses its acknowledgement, the menu requires a refresh and result
+check before another write. It never repeats a fork or project move by itself.
+
 The sidebar groups pull-request links, workspace outputs and sources used in
 the chat. Open an output to preview or download it. Expand a pull request and
 follow its GitHub link to check its current review or merge status. The Bridge

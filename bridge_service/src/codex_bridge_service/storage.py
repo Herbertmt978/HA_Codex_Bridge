@@ -28,6 +28,7 @@ from .models import (
     ArtifactRecord,
     ArtifactSource,
     AttachmentRecord,
+    ChatSectionRecord,
     ContextUsageRecord,
     LimitsStatusRecord,
     LimitsWindowRecord,
@@ -165,6 +166,125 @@ def _write_all(output: BinaryIO, content: bytes | bytearray | memoryview) -> int
     return total
 
 
+def _copy_confined_file(
+    source_boundary: WorkspaceBoundary,
+    source_locator: str,
+    destination_boundary: WorkspaceBoundary,
+    destination_locator: str,
+    *,
+    maximum: int,
+    expected_size: int | None = None,
+    expected_sha256: str | None = None,
+    reservation: QuotaReservation | None = None,
+    on_cleanup_failure: Callable[[int | None], None] | None = None,
+) -> WorkspaceFileIdentity:
+    """Copy one stable regular file between explicit no-follow boundaries."""
+    source_locator = source_boundary.normalize(source_locator)
+    destination_locator = destination_boundary.normalize(destination_locator)
+    source_stat = source_boundary.regular_file_stat(source_locator)
+    if source_stat.size_bytes > maximum or (
+        expected_size is not None and source_stat.size_bytes != expected_size
+    ):
+        raise WorkspaceResourceLimitError("file_copy")
+    parent = str(PurePosixPath(destination_locator).parent)
+    if parent != ".":
+        destination_boundary.create_directory(parent)
+    output: BinaryIO | None = None
+    identity: WorkspaceFileIdentity | None = None
+    digest = hashlib.sha256()
+    copied = 0
+    try:
+        with source_boundary.open_regular_file(source_locator) as source:
+            source_identity = source_boundary.identify_open_file(source)
+            if source_identity != source_stat.identity:
+                raise WorkspaceEscapeError()
+            output = destination_boundary.create_file_exclusive(destination_locator)
+            identity = destination_boundary.identify_open_file(output)
+            while chunk := source.read(min(1024 * 1024, maximum + 1 - copied)):
+                copied += len(chunk)
+                if copied > maximum:
+                    raise WorkspaceResourceLimitError("file_copy")
+                if reservation is not None:
+                    reservation.consume(len(chunk))
+                digest.update(chunk)
+                _write_all(output, chunk)
+            if copied != source_stat.size_bytes:
+                raise WorkspaceEscapeError()
+            if expected_sha256 is not None and digest.hexdigest() != expected_sha256:
+                raise WorkspaceEscapeError()
+            output.flush()
+            os.fsync(output.fileno())
+            source_boundary.validate_regular_file_identity(source_locator, source_identity)
+            destination_boundary.validate_regular_file_identity(destination_locator, identity)
+            output.close()
+            output = None
+            return identity
+    except BaseException:
+        if output is not None:
+            try:
+                output.flush()
+            except Exception:
+                pass
+            try:
+                output.close()
+            except Exception:
+                pass
+            output = None
+        if identity is not None:
+            try:
+                destination_boundary.unlink_regular_file(
+                    destination_locator, missing_ok=True, expected_identity=identity
+                )
+            except WorkspaceBoundaryError:
+                if on_cleanup_failure is not None:
+                    try:
+                        retained_stat = destination_boundary.regular_file_stat(
+                            destination_locator
+                        )
+                        retained_size = (
+                            retained_stat.size_bytes
+                            if retained_stat.identity == identity
+                            else None
+                        )
+                    except WorkspaceBoundaryError:
+                        retained_size = None
+                    on_cleanup_failure(retained_size)
+        raise
+    finally:
+        if output is not None:
+            output.close()
+
+
+def _settle_failed_copy_reservation(
+    reservation: QuotaReservation,
+    *,
+    retained_bytes: int,
+    retained_size_unknown: bool,
+) -> None:
+    """Account retained rollback files, or keep the full claim if uncertain."""
+    if not reservation.active:
+        return
+    if retained_size_unknown:
+        try:
+            reservation.quarantine()
+        except Exception:
+            # Retain the active claim even if the quarantine marker fails.
+            pass
+        return
+    if retained_bytes:
+        try:
+            reservation.commit(persisted_bytes=retained_bytes)
+        except Exception:
+            # The active reservation remains a conservative capacity claim.
+            pass
+        return
+    try:
+        reservation.release()
+    except Exception:
+        # A failed release must not make uncertain disk usage available again.
+        pass
+
+
 class _QuotaSequentialWriter:
     """Make ZipFile use data descriptors while reserving each appended byte."""
 
@@ -255,6 +375,34 @@ class ProjectNotFoundError(FileNotFoundError):
 
 class ProjectMutationError(ValueError):
     pass
+
+
+class ChatNavigationRevisionConflict(ValueError):
+    pass
+
+
+class DurableMutationPendingError(ProjectMutationError):
+    """A durable outbox intent exists and owned resources must be retained."""
+
+
+def _durable_intent_may_be_pending(outbox: DurableOutbox) -> bool:
+    try:
+        return outbox.pending_count() > 0
+    except Exception:
+        # If the ledger cannot be inspected, retain owned files/provider state;
+        # deleting them could make a prepared intent unrecoverable.
+        return True
+
+
+def _normalise_chat_section_name(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("Chat section name is invalid.")
+    name = value.strip()
+    if not name or len(name) > 80 or len(name.encode("utf-8")) > 320:
+        raise ValueError("Chat section name is invalid.")
+    if any(ord(char) < 32 or ord(char) == 127 for char in name):
+        raise ValueError("Chat section name is invalid.")
+    return name
 
 
 class UploadNotFoundError(FileNotFoundError):
@@ -477,6 +625,7 @@ class BridgeStorage:
         self._event_next_sequences: dict[str, int] = {}
         self._project_mutation_lock = RLock()
         self._thread_mutation_lock = RLock()
+        self._section_mutation_lock = RLock()
         # Automation dispatch reserves its target across thread preparation and
         # runtime submission. Archive/delete take this lock first and reject a
         # reserved target instead of interleaving with an accepted prompt.
@@ -621,6 +770,139 @@ class BridgeStorage:
     def _event_log_path(self, thread_id: str) -> Path:
         return self.logs_dir / f"{thread_id}.events.jsonl"
 
+    @property
+    def _sections_path(self) -> Path:
+        return self.root / "chat-sections.json"
+
+    def _load_chat_sections_locked(self) -> list[ChatSectionRecord]:
+        try:
+            payload = json.loads(self._sections_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return []
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            raise ValueError("Chat section storage is invalid.") from None
+        if isinstance(payload, dict) and "_bridge_operation" in payload:
+            marker = payload.pop("_bridge_operation")
+            if (
+                not isinstance(marker, dict)
+                or set(marker) != {"operation_id", "revision"}
+                or not isinstance(marker.get("operation_id"), str)
+                or type(marker.get("revision")) is not int
+                or marker["revision"] < 1
+            ):
+                raise ValueError("Chat section storage is invalid.")
+        if (
+            not isinstance(payload, dict)
+            or set(payload) != {"schema_version", "sections"}
+            or payload.get("schema_version") != 1
+            or not isinstance(payload.get("sections"), list)
+        ):
+            raise ValueError("Chat section storage is invalid.")
+        try:
+            sections = [ChatSectionRecord.model_validate(item) for item in payload["sections"]]
+        except ValidationError:
+            raise ValueError("Chat section storage is invalid.") from None
+        identifiers = [section.section_id for section in sections]
+        if len(set(identifiers)) != len(identifiers):
+            raise ValueError("Chat section storage is invalid.")
+        return sections
+
+    def _save_chat_sections_locked(self, sections: list[ChatSectionRecord]) -> None:
+        relative_path = "chat-sections.json"
+        revision = self.durable_outbox.next_state_revision(relative_path)
+        self.durable_outbox.commit_operation(
+            operation_id=f"chat-sections:{revision}:{uuid4().hex}",
+            events=(),
+            writes=(
+                OutboxWrite(
+                    relative_path=relative_path,
+                    state_revision=revision,
+                    state_payload={
+                        "schema_version": 1,
+                        "sections": [item.model_dump(mode="json") for item in sections],
+                    },
+                ),
+            ),
+        )
+
+    def list_chat_sections(self) -> list[ChatSectionRecord]:
+        with self._section_mutation_lock:
+            return [item.model_copy(deep=True) for item in self._load_chat_sections_locked()]
+
+    def create_chat_section(self, name: str) -> ChatSectionRecord:
+        normalized = _normalise_chat_section_name(name)
+        with self._section_mutation_lock:
+            sections = self._load_chat_sections_locked()
+            if any(item.name.casefold() == normalized.casefold() for item in sections):
+                raise ValueError("A chat section with this name already exists.")
+            now = self._now()
+            section = ChatSectionRecord(
+                section_id=f"sec_{uuid4().hex[:16]}",
+                name=normalized,
+                created_at=now,
+                updated_at=now,
+            )
+            sections.append(section)
+            self._save_chat_sections_locked(sections)
+            return section.model_copy(deep=True)
+
+    def update_chat_section(
+        self, section_id: str, name: str, *, expected_revision: int
+    ) -> ChatSectionRecord:
+        normalized = _normalise_chat_section_name(name)
+        with self._section_mutation_lock:
+            sections = self._load_chat_sections_locked()
+            section = next((item for item in sections if item.section_id == section_id), None)
+            if section is None:
+                raise FileNotFoundError(section_id)
+            if section.revision != expected_revision:
+                raise ChatNavigationRevisionConflict()
+            if any(
+                item.section_id != section_id
+                and item.name.casefold() == normalized.casefold()
+                for item in sections
+            ):
+                raise ValueError("A chat section with this name already exists.")
+            section.name = normalized
+            section.revision += 1
+            section.updated_at = self._now()
+            self._save_chat_sections_locked(sections)
+            return section.model_copy(deep=True)
+
+    def delete_chat_section(self, section_id: str, *, expected_revision: int) -> None:
+        # Clear all memberships first. If any write fails, the section remains
+        # available and a retry can finish the idempotent unassignment.
+        with self._automation_target_lock:
+            with self._project_mutation_lock:
+                with self._section_mutation_lock:
+                    with self._thread_mutation_lock:
+                        sections = self._load_chat_sections_locked()
+                        section = next((item for item in sections if item.section_id == section_id), None)
+                        if section is None:
+                            raise FileNotFoundError(section_id)
+                        if section.revision != expected_revision:
+                            raise ChatNavigationRevisionConflict()
+                        for record in self.list_threads(include_archived=True):
+                            if record.section_id != section_id:
+                                continue
+                            self._assert_automation_thread_unreserved(record)
+                            stored = self.load_thread(record.thread_id)
+                            stored.section_id = None
+                            stored.navigation_revision += 1
+                            self._touch_thread(stored)
+                            self._save_thread_with_events(
+                                stored,
+                                EventDraft(
+                                    scope="thread",
+                                    thread_id=stored.thread_id,
+                                    event_type="thread.updated",
+                                    payload={"section_id": None, "navigation_revision": stored.navigation_revision},
+                                ),
+                            )
+                        self._save_chat_sections_locked(
+                            [item for item in sections if item.section_id != section_id]
+                        )
+
     def _import_legacy_event_logs(self) -> None:
         suffix = ".events.jsonl"
         for path in sorted(
@@ -726,6 +1008,12 @@ class BridgeStorage:
             "workspace",
             conflict_key="codex-workspace-mutation",
         )
+
+    @contextmanager
+    def project_mutation_guard(self) -> Iterator[None]:
+        """Hold project configuration stable across a provider transition."""
+        with self._automation_target_lock, self._project_mutation_lock:
+            yield
 
     def observe_workspace_growth(self, reservation: QuotaReservation) -> int:
         if reservation.pool != "workspace":
@@ -1009,6 +1297,42 @@ class BridgeStorage:
             artifact_ids.add(artifact.artifact_id)
             artifact_owners.add(owner)
             boundary.validate_file_locator(stored)
+            original_fields = (
+                artifact.original_private_source,
+                artifact.original_private_stored_path,
+                artifact.original_private_relative_path,
+            )
+            if any(value is None for value in original_fields) and any(
+                value is not None for value in original_fields
+            ):
+                raise WorkspaceInputError()
+            if artifact.original_private_source is not None:
+                if artifact.source is not ArtifactSource.WORKSPACE:
+                    raise WorkspaceInputError()
+                if artifact.original_private_source not in {
+                    ArtifactSource.WORKSPACE_ARCHIVE,
+                    ArtifactSource.GENERATED_IMAGE,
+                    ArtifactSource.BROWSER_CAPTURE,
+                }:
+                    raise WorkspaceInputError()
+                private_boundary = self._home_assistant_artifacts_boundary()
+                original_locator = private_boundary.normalize(
+                    artifact.original_private_stored_path or ""
+                )
+                original_relative = private_boundary.normalize(
+                    artifact.original_private_relative_path or ""
+                )
+                original_category = {
+                    ArtifactSource.WORKSPACE_ARCHIVE: "",
+                    ArtifactSource.GENERATED_IMAGE: "generated/",
+                    ArtifactSource.BROWSER_CAPTURE: "browser/",
+                }[artifact.original_private_source]
+                if (
+                    original_locator
+                    != f"{record.thread_id}/{original_category}{original_relative}"
+                ):
+                    raise WorkspaceInputError()
+                private_boundary.validate_file_locator(original_locator)
         return record
 
     def _workspace_child_locator(self, workspace_path: str, child: str) -> str:
@@ -1766,6 +2090,445 @@ class BridgeStorage:
     def get_thread(self, thread_id: str) -> ThreadViewRecord:
         return self._resolve_thread(self.load_thread(thread_id))
 
+    def clone_thread_for_fork(
+        self, source_thread_id: str, codex_thread_id: str
+    ) -> ThreadViewRecord:
+        """Create a local projection for a verified native fork in the same workspace."""
+        with self._automation_target_lock, self._project_mutation_lock:
+            with self._section_mutation_lock, self._thread_mutation_lock:
+                source = self.load_thread(source_thread_id)
+                if source.status != "idle" or source.active_run_id or source.active_turn_id or source.pending_prompts:
+                    raise ProjectMutationError("thread is busy")
+                project = self.load_project(source.project_id or "")
+                if project.archived_at is not None:
+                    raise ProjectMutationError("project is archived")
+                created: ThreadViewRecord | None = None
+                copied_uploads: list[tuple[WorkspaceBoundary, str, object, int]] = []
+                copied_artifacts: list[tuple[WorkspaceBoundary, str, object, int]] = []
+                source_file_sizes = []
+                upload_boundary = self._home_assistant_uploads_boundary()
+                artifact_boundary = self._home_assistant_artifacts_boundary()
+                for attachment in source.attachments:
+                    source_file_sizes.append(
+                        upload_boundary.regular_file_stat(attachment.stored_path).size_bytes
+                    )
+                for artifact in source.artifacts:
+                    if artifact.source is ArtifactSource.WORKSPACE:
+                        continue
+                    source_file_sizes.append(
+                        artifact_boundary.regular_file_stat(artifact.stored_path).size_bytes
+                    )
+                reservation = self._disk_quota().reserve(
+                    "private", amount_bytes=sum(source_file_sizes)
+                )
+                retained_bytes = 0
+                retained_size_unknown = False
+
+                def note_retained_copy(size: int | None) -> None:
+                    nonlocal retained_bytes, retained_size_unknown
+                    if size is None:
+                        retained_size_unknown = True
+                    else:
+                        retained_bytes += size
+
+                projection_committed = False
+                try:
+                    created = self._create_thread_locked(
+                        title=source.title,
+                        project_id=source.project_id,
+                        mode=source.mode,
+                        model_override=source.model_override,
+                        thinking_override=source.thinking_override,
+                        assist_origin=source.assist_origin,
+                        workspace_id_override=source.workspace_id,
+                        persist=False,
+                    )
+                    cloned = ThreadRecord.model_validate(created.model_dump())
+                    cloned.codex_thread_id = codex_thread_id
+                    cloned.section_id = source.section_id
+                    cloned.attachments = [item.model_copy(deep=True) for item in source.attachments]
+                    cloned.artifacts = [item.model_copy(deep=True) for item in source.artifacts]
+                    for attachment in cloned.attachments:
+                        boundary = self._home_assistant_uploads_boundary()
+                        relative = boundary.normalize(attachment.relative_path or "")
+                        target = f"{cloned.thread_id}/{relative}"
+                        size = boundary.regular_file_stat(attachment.stored_path).size_bytes
+                        identity = _copy_confined_file(
+                            boundary,
+                            attachment.stored_path,
+                            boundary,
+                            target,
+                            maximum=self.resource_limits.max_upload_file_bytes if self.resource_limits else 100 * 1024 * 1024,
+                            expected_size=attachment.size_bytes,
+                            expected_sha256=attachment.sha256,
+                            reservation=reservation,
+                            on_cleanup_failure=note_retained_copy,
+                        )
+                        attachment.stored_path = target
+                        copied_uploads.append((boundary, target, identity, size))
+                    for artifact in cloned.artifacts:
+                        artifact.original_private_source = None
+                        artifact.original_private_stored_path = None
+                        artifact.original_private_relative_path = None
+                        if artifact.source is ArtifactSource.WORKSPACE:
+                            # Forks share their project workspace by contract.
+                            continue
+                        boundary = self._home_assistant_artifacts_boundary()
+                        relative = boundary.normalize(artifact.relative_path or "")
+                        directory = {
+                            ArtifactSource.WORKSPACE_ARCHIVE: "",
+                            ArtifactSource.GENERATED_IMAGE: "generated/",
+                            ArtifactSource.BROWSER_CAPTURE: "browser/",
+                        }[artifact.source]
+                        target = f"{cloned.thread_id}/{directory}{relative}"
+                        size = boundary.regular_file_stat(artifact.stored_path).size_bytes
+                        identity = _copy_confined_file(
+                            boundary,
+                            artifact.stored_path,
+                            boundary,
+                            target,
+                            maximum=self.resource_limits.max_transient_snapshot_bytes if self.resource_limits else 256 * 1024 * 1024,
+                            expected_size=artifact.size_bytes,
+                            reservation=reservation,
+                            on_cleanup_failure=note_retained_copy,
+                        )
+                        artifact.stored_path = target
+                        copied_artifacts.append((boundary, target, identity, size))
+                    cloned.pinned = False
+                    cloned.unread = False
+                    cloned.navigation_revision = 1
+                    projected_events = [
+                        EventDraft(
+                            scope="thread",
+                            thread_id=cloned.thread_id,
+                            event_type="thread.created",
+                            payload={
+                                "title": cloned.title,
+                                "project_id": cloned.project_id,
+                                "project_name": project.name,
+                                "workspace_id": cloned.workspace_id,
+                                "workspace_path": cloned.workspace_path,
+                                "mode": cloned.mode.value,
+                                "model_override": cloned.model_override,
+                                "thinking_override": cloned.thinking_override,
+                                "created_at": cloned.created_at,
+                            },
+                        ),
+                        EventDraft(
+                            scope="thread",
+                            thread_id=cloned.thread_id,
+                            event_type="thread.updated",
+                            payload={"forked_from": source_thread_id},
+                        )
+                    ]
+                    for event in self.list_thread_events(source_thread_id):
+                        if event.event_type not in {"message.created", "message.completed"}:
+                            continue
+                        role = event.payload.get("role")
+                        text = event.payload.get("text")
+                        if role not in {"user", "assistant"} or not isinstance(text, str):
+                            continue
+                        projected_events.append(
+                            EventDraft(
+                                scope="thread",
+                                thread_id=cloned.thread_id,
+                                event_type=event.event_type,
+                                payload={"role": role, "text": text},
+                            )
+                        )
+                    self._prepare_thread_for_save_locked(cloned)
+                    resolved = self._resolve_thread(cloned)
+                    self._commit_prepared_thread_with_events_locked(
+                        cloned, tuple(projected_events)
+                    )
+                    projection_committed = True
+                    reservation.commit(persisted_bytes=sum(source_file_sizes))
+                    return resolved
+                except BaseException:
+                    if projection_committed or _durable_intent_may_be_pending(self.durable_outbox):
+                        try:
+                            if reservation.active:
+                                reservation.commit(
+                                    persisted_bytes=sum(source_file_sizes)
+                                )
+                        except Exception:
+                            # Keep an active claim if accounting itself is
+                            # unavailable; releasing could bypass quota scans.
+                            pass
+                        raise DurableMutationPendingError(
+                            "fork projection is pending durable recovery"
+                        ) from None
+                    for boundary, locator, identity, _size in reversed(copied_artifacts + copied_uploads):
+                        try:
+                            boundary.unlink_regular_file(locator, missing_ok=True, expected_identity=identity)
+                        except WorkspaceBoundaryError:
+                            try:
+                                retained_stat = boundary.regular_file_stat(locator)
+                                note_retained_copy(
+                                    retained_stat.size_bytes
+                                    if retained_stat.identity == identity
+                                    else None
+                                )
+                            except WorkspaceBoundaryError:
+                                note_retained_copy(None)
+                    clone_id = created.thread_id if created is not None else None
+                    for boundary, locator, _identity, _size in reversed(
+                        copied_artifacts + copied_uploads
+                    ):
+                        if clone_id is None:
+                            continue
+                        parent = PurePosixPath(locator).parent
+                        stop = PurePosixPath(clone_id)
+                        while str(parent) != "." and stop in parent.parents:
+                            try:
+                                boundary.remove_empty_directory(
+                                    str(parent), missing_ok=True
+                                )
+                            except WorkspaceBoundaryError:
+                                break
+                            parent = parent.parent
+                    if clone_id is not None:
+                        for boundary in (
+                            self._home_assistant_uploads_boundary(),
+                            self._home_assistant_artifacts_boundary(),
+                        ):
+                            try:
+                                boundary.remove_empty_directory(
+                                    clone_id, missing_ok=True
+                                )
+                            except WorkspaceBoundaryError:
+                                pass
+                    _settle_failed_copy_reservation(
+                        reservation,
+                        retained_bytes=retained_bytes,
+                        retained_size_unknown=retained_size_unknown,
+                    )
+                    raise
+
+    def move_thread_to_project(
+        self,
+        thread_id: str,
+        project_id: str,
+        codex_thread_id: str,
+        *,
+        expected_navigation_revision: int,
+        workspace_artifact_ids: tuple[str, ...] = (),
+    ) -> ThreadViewRecord:
+        """Commit a provider-verified project move and copy only Bridge-owned files."""
+        with self._automation_target_lock, self._project_mutation_lock:
+            with self._section_mutation_lock, self._thread_mutation_lock:
+                record = self.load_thread(thread_id)
+                if record.navigation_revision != expected_navigation_revision:
+                    raise ChatNavigationRevisionConflict()
+                if record.status != "idle" or record.active_run_id or record.active_turn_id or record.pending_prompts:
+                    raise ProjectMutationError("thread is busy")
+                destination = self.load_project(project_id)
+                if destination.archived_at is not None:
+                    raise ProjectMutationError("destination project is archived")
+                if destination.kind is not ProjectKind.PROJECT:
+                    raise ProjectMutationError("destination must be a normal project")
+                if len(workspace_artifact_ids) > 100 or len(set(workspace_artifact_ids)) != len(workspace_artifact_ids):
+                    raise ProjectMutationError("workspace artifact selection is invalid")
+                if record.project_id == destination.project_id:
+                    return self._resolve_thread(record)
+                if self.runtime_profile is not RuntimeProfile.HOME_ASSISTANT:
+                    raise ProjectMutationError("project moves require the Home Assistant runtime")
+                workspace_boundary = self._home_assistant_boundary()
+                if destination.kind in {ProjectKind.DIRECT, ProjectKind.IMPORTED}:
+                    workspace_id = f"ws_{uuid4().hex[:12]}"
+                    workspace_boundary.create_directory(workspace_id)
+                    target_relative = workspace_id
+                else:
+                    workspace_id = record.workspace_id
+                    target_relative = workspace_boundary.normalize(destination.root_path)
+                    workspace_boundary.resolve_relative(
+                        target_relative, must_exist=True, kind="directory"
+                    )
+                copied: list[tuple[WorkspaceBoundary, str, WorkspaceFileIdentity, int]] = []
+                metadata_saved = False
+                source_workspace = self._home_assistant_boundary()
+                uploads = self._home_assistant_uploads_boundary()
+                artifacts = self._home_assistant_artifacts_boundary()
+                copy_plan: list[tuple[WorkspaceBoundary, str, str, object, int]] = []
+                selected_workspace_ids = set(workspace_artifact_ids)
+                selected_workspace_ids.update(
+                    artifact.artifact_id
+                    for artifact in record.artifacts
+                    if artifact.source is ArtifactSource.WORKSPACE
+                    and (
+                        artifact.original_private_stored_path is not None
+                        or artifact.copied_for_chat
+                    )
+                )
+                known_workspace_ids = {
+                    artifact.artifact_id
+                    for artifact in record.artifacts
+                    if artifact.source is ArtifactSource.WORKSPACE
+                }
+                if not selected_workspace_ids <= known_workspace_ids:
+                    raise ProjectMutationError("workspace artifact selection is stale")
+                for attachment in record.attachments:
+                    size = uploads.regular_file_stat(attachment.stored_path).size_bytes
+                    rel = workspace_boundary.normalize(
+                        f".codex-bridge-moved/{thread_id}/move-{record.navigation_revision + 1}/attachments/{attachment.attachment_id}-{attachment.filename}"
+                    )
+                    copy_plan.append((uploads, attachment.stored_path, rel, attachment, size))
+                for artifact in record.artifacts:
+                    if artifact.source is ArtifactSource.WORKSPACE:
+                        if artifact.artifact_id not in selected_workspace_ids:
+                            continue
+                        source_boundary = source_workspace
+                        source_locator = self._workspace_child_locator(
+                            record.workspace_path, artifact.relative_path or ""
+                        )
+                    elif artifact.source in {
+                        ArtifactSource.WORKSPACE_ARCHIVE,
+                        ArtifactSource.GENERATED_IMAGE,
+                        ArtifactSource.BROWSER_CAPTURE,
+                    }:
+                        source_boundary = artifacts
+                        source_locator = artifact.stored_path
+                    else:
+                        continue
+                    size = source_boundary.regular_file_stat(source_locator).size_bytes
+                    category_source = (
+                        artifact.original_private_source
+                        if artifact.source is ArtifactSource.WORKSPACE
+                        and artifact.original_private_source is not None
+                        else artifact.source
+                    )
+                    category = {
+                        ArtifactSource.WORKSPACE: "outputs",
+                        ArtifactSource.WORKSPACE_ARCHIVE: "archives",
+                        ArtifactSource.GENERATED_IMAGE: "generated",
+                        ArtifactSource.BROWSER_CAPTURE: "browser",
+                    }[category_source]
+                    rel = workspace_boundary.normalize(
+                        f".codex-bridge-moved/{thread_id}/move-{record.navigation_revision + 1}/{category}/{artifact.artifact_id}/{artifact.filename}"
+                    )
+                    copy_plan.append((source_boundary, source_locator, rel, artifact, size))
+                record.artifacts = [
+                    artifact
+                    for artifact in record.artifacts
+                    if artifact.source is not ArtifactSource.WORKSPACE
+                    or artifact.artifact_id in selected_workspace_ids
+                ]
+                reservation = self._disk_quota().reserve(
+                    "workspace",
+                    amount_bytes=sum(item[4] for item in copy_plan),
+                )
+                retained_bytes = 0
+                retained_size_unknown = False
+
+                def note_retained_copy(size: int | None) -> None:
+                    nonlocal retained_bytes, retained_size_unknown
+                    if size is None:
+                        retained_size_unknown = True
+                    else:
+                        retained_bytes += size
+
+                try:
+                    for source_boundary, source_locator, rel, owner, size in copy_plan:
+                        locator = self._workspace_child_locator(target_relative, rel)
+                        identity = _copy_confined_file(
+                            source_boundary,
+                            source_locator,
+                            workspace_boundary,
+                            locator,
+                            maximum=(
+                                self.resource_limits.max_upload_file_bytes
+                                if isinstance(owner, AttachmentRecord)
+                                else self.resource_limits.max_transient_snapshot_bytes
+                            ) if self.resource_limits else 256 * 1024 * 1024,
+                            expected_size=size,
+                            expected_sha256=getattr(owner, "sha256", None),
+                            reservation=reservation,
+                            on_cleanup_failure=note_retained_copy,
+                        )
+                        copied.append((workspace_boundary, locator, identity, size))
+                        if isinstance(owner, ArtifactRecord):
+                            if owner.source is not ArtifactSource.WORKSPACE:
+                                owner.original_private_source = owner.source
+                                owner.original_private_stored_path = owner.stored_path
+                                owner.original_private_relative_path = owner.relative_path
+                            owner.source = ArtifactSource.WORKSPACE
+                            owner.relative_path = rel
+                            owner.stored_path = locator
+                            owner.copied_for_chat = True
+                    record.project_id = destination.project_id
+                    record.workspace_path = target_relative
+                    record.workspace_id = workspace_id
+                    record.codex_thread_id = codex_thread_id
+                    record.host_access_grant = None
+                    record.context_usage = None
+                    record.navigation_revision += 1
+                    self._touch_thread(record)
+                    event = EventDraft(
+                            scope="thread",
+                            thread_id=thread_id,
+                            event_type="thread.updated",
+                            payload={
+                                "project_id": destination.project_id,
+                                "workspace_id": workspace_id,
+                                "navigation_revision": record.navigation_revision,
+                            },
+                        )
+                    self._prepare_thread_for_save_locked(
+                        record, allow_artifact_rebinding=True
+                    )
+                    resolved = self._resolve_thread(record)
+                    self._commit_prepared_thread_with_events_locked(record, (event,))
+                    metadata_saved = True
+                    reservation.commit(persisted_bytes=sum(item[4] for item in copy_plan))
+                    return resolved
+                except BaseException:
+                    if metadata_saved or _durable_intent_may_be_pending(self.durable_outbox):
+                        try:
+                            if reservation.active:
+                                reservation.commit(
+                                    persisted_bytes=sum(item[4] for item in copy_plan)
+                                )
+                        except Exception:
+                            # Keep an active claim if accounting itself is
+                            # unavailable; releasing could bypass quota scans.
+                            pass
+                        raise DurableMutationPendingError(
+                            "project move is pending durable recovery"
+                        ) from None
+                    if not metadata_saved:
+                        for boundary, locator, identity, _size in reversed(copied):
+                            try:
+                                boundary.unlink_regular_file(locator, missing_ok=True, expected_identity=identity)
+                            except WorkspaceBoundaryError:
+                                try:
+                                    retained_stat = boundary.regular_file_stat(locator)
+                                    note_retained_copy(
+                                        retained_stat.size_bytes
+                                        if retained_stat.identity == identity
+                                        else None
+                                    )
+                                except WorkspaceBoundaryError:
+                                    note_retained_copy(None)
+                        for _boundary, locator, _identity, _size in reversed(copied):
+                            parent = PurePosixPath(locator).parent
+                            stop = PurePosixPath(target_relative)
+                            while str(parent) != "." and stop in parent.parents:
+                                try:
+                                    workspace_boundary.remove_empty_directory(
+                                        str(parent), missing_ok=True
+                                    )
+                                except WorkspaceBoundaryError:
+                                    break
+                                parent = parent.parent
+                        if destination.kind in {ProjectKind.DIRECT, ProjectKind.IMPORTED}:
+                            workspace_boundary.remove_empty_directory(workspace_id, missing_ok=True)
+                        _settle_failed_copy_reservation(
+                            reservation,
+                            retained_bytes=retained_bytes,
+                            retained_size_unknown=retained_size_unknown,
+                        )
+                    raise
+
     def list_threads(self, *, include_archived: bool = False) -> list[ThreadViewRecord]:
         with self._thread_mutation_lock:
             records = [
@@ -1920,6 +2683,7 @@ class BridgeStorage:
         direct_defaults_provisional: bool | None = None,
         thread_id_override: str | None = None,
         workspace_id_override: str | None = None,
+        persist: bool = True,
         task_action_fingerprint: str | None = None,
         assist_origin: bool = False,
     ) -> ThreadViewRecord:
@@ -1977,25 +2741,26 @@ class BridgeStorage:
             updated_at=now,
             archived_at=None,
         )
-        self._save_thread_with_events(
-            record,
-            EventDraft(
-                scope="thread",
-                thread_id=record.thread_id,
-                event_type="thread.created",
-                payload={
-                    "title": record.title,
-                    "project_id": project.project_id,
-                    "project_name": project.name,
-                    "workspace_id": record.workspace_id,
-                    "workspace_path": record.workspace_path,
-                    "mode": record.mode.value,
-                    "model_override": record.model_override,
-                    "thinking_override": record.thinking_override,
-                    "created_at": record.created_at,
-                },
-            ),
-        )
+        if persist:
+            self._save_thread_with_events(
+                record,
+                EventDraft(
+                    scope="thread",
+                    thread_id=record.thread_id,
+                    event_type="thread.created",
+                    payload={
+                        "title": record.title,
+                        "project_id": project.project_id,
+                        "project_name": project.name,
+                        "workspace_id": record.workspace_id,
+                        "workspace_path": record.workspace_path,
+                        "mode": record.mode.value,
+                        "model_override": record.model_override,
+                        "thinking_override": record.thinking_override,
+                        "created_at": record.created_at,
+                    },
+                ),
+            )
         return self._resolve_thread(record)
 
     @contextmanager
@@ -2180,20 +2945,37 @@ class BridgeStorage:
         host_access_grant: str | None | object = _UNSET,
         model_override: str | None | object = _UNSET,
         thinking_override: str | None | object = _UNSET,
+        pinned: bool | None = None,
+        unread: bool | None = None,
+        section_id: str | None | object = _UNSET,
+        navigation_revision: int | None = None,
     ) -> ThreadViewRecord:
         with self._automation_target_lock:
             with self._project_mutation_lock:
-                with self._thread_mutation_lock:
-                    record = self.load_thread(thread_id)
-                    self._assert_automation_thread_unreserved(record)
-                    return self._update_thread_record_locked(
-                        record,
-                        title=title,
-                        mode=mode,
-                        host_access_grant=host_access_grant,
-                        model_override=model_override,
-                        thinking_override=thinking_override,
-                    )
+                with self._section_mutation_lock:
+                    if section_id is not _UNSET and section_id is not None:
+                        if not any(
+                            item.section_id == section_id
+                            for item in self._load_chat_sections_locked()
+                        ):
+                            raise FileNotFoundError(str(section_id))
+                    with self._thread_mutation_lock:
+                        record = self.load_thread(thread_id)
+                        self._assert_automation_thread_unreserved(record)
+                        if pinned is not None or unread is not None or section_id is not _UNSET:
+                            if navigation_revision != record.navigation_revision:
+                                raise ChatNavigationRevisionConflict()
+                        return self._update_thread_record_locked(
+                            record,
+                            title=title,
+                            mode=mode,
+                            host_access_grant=host_access_grant,
+                            model_override=model_override,
+                            thinking_override=thinking_override,
+                            pinned=pinned,
+                            unread=unread,
+                            section_id=section_id,
+                        )
 
     def _update_thread_record_locked(
         self,
@@ -2204,7 +2986,22 @@ class BridgeStorage:
         host_access_grant: str | None | object = _UNSET,
         model_override: str | None | object = _UNSET,
         thinking_override: str | None | object = _UNSET,
+        pinned: bool | None = None,
+        unread: bool | None = None,
+        section_id: str | None | object = _UNSET,
     ) -> ThreadViewRecord:
+        navigation_changed = False
+        if pinned is not None and record.pinned != pinned:
+            record.pinned = pinned
+            navigation_changed = True
+        if unread is not None and record.unread != unread:
+            record.unread = unread
+            navigation_changed = True
+        if section_id is not _UNSET and record.section_id != section_id:
+            record.section_id = section_id
+            navigation_changed = True
+        if navigation_changed:
+            record.navigation_revision += 1
         if title is not None:
             if not title.strip():
                 raise ValueError("title must not be blank")
@@ -2244,6 +3041,10 @@ class BridgeStorage:
                     "mode": record.mode.value,
                     "model_override": record.model_override,
                     "thinking_override": record.thinking_override,
+                    "pinned": record.pinned,
+                    "unread": record.unread,
+                    "section_id": record.section_id,
+                    "navigation_revision": record.navigation_revision,
                 },
             ),
         )
@@ -2350,6 +3151,11 @@ class BridgeStorage:
                     }:
                         artifacts_boundary.unlink_regular_file(
                             artifact.stored_path,
+                            missing_ok=True,
+                        )
+                    if artifact.original_private_stored_path is not None:
+                        artifacts_boundary.unlink_regular_file(
+                            artifact.original_private_stored_path,
                             missing_ok=True,
                         )
                 # A generated image is published before thread metadata.  If
@@ -2636,7 +3442,9 @@ class BridgeStorage:
             events=events,
         )
 
-    def _prepare_thread_for_save_locked(self, record: ThreadRecord) -> None:
+    def _prepare_thread_for_save_locked(
+        self, record: ThreadRecord, *, allow_artifact_rebinding: bool = False
+    ) -> None:
         # A rename or runtime projection may have loaded the thread before a
         # token update. Preserve that newer snapshot for the same provider chat.
         target = self._thread_path(record.thread_id)
@@ -2663,7 +3471,11 @@ class BridgeStorage:
             self._validate_thread_attachments(record)
             self._validate_thread_artifacts(record)
             self._merge_persisted_home_assistant_attachments(record)
-            self._merge_persisted_home_assistant_artifacts(record)
+            self._merge_persisted_home_assistant_artifacts(
+                record,
+                allow_rebinding=allow_artifact_rebinding,
+                allow_workspace_artifact_removal=allow_artifact_rebinding,
+            )
             self._validate_thread_attachments(record)
             self._validate_thread_artifacts(record)
         if not record.created_at:
@@ -2704,7 +3516,13 @@ class BridgeStorage:
             merged.append(attachment)
         record.attachments = merged
 
-    def _merge_persisted_home_assistant_artifacts(self, record: ThreadRecord) -> None:
+    def _merge_persisted_home_assistant_artifacts(
+        self,
+        record: ThreadRecord,
+        *,
+        allow_rebinding: bool = False,
+        allow_workspace_artifact_removal: bool = False,
+    ) -> None:
         """Preserve append-only artifact metadata across stale thread writers."""
         target = self._thread_path(record.thread_id)
         try:
@@ -2720,12 +3538,33 @@ class BridgeStorage:
         persisted_by_id = {
             artifact.artifact_id: artifact for artifact in persisted.artifacts
         }
-        merged = list(persisted.artifacts)
+        merged = []
+        incoming_ids = {artifact.artifact_id for artifact in record.artifacts}
+        for artifact in persisted.artifacts:
+            if (
+                allow_workspace_artifact_removal
+                and persisted.project_id != record.project_id
+                and artifact.source is ArtifactSource.WORKSPACE
+                and artifact.artifact_id not in incoming_ids
+            ):
+                continue
+            merged.append(artifact)
         for artifact in record.artifacts:
             persisted_artifact = persisted_by_id.get(artifact.artifact_id)
             if persisted_artifact is not None:
                 if persisted_artifact != artifact:
-                    raise WorkspaceInputError()
+                    moved_projection = (
+                        allow_rebinding
+                        and persisted.project_id != record.project_id
+                        and artifact.source is ArtifactSource.WORKSPACE
+                        and artifact.artifact_id == persisted_artifact.artifact_id
+                        and artifact.filename == persisted_artifact.filename
+                        and artifact.mime_type == persisted_artifact.mime_type
+                        and artifact.size_bytes == persisted_artifact.size_bytes
+                    )
+                    if not moved_projection:
+                        raise WorkspaceInputError()
+                    merged[merged.index(persisted_artifact)] = artifact
                 continue
             merged.append(artifact)
         record.artifacts = merged
@@ -4370,6 +5209,23 @@ class BridgeStorage:
         else:
             self.save_thread(record)
         return record.artifacts
+
+    def validate_workspace_artifact_selection(
+        self, thread_id: str, artifact_ids: tuple[str, ...]
+    ) -> None:
+        if (
+            len(artifact_ids) > 100
+            or len(set(artifact_ids)) != len(artifact_ids)
+            or any(not isinstance(item, str) or not item or len(item) > 128 for item in artifact_ids)
+        ):
+            raise ProjectMutationError("workspace artifact selection is invalid")
+        workspace_ids = {
+            artifact.artifact_id
+            for artifact in self.sync_thread_artifacts(thread_id)
+            if artifact.source is ArtifactSource.WORKSPACE
+        }
+        if not set(artifact_ids) <= workspace_ids:
+            raise ProjectMutationError("workspace artifact selection is stale")
 
     def _sync_thread_artifacts_home_assistant(
         self,

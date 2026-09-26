@@ -796,6 +796,8 @@ class BridgeApiClient:
     async def async_update_thread(
         self, thread_id: str, updates: dict[str, Any]
     ) -> dict[str, Any]:
+        if {"pinned", "unread", "section_id", "navigation_revision"}.intersection(updates):
+            self.require_capability("chat_operations_v1")
         if updates.get("mode") == "haos-full-access" or "host_access_grant" in updates:
             self.require_capability("host_access_v1")
         return _public_thread_payload(
@@ -805,6 +807,25 @@ class BridgeApiClient:
                 json_body=updates,
             )
         )
+
+    async def async_list_chat_sections(self) -> list[dict[str, Any]]:
+        self.require_capability("chat_operations_v1")
+        payload = await self._async_json("GET", "/chat-sections")
+        if not isinstance(payload, dict) or not isinstance(payload.get("sections"), list):
+            raise BridgeApiEndpointError("chat_section_payload_invalid")
+        return payload["sections"]
+
+    async def async_create_chat_section(self, name: str) -> dict[str, Any]:
+        self.require_capability("chat_operations_v1")
+        return await self._async_json("POST", "/chat-sections", json_body={"name": name}, expected_status={201})
+
+    async def async_update_chat_section(self, section_id: str, name: str, revision: int) -> dict[str, Any]:
+        self.require_capability("chat_operations_v1")
+        return await self._async_json("PATCH", f"/chat-sections/{_path_segment(section_id)}", json_body={"name": name, "revision": revision})
+
+    async def async_delete_chat_section(self, section_id: str, revision: int) -> None:
+        self.require_capability("chat_operations_v1")
+        await self._async_no_content("DELETE", f"/chat-sections/{_path_segment(section_id)}?revision={revision}", expected_status={204})
 
     async def async_archive_thread(self, thread_id: str) -> dict[str, Any]:
         return _public_thread_payload(
@@ -827,6 +848,34 @@ class BridgeApiClient:
             "DELETE",
             f"/threads/{_path_segment(thread_id)}",
             expected_status={204},
+        )
+
+    async def async_fork_thread(self, thread_id: str) -> dict[str, Any]:
+        self.require_capability("chat_operations_v1")
+        return _public_thread_payload(
+            await self._async_json(
+                "POST", f"/threads/{_path_segment(thread_id)}/fork", json_body={}
+            )
+        )
+
+    async def async_move_thread_project(
+        self,
+        thread_id: str,
+        project_id: str,
+        navigation_revision: int,
+        workspace_artifact_ids: list[str] | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("chat_operations_v1")
+        return _public_thread_payload(
+            await self._async_json(
+                "POST",
+                f"/threads/{_path_segment(thread_id)}/move-project",
+                json_body={
+                    "project_id": _bounded_text(project_id, 128),
+                    "navigation_revision": navigation_revision,
+                    "workspace_artifact_ids": list(workspace_artifact_ids or []),
+                },
+            )
         )
 
     async def async_send_prompt(

@@ -917,22 +917,22 @@ test("creates disposable chats and uses the menu to edit, archive and delete the
   };
   await createChat("Disposable archive check");
   await panel.locator("#chat-menu-button").click();
-  const menu = panel.locator("#thread-menu");
-  await expect(menu.locator('[data-action="edit-current-chat"]')).toBeVisible();
+  const menu = panel.locator("#chat-context-menu");
+  await expect(menu.locator('[data-chat-action="settings"]')).toBeVisible();
   expect(await menu.locator("button[data-tooltip]").count()).toBe(0);
-  await menu.locator('[data-action="edit-current-chat"]').click();
+  await menu.locator('[data-chat-action="settings"]').click();
   await expect(panel.locator("#thread-form-panel")).toContainText("Chat settings");
   await panel.locator("#thread-title-input").fill("Disposable renamed check");
   await panel.locator('#thread-form-panel [data-action="save-thread"]').click();
   await expect(panel.locator("#thread-title-label")).toHaveText("Disposable renamed check");
   await panel.locator("#chat-menu-button").click();
-  await menu.locator('[data-action="archive-thread"]').click();
+  await menu.locator('[data-chat-action="archive"]').click();
   await expect(panel.locator("#thread-title-label")).not.toHaveText("Disposable renamed check");
   await expect.poll(() => panel.evaluate((element) => element._threads.some((thread) =>
     thread.title === "Disposable renamed check" && Boolean(thread.archived_at)))).toBe(true);
   await createChat("Disposable delete check");
   await panel.locator("#chat-menu-button").click();
-  await menu.locator('[data-action="delete-thread"]').click();
+  await menu.locator('[data-chat-action="delete"]').click();
   await expect(panel.locator("#confirmation-dialog")).toBeVisible();
   await panel.locator("#confirm-delete-button").click();
   await expect.poll(() => panel.evaluate((element) => element._threads.some((thread) =>
@@ -1099,7 +1099,7 @@ test("search, share, refresh and account-menu controls produce visible results",
 
   const before = (await websocketCalls(page, "codex_bridge/get_thread")).length;
   await panel.locator("#chat-menu-button").click();
-  await panel.locator('#thread-menu [data-action="refresh-thread"]').click();
+  await panel.locator('#chat-context-menu [data-chat-action="refresh"]').click();
   await expect.poll(async () => (await websocketCalls(page, "codex_bridge/get_thread")).length).toBeGreaterThan(before);
   await panel.locator("#app-menu-toggle").click();
   await expect(panel.locator("#app-menu")).toBeVisible();
@@ -2295,7 +2295,7 @@ test("creates a workspace project and first chat at compact widths in both colou
   await expect(refresh).toHaveCSS("width", "32px");
   await expect(refresh).toHaveCSS("height", "32px");
   await refresh.click();
-  await expect(panel.locator('#thread-menu [data-action="refresh-thread"]')).toBeVisible();
+  await expect(panel.locator('#chat-context-menu [data-chat-action="refresh"]')).toBeVisible();
   await page.keyboard.press("Escape");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(panel.locator("#runtime-strip")).toBeHidden();
@@ -3450,3 +3450,307 @@ for (const width of [1440, 390]) {
     await expect(panel.locator("[data-mcp-header-value]")).toHaveCount(0);
   });
 }
+
+
+for (const width of [390, 1440]) {
+  test(`chat context menu routes every action safely at ${width}px`, async ({ page }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator("#new-project-button")).toBeVisible();
+    await selectHarnessThread(page);
+    await panel.evaluate((element) => {
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: [...(element._config.capabilities || []), "chat_operations_v1"] };
+      const records = new Map(element._threads.map((thread) => [thread.thread_id, { ...thread, pinned: false, unread: false, section_id: null, navigation_revision: 1 }]));
+      let sections = [{ section_id: "section_test", name: "Research", revision: 1 }];
+      const original = element._callWS.bind(element);
+      window.__chatMenuCalls = [];
+      window.__chatMenuCopies = [];
+      element._writeClipboardText = async (text) => window.__chatMenuCopies.push(text);
+      element._callWS = async (operation, payload = {}) => {
+        window.__chatMenuCalls.push({ operation, payload: structuredClone(payload) });
+        if (operation === "list_chat_sections") return { sections: structuredClone(sections) };
+        if (operation === "get_events" && payload.thread_id === "thr_direct") return [
+          { event_id: "menu_message_one", sequence: 1, thread_id: "thr_direct", event_type: "message.created", payload: { role: "user", text: "Synthetic menu acceptance prompt" }, timestamp: "2026-09-26T00:00:00Z" },
+          { event_id: "menu_tool", sequence: 2, thread_id: "thr_direct", event_type: "tool.completed", payload: { text: "Private tool output excluded from copies" }, timestamp: "2026-09-26T00:00:01Z" },
+          { event_id: "menu_message_two", sequence: 3, thread_id: "thr_direct", event_type: "message.completed", payload: { role: "assistant", text: "Synthetic menu acceptance answer" }, timestamp: "2026-09-26T00:00:02Z" },
+        ].filter((event) => event.sequence > (payload.after || 0));
+        if (operation === "list_threads") return structuredClone([...records.values()]);
+        if (operation === "list_artifacts") return [
+          { artifact_id: "menu_workspace_file", filename: "generated.txt", relative_path: "generated.txt", source: "workspace", size_bytes: 12, mime_type: "text/plain" },
+          { artifact_id: "menu_private_file", filename: "capture.png", relative_path: null, source: "generated", size_bytes: 12, mime_type: "image/png" },
+          { artifact_id: "menu_owned_copy", filename: "earlier.txt", relative_path: "earlier/earlier.txt", source: "workspace", copied_for_chat: true, size_bytes: 12, mime_type: "text/plain" },
+        ];
+        if (operation === "get_thread") return structuredClone(records.get(payload.thread_id));
+        if (operation === "create_chat_section") { const section = { section_id: "section_new", name: payload.name, revision: 1 }; sections.push(section); return structuredClone(section); }
+        if (operation === "update_chat_section") { const section = sections.find((item) => item.section_id === payload.section_id); Object.assign(section, { name: payload.name, revision: section.revision + 1 }); return structuredClone(section); }
+        if (operation === "delete_chat_section") { sections = sections.filter((item) => item.section_id !== payload.section_id); for (const record of records.values()) if (record.section_id === payload.section_id) Object.assign(record, { section_id: null, navigation_revision: record.navigation_revision + 1 }); return {}; }
+        if (operation === "update_thread") {
+          const record = records.get(payload.thread_id);
+          if (["pinned", "unread", "section_id"].some((key) => key in payload)) {
+            if (payload.navigation_revision !== record.navigation_revision) throw new Error("The chat changed. Refresh before trying again.");
+            Object.assign(record, payload, { navigation_revision: record.navigation_revision + 1 });
+          } else Object.assign(record, await original(operation, payload));
+          return structuredClone(record);
+        }
+        if (operation === "move_thread_project") {
+          const record = records.get(payload.thread_id), project = element._projects.find((item) => item.project_id === payload.project_id);
+          Object.assign(record, { project_id: project.project_id, project_kind: project.kind, navigation_revision: record.navigation_revision + 1 }); return structuredClone(record);
+        }
+        if (operation === "fork_thread") {
+          const fork = { ...records.get(payload.thread_id), thread_id: "thr_menu_fork", title: "Fork acceptance", pinned: false, unread: false, section_id: null, navigation_revision: 1 };
+          records.set(fork.thread_id, fork); return structuredClone(fork);
+        }
+        if (["archive_thread", "restore_thread"].includes(operation)) { const record = records.get(payload.thread_id); record.archived_at = operation === "archive_thread" ? "2026-09-26T00:00:00Z" : null; return structuredClone(record); }
+        if (operation === "delete_thread") { records.delete(payload.thread_id); return original(operation, payload); }
+        return original(operation, payload);
+      };
+      element._threads = structuredClone([...records.values()]);
+      element._activeThread = records.get(element._selectedThreadId);
+      element._chatContextMenu.sectionsLoaded = false;
+      element._renderedNavigationKey = null;
+      element._render();
+    });
+    const source = "thr_direct";
+    const menu = panel.locator("#chat-context-menu");
+    const open = async () => {
+      if (width === 390 && !await panel.locator("#workspace-drawer").evaluate((node) => node.classList.contains("drawer-open"))) {
+        await panel.locator("#mobile-nav-toggle").click();
+      }
+      const row = panel.locator(`[data-chat-thread-id="${source}"]`);
+      await row.locator('[data-action="toggle-thread-actions"]').click();
+      await expect(menu).toBeVisible();
+    };
+    const action = (name) => menu.locator(`.chat-menu-root [data-chat-action="${name}"]`);
+    const openSubmenu = async (name) => {
+      await open();
+      const control = action("submenu").filter({ hasText: name });
+      if (width === 1440) await control.hover(); else await control.click();
+      await expect(menu.locator(".chat-menu-submenu")).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath(`chat-menu-${name.toLowerCase()}-${width}.png`) });
+    };
+    if (width === 390) await panel.locator("#mobile-nav-toggle").click();
+    await panel.locator(`[data-chat-thread-id="${source}"] .chat-select`).click({ button: "right" });
+    await expect(menu).toBeVisible();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Attachment validation");
+    await expect(menu.locator("button[data-tooltip],button[title]")).toHaveCount(0);
+    const bounds = await menu.boundingBox(); expect(bounds.x).toBeGreaterThanOrEqual(0); expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`chat-menu-root-${width}.png`) });
+    await page.emulateMedia({ colorScheme: "dark" }); await page.screenshot({ path: testInfo.outputPath(`chat-menu-root-dark-${width}.png`) }); await page.emulateMedia({ colorScheme: "light" });
+    await page.keyboard.press("Escape");
+    await open(); await action("rename").click(); const dialog = panel.getByRole("dialog", { name: "Rename chat" });
+    await dialog.getByRole("textbox", { name: "Chat title" }).fill("Menu acceptance chat");
+    await page.screenshot({ path: testInfo.outputPath(`chat-menu-rename-${width}.png`) });
+    await dialog.getByRole("button", { name: "Save", exact: true }).click(); await expect(dialog).toBeHidden();
+    await open(); await action("pin").click(); await expect(panel.locator("#chat-navigation-sections")).toContainText("Pinned");
+    await open(); await expect(action("pin")).toContainText("Unpin"); await action("pin").click();
+    await open(); await action("unread").click(); await expect(panel.locator(`[data-chat-thread-id="${source}"]`)).toHaveClass(/unread/);
+    await openSubmenu("Project"); await menu.locator('.chat-menu-submenu [data-chat-action="move"]').filter({ hasText: "Youtube DL" }).click();
+    const moveDialog = panel.getByRole("dialog", { name: "Move chat" });
+    await expect(moveDialog).toBeVisible();
+    const optionalFile = moveDialog.getByRole("checkbox", { name: /generated.txt/ });
+    await expect(optionalFile).not.toBeChecked();
+    await expect(moveDialog.getByRole("checkbox")).toHaveCount(1);
+    await expect(moveDialog).not.toContainText("earlier.txt");
+    await optionalFile.check();
+    const moveBounds = await moveDialog.boundingBox();
+    expect(moveBounds.x).toBeGreaterThanOrEqual(0);
+    expect(moveBounds.x + moveBounds.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`chat-menu-move-review-${width}.png`) });
+    await moveDialog.getByRole("button", { name: "Move chat", exact: true }).click();
+    await expect(moveDialog).toBeHidden();
+    await openSubmenu("Section"); await menu.locator('.chat-menu-submenu [data-chat-action="section"]').filter({ hasText: "Research" }).click();
+    await expect(panel.locator("#chat-navigation-sections")).toContainText("Menu acceptance chat");
+    await openSubmenu("Section"); await menu.locator('[data-chat-action="rename-section"]').click();
+    await panel.getByRole("dialog", { name: "Rename section" }).getByRole("textbox").fill("Analysis");
+    await panel.getByRole("dialog", { name: "Rename section" }).getByRole("button", { name: "Save", exact: true }).click();
+    await openSubmenu("Section"); await menu.locator('[data-chat-action="remove-section"]').click();
+    await panel.getByRole("dialog", { name: "Remove section" }).getByRole("button", { name: "Remove section", exact: true }).click();
+    await openSubmenu("Section"); await menu.locator('[data-chat-action="create-section"]').click();
+    await panel.getByRole("dialog", { name: "New section" }).getByRole("textbox").fill("New grouping");
+    await panel.getByRole("dialog", { name: "New section" }).getByRole("button", { name: "Save", exact: true }).click();
+    await expect(panel.getByRole("dialog", { name: "New section" })).toBeHidden();
+    await openSubmenu("Section"); await menu.locator('[data-chat-action="manage-sections"]').click();
+    await page.screenshot({ path: testInfo.outputPath(`chat-menu-manage-sections-${width}.png`) });
+    await menu.locator('[data-chat-action="manage-section"]').click();
+    await page.screenshot({ path: testInfo.outputPath(`chat-menu-manage-section-actions-${width}.png`) });
+    for (let depth = 0; depth < 4; depth += 1) await page.keyboard.press("Escape");
+    for (const copy of ["copy-title", "copy-link", "copy-text", "copy-markdown"]) { await openSubmenu("Copy"); await menu.locator(`.chat-menu-submenu [data-chat-action="${copy}"]`).click(); await expect(menu).toBeHidden(); }
+    await open(); await action("copy-link").click(); await expect(panel.locator("#share-status")).toContainText("Home Assistant sign-in is required");
+    await open(); const popupPromise = page.waitForEvent("popup"); await action("open").click(); const popup = await popupPromise; expect(popup.url()).toContain(`thread=${source}`); await popup.close();
+    await openSubmenu("Fork"); await menu.locator('[data-chat-action="fork"]').click(); await expect(panel.locator("#thread-title-label")).toHaveText("Fork acceptance");
+    if (width === 1440) {
+      await panel.locator("#chat-menu-button").focus(); await page.keyboard.press("Control+Alt+p");
+      await expect.poll(() => panel.evaluate((element) => element._threads.find((thread) => thread.thread_id === "thr_menu_fork")?.pinned)).toBe(true);
+      await panel.locator("#chat-menu-button").focus(); await page.keyboard.press("Control+Alt+r");
+      await expect(panel.getByRole("dialog", { name: "Rename chat" })).toBeVisible(); await page.keyboard.press("Escape");
+      await panel.locator("#prompt-input").focus(); await page.keyboard.press("Control+Shift+u");
+      await expect.poll(() => panel.evaluate((element) => element._threads.find((thread) => thread.thread_id === "thr_menu_fork")?.unread)).toBe(false);
+      await panel.locator("#chat-menu-button").focus(); await page.keyboard.press("Control+Shift+u");
+      await expect.poll(() => panel.evaluate((element) => element._threads.find((thread) => thread.thread_id === "thr_menu_fork")?.unread)).toBe(true);
+      await panel.locator("#chat-menu-button").focus(); await page.keyboard.press("Control+Shift+a");
+      await expect.poll(() => panel.evaluate((element) => element._threads.find((thread) => thread.thread_id === "thr_menu_fork")?.archived_at)).toBeTruthy();
+    }
+    // Test cancellation and confirmation on an owned disposable source, with no native delete bypass.
+    await open(); await action("delete").click(); await expect(panel.locator("#confirmation-dialog")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`chat-menu-delete-${width}.png`) });
+    await panel.locator("#cancel-delete-button").click(); await expect(panel.locator(`[data-chat-thread-id="${source}"]`)).toBeAttached();
+    await open(); await action("archive").click(); await expect.poll(() => panel.evaluate((element) => element._threads.find((thread) => thread.thread_id === "thr_direct")?.archived_at)).toBeTruthy();
+    await panel.locator('[data-action="toggle-section"][data-section="archived"]').click();
+    await open(); await expect(action("archive")).toContainText("Restore"); await action("archive").click();
+    await open(); await action("delete").click(); await panel.locator("#confirm-delete-button").click(); await expect(panel.locator(`[data-chat-thread-id="${source}"]`)).toHaveCount(0);
+    const calls = await page.evaluate(() => window.__chatMenuCalls);
+    expect(calls.find((call) => call.operation === "move_thread_project").payload.workspace_artifact_ids).toEqual(["menu_workspace_file"]);
+    for (const operation of ["update_thread", "move_thread_project", "create_chat_section", "update_chat_section", "delete_chat_section", "fork_thread", "archive_thread", "restore_thread", "delete_thread"]) expect(calls.some((call) => call.operation === operation)).toBe(true);
+    const copies = await page.evaluate(() => window.__chatMenuCopies); expect(copies.length).toBe(5); expect(copies[1]).toContain(`thread=${source}`); expect(copies[3]).toContain("## You");
+    await new AxeBuilder({ page }).include("codex-bridge-panel").analyze().then((result) => expect(result.violations.filter((item) => item.impact === "critical")).toEqual([]));
+  });
+}
+
+
+test("coarse pointer tablet keeps chat menu Back reachable", async ({ browser }, testInfo) => {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 900 }, hasTouch: true });
+  try {
+    const page = await context.newPage(); await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel"); await expect(panel.locator("#new-project-button")).toBeVisible();
+    await selectHarnessThread(page); expect(await page.evaluate(() => matchMedia("(pointer:coarse)").matches)).toBe(true);
+    await panel.locator('[data-chat-thread-id="thr_direct"] [data-action="toggle-thread-actions"]').tap();
+    const menu = panel.locator("#chat-context-menu"); await expect(menu).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Copy", exact: true }).tap();
+    const back = menu.getByRole("menuitem", { name: "Back", exact: true }); await expect(back).toBeVisible();
+    await expect(menu.locator(".chat-menu-root")).toBeHidden(); expect((await back.boundingBox()).height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({ path: testInfo.outputPath("chat-menu-touch-tablet-1024.png") }); await back.tap();
+    await expect(menu.locator(".chat-menu-root")).toBeVisible(); await expect(menu.locator(".chat-menu-submenu")).toHaveCount(0);
+  } finally { await context.close(); }
+});
+
+test("conversation timeline previews and jumps at desktop and touch widths", async ({ page }) => {
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await selectHarnessThread(page);
+    await page.evaluate(() => {
+      const element = document.querySelector("codex-bridge-panel");
+      element._stopPolling();
+      element._events = [
+        { sequence: 101, event_type: "message.created", payload: { run_id: "private-run-one", text: "Summarise the current workspace layout" } },
+        { sequence: 102, event_type: "message.completed", payload: { run_id: "private-run-one", text: "The workspace contains the integration and its tests." } },
+        { sequence: 103, event_type: "message.created", payload: { run_id: "private-run-two", text: "Now check the history loading path" } },
+        { sequence: 104, event_type: "run.queued", payload: { run_id: "private-run-two" } },
+      ];
+      element._forceMessageRebuild = true;
+      element._render();
+    });
+    const navigation = panel.getByRole("navigation", { name: "Conversation turns" });
+    await expect(navigation).toBeVisible();
+    const turns = navigation.locator(".timeline-item");
+    await expect(turns).toHaveCount(2);
+    const first = turns.first();
+    await expect(first).toHaveAttribute("aria-label", /Summarise the current workspace layout/);
+    if (width > 880) {
+      expect((await first.boundingBox()).height).toBeGreaterThanOrEqual(24);
+      await first.hover();
+      await expect(navigation.locator("#conversation-timeline-desktop-preview")).toBeVisible();
+      await first.focus();
+      await expect(navigation.locator("#conversation-timeline-desktop-preview")).toContainText("The workspace contains the integration and its tests.");
+      await first.press("Enter");
+    } else {
+      const disclosure = navigation.getByRole("button", { name: "Jump to message" });
+      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+      await expect(turns.first()).toBeHidden();
+      await disclosure.click();
+      await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+      expect((await first.boundingBox()).height).toBeGreaterThanOrEqual(44);
+      await first.click();
+      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+      await expect(disclosure).toBeFocused();
+      await expect(first).toBeHidden();
+      await disclosure.click();
+      await first.focus();
+      await first.press("Escape");
+      await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+      await expect(disclosure).toBeFocused();
+    }
+    expect(await navigation.innerText()).not.toContain("private-run-one");
+    await expect(first).toHaveAttribute("aria-current", "location");
+    await page.screenshot({ path: `D:/CodexWork/.tmp/conversation-navigation/conversation-timeline-${width}.png`, animations: "disabled" });
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
+    expect(accessibility.violations).toEqual([]);
+  }
+});
+
+test("empty chats and long conversation tracks keep the desktop message width", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await selectHarnessThread(page);
+  await page.evaluate(() => {
+    const element = document.querySelector("codex-bridge-panel");
+    element._stopPolling();
+    element._events = [];
+    element._forceMessageRebuild = true;
+    element._render();
+  });
+  await expect(panel.locator("#conversation-timeline")).toBeHidden();
+  await expect(panel.locator("#message-list")).toContainText("Chat is ready");
+  expect((await panel.locator("#message-list").boundingBox()).width).toBeGreaterThan(600);
+  await page.screenshot({ path: testInfo.outputPath("empty-chat-desktop.png") });
+  await page.evaluate(() => {
+    const element = document.querySelector("codex-bridge-panel");
+    element._events = Array.from({ length: 80 }, (_, index) => ({
+      sequence: index + 1, event_type: index % 2 ? "message.completed" : "message.created",
+      payload: { run_id: `owned-run-${Math.floor(index / 2)}`, text: `${index % 2 ? "Answer" : "Prompt"} ${Math.floor(index / 2) + 1}` },
+    }));
+    element._forceMessageRebuild = true;
+    element._render();
+  });
+  const track = panel.locator("#conversation-timeline-track");
+  await expect(track).toHaveClass(/is-scrollable/);
+  const ticks = track.locator(".timeline-item");
+  await expect(ticks).toHaveCount(40);
+  await ticks.first().focus();
+  await ticks.first().press("End");
+  await expect(ticks.last()).toBeFocused();
+  await expect(panel.locator("#conversation-timeline-desktop-preview")).toContainText("Prompt 40");
+  const firstRect = await ticks.first().boundingBox();
+  const secondRect = await ticks.nth(1).boundingBox();
+  expect(secondRect.y - firstRect.y).toBeGreaterThanOrEqual(24);
+  expect((await panel.locator("#message-list").boundingBox()).width).toBeGreaterThan(600);
+  await page.screenshot({ path: testInfo.outputPath("long-track-desktop.png") });
+});
+
+test("conversation navigation switches to a compact control in a narrow desktop chat area", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await selectHarnessThread(page);
+  await panel.evaluate((element) => {
+    element._stopPolling();
+    element._events = [
+      { sequence: 1, event_type: "message.created", payload: { run_id: "narrow_owned", text: "A narrow desktop prompt" } },
+      { sequence: 2, event_type: "message.completed", payload: { run_id: "narrow_owned", text: "The answer stays within its reading area." } },
+    ];
+    element._forceMessageRebuild = true;
+    element._render();
+  });
+  const layout = panel.locator("#conversation-layout");
+  await expect(layout).toHaveClass(/timeline-compact/);
+  const disclosure = panel.getByRole("button", { name: "Jump to message" });
+  await expect(disclosure).toBeVisible();
+  const layoutBounds = await layout.boundingBox();
+  const navigationBounds = await panel.locator("#conversation-timeline").boundingBox();
+  expect(navigationBounds.x).toBeCloseTo(layoutBounds.x, 0);
+  expect(navigationBounds.width).toBeCloseTo(layoutBounds.width, 0);
+  expect(layoutBounds.x).toBeGreaterThanOrEqual(0);
+  expect(layoutBounds.x + layoutBounds.width).toBeLessThanOrEqual(1000);
+  await disclosure.click();
+  await panel.locator(".timeline-item").click();
+  await expect(disclosure).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath("narrow-desktop-conversation.png") });
+  expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+});

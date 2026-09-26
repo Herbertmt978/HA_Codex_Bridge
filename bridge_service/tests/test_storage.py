@@ -60,6 +60,89 @@ def test_create_project_persists_defaults_and_root_path(tmp_path) -> None:
     assert payload["default_thinking_level"] == "medium"
 
 
+def test_chat_sections_and_navigation_metadata_survive_restart(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Navigation", mode=RunMode.FULL_AUTO)
+    section = storage.create_chat_section("Research")
+    updated = storage.update_thread(
+        thread.thread_id,
+        pinned=True,
+        unread=True,
+        section_id=section.section_id,
+        navigation_revision=thread.navigation_revision,
+    )
+
+    reopened = BridgeStorage(root_path=tmp_path)
+    restored = reopened.get_thread(thread.thread_id)
+    assert (restored.pinned, restored.unread, restored.section_id) == (
+        True,
+        True,
+        section.section_id,
+    )
+    assert restored.navigation_revision == updated.navigation_revision
+    assert reopened.list_chat_sections()[0].name == "Research"
+
+
+def test_legacy_thread_metadata_defaults_to_unpinned_read_and_unsectioned(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Legacy", mode=RunMode.FULL_AUTO)
+    path = tmp_path / "threads" / f"{thread.thread_id}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    for key in ("pinned", "unread", "section_id", "navigation_revision"):
+        payload.pop(key, None)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    restored = BridgeStorage(root_path=tmp_path).get_thread(thread.thread_id)
+
+    assert restored.pinned is False
+    assert restored.unread is False
+    assert restored.section_id is None
+    assert restored.navigation_revision == 1
+
+
+def test_navigation_updates_reject_stale_revision_and_missing_section(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Navigation", mode=RunMode.FULL_AUTO)
+    updated = storage.update_thread(
+        thread.thread_id,
+        pinned=True,
+        navigation_revision=thread.navigation_revision,
+    )
+
+    from codex_bridge_service.storage import ChatNavigationRevisionConflict
+
+    with pytest.raises(ChatNavigationRevisionConflict):
+        storage.update_thread(
+            thread.thread_id,
+            unread=True,
+            navigation_revision=thread.navigation_revision,
+        )
+    with pytest.raises(FileNotFoundError):
+        storage.update_thread(
+            thread.thread_id,
+            section_id="sec_missing",
+            navigation_revision=updated.navigation_revision,
+        )
+
+
+def test_delete_chat_section_clears_membership_with_new_navigation_revision(tmp_path) -> None:
+    storage = BridgeStorage(root_path=tmp_path)
+    thread = storage.create_thread(title="Navigation", mode=RunMode.FULL_AUTO)
+    section = storage.create_chat_section("Research")
+    assigned = storage.update_thread(
+        thread.thread_id,
+        section_id=section.section_id,
+        navigation_revision=thread.navigation_revision,
+    )
+
+    storage.delete_chat_section(section.section_id, expected_revision=section.revision)
+
+    restored = storage.get_thread(thread.thread_id)
+    assert restored.section_id is None
+    assert restored.navigation_revision == assigned.navigation_revision + 1
+    assert storage.list_chat_sections() == []
+
+
 def test_create_project_without_root_path_creates_named_workspace(tmp_path) -> None:
     storage = BridgeStorage(root_path=tmp_path)
 

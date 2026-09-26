@@ -60,9 +60,9 @@ describe("desktop chat controls", () => {
     const element = panel();
     const root = element.shadowRoot;
     root.getElementById("chat-menu-button").click();
-    expect(root.getElementById("thread-menu").hidden).toBe(false);
-    root.querySelector("#thread-menu button").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    expect(root.getElementById("thread-menu").hidden).toBe(true);
+    expect(root.getElementById("chat-context-menu").hidden).toBe(false);
+    root.querySelector("#chat-context-menu button").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(root.getElementById("chat-context-menu").hidden).toBe(true);
     expect(root.activeElement.id).toBe("chat-menu-button");
     element._renderTerminalAvailability();
     expect(root.getElementById("open-terminal-button").disabled).toBe(false);
@@ -76,7 +76,7 @@ describe("desktop chat controls", () => {
     const root = element.shadowRoot;
     element._callWS = vi.fn().mockResolvedValue({ ...element._activeThread, title: "Renamed chat" });
     root.getElementById("chat-menu-button").click();
-    const settings = root.querySelector('#thread-menu [data-action="edit-current-chat"]');
+    const settings = root.querySelector('#chat-context-menu [data-chat-action="settings"]');
     expect(settings.dataset.tooltip).toBeUndefined();
     expect(settings.hasAttribute("title")).toBe(false);
     settings.click();

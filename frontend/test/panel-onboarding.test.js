@@ -729,7 +729,7 @@ describe("HA-first panel integration", () => {
     expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(true);
     chatMore?.click();
     expect(chatMore?.getAttribute("aria-expanded")).toBe("true");
-    expect(chatMore?.getAttribute("aria-label")).toContain("Hide actions");
+    expect(chatMore?.getAttribute("aria-label")).toContain("Show actions");
     expect(panel.shadowRoot.getElementById(chatSecondaryId)?.hidden).toBe(false);
     chatMore?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(chatMore?.getAttribute("aria-expanded")).toBe("false");
@@ -813,8 +813,8 @@ describe("HA-first panel integration", () => {
     );
     const more = archivedList?.querySelector('[data-action="toggle-thread-actions"]');
     more?.click();
-    expect(archivedList?.querySelector('[data-action="archive-thread"]')).toBeTruthy();
-    expect(archivedList?.querySelector('[data-action="restore-thread"]')).toBeNull();
+    expect(panel.shadowRoot.querySelector('#chat-context-menu [data-chat-action="archive"]')?.textContent).toContain("Archive");
+    expect(panel.shadowRoot.querySelector('#chat-context-menu [data-chat-action="archive"]')?.textContent).not.toContain("Restore");
   });
 
   it("renders a disabled short window separately from a full weekly allowance", () => {

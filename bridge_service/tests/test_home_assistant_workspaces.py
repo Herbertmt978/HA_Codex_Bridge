@@ -7,10 +7,22 @@ import pytest
 from fastapi.testclient import TestClient
 
 from codex_bridge_service.app import create_app
-from codex_bridge_service.models import ProjectKind, RunMode, RuntimeProfile
-from codex_bridge_service.storage import BridgeStorage, ProjectMutationError
+from codex_bridge_service.models import (
+    ArtifactRecord,
+    ArtifactSource,
+    ProjectKind,
+    RunMode,
+    RuntimeProfile,
+)
+from codex_bridge_service.resource_limits import QuotaExceededError, ResourceLimits
+from codex_bridge_service.storage import (
+    BridgeStorage,
+    DurableMutationPendingError,
+    ProjectMutationError,
+)
 from codex_bridge_service.workspace import (
     WorkspaceBoundaryError,
+    WorkspaceEscapeError,
     WorkspaceInputError,
 )
 
@@ -26,6 +38,290 @@ def _home_assistant_storage(tmp_path) -> tuple[BridgeStorage, Path, Path]:
         workspace_root=workspace_root,
     )
     return storage, state_root, workspace_root
+
+
+def _storage_with_small_quotas(tmp_path) -> tuple[BridgeStorage, Path]:
+    if os.name == "nt":
+        pytest.skip("secure Home Assistant workspace operations require POSIX dir_fd support")
+    workspace_root = tmp_path / "workspaces"
+    storage = BridgeStorage(
+        root_path=tmp_path / "private-state",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=workspace_root,
+        resource_limits=ResourceLimits(
+            max_private_bytes=16,
+            max_workspace_bytes=8,
+            minimum_free_bytes=0,
+            minimum_free_fraction=0,
+        ),
+    )
+    return storage, workspace_root
+
+
+def _add_eight_byte_private_capture(storage: BridgeStorage, thread_id: str) -> None:
+    boundary = storage._home_assistant_artifacts_boundary()
+    relative = "capture.bin"
+    stored = f"{thread_id}/browser/{relative}"
+    boundary.create_directory(f"{thread_id}/browser")
+    with boundary.create_file_exclusive(stored) as output:
+        output.write(b"12345678")
+    record = storage.load_thread(thread_id)
+    record.artifacts.append(
+        ArtifactRecord(
+            artifact_id="art_capture_quota",
+            filename=relative,
+            mime_type="application/octet-stream",
+            source=ArtifactSource.BROWSER_CAPTURE,
+            stored_path=stored,
+            relative_path=relative,
+            size_bytes=8,
+        )
+    )
+    storage.save_thread(record)
+
+
+@pytest.mark.parametrize(("operation", "replacement_size"), [("fork", 8), ("fork", 9), ("move", 8), ("move", 9)])
+def test_copy_rollback_accounts_changed_inode_before_releasing_quota(
+    tmp_path, monkeypatch, operation: str, replacement_size: int
+) -> None:
+    storage, workspace_root = _storage_with_small_quotas(tmp_path)
+    source_project = storage.create_project(name="Source", root_path="source")
+    source = storage.create_thread(
+        title="Source",
+        project_id=source_project.project_id,
+        mode=RunMode.FULL_AUTO,
+    )
+    _add_eight_byte_private_capture(storage, source.thread_id)
+    pool = "private" if operation == "fork" else "workspace"
+    quota = storage._disk_quota()
+    concurrent_claim = quota.reserve(pool, amount_bytes=0)
+    if operation == "move":
+        destination = storage.create_project(name="Destination", root_path="destination")
+
+    original_prepare = storage._prepare_thread_for_save_locked
+    replacement_paths: list[Path] = []
+
+    def replace_copy_and_fail(record, *args, **kwargs):
+        if record.thread_id != source.thread_id or operation == "move":
+            if operation == "fork":
+                artifact = record.artifacts[0]
+                target = storage.artifacts_dir.joinpath(*artifact.stored_path.split("/"))
+            else:
+                artifact = record.artifacts[0]
+                target = workspace_root.joinpath(
+                    *record.workspace_path.split("/"), *artifact.relative_path.split("/")
+                )
+            original_copy = target.with_name(f"{target.name}.retained")
+            target.rename(original_copy)
+            replacement = target.with_name(f"{target.name}.replacement")
+            replacement.write_bytes(b"R" * replacement_size)
+            os.replace(replacement, target)
+            replacement_paths.append(target)
+            assert original_copy.stat().st_ino != target.stat().st_ino
+            assert original_copy.read_bytes() == b"12345678"
+            raise WorkspaceEscapeError()
+        return original_prepare(record, *args, **kwargs)
+
+    monkeypatch.setattr(storage, "_prepare_thread_for_save_locked", replace_copy_and_fail)
+
+    with pytest.raises(WorkspaceEscapeError):
+        if operation == "fork":
+            storage.clone_thread_for_fork(source.thread_id, "provider-fork")
+        else:
+            storage.move_thread_to_project(
+                source.thread_id,
+                destination.project_id,
+                "provider-moved",
+                expected_navigation_revision=source.navigation_revision,
+        )
+
+    assert replacement_paths[0].read_bytes() == b"R" * replacement_size
+    assert storage._disk_quota().active_reservations >= 1
+    with pytest.raises(QuotaExceededError):
+        quota.reserve(pool, amount_bytes=1)
+    concurrent_claim.release()
+
+
+def test_copy_helper_retained_partial_file_keeps_quota_claim(
+    tmp_path, monkeypatch
+) -> None:
+    storage, _workspace_root = _storage_with_small_quotas(tmp_path)
+    source = storage.create_thread(title="Source", mode=RunMode.FULL_AUTO)
+    _add_eight_byte_private_capture(storage, source.thread_id)
+    quota = storage._disk_quota()
+    concurrent_claim = quota.reserve("private", amount_bytes=0)
+    artifacts = storage._home_assistant_artifacts_boundary()
+    original_validate = artifacts.validate_regular_file_identity
+    original_unlink = artifacts.unlink_regular_file
+
+    def fail_source_validation(locator, identity):
+        if locator == f"{source.thread_id}/browser/capture.bin":
+            raise WorkspaceEscapeError()
+        return original_validate(locator, identity)
+
+    def refuse_clone_cleanup(locator, *args, **kwargs):
+        if locator.startswith("thr_") and locator != f"{source.thread_id}/browser/capture.bin":
+            raise WorkspaceEscapeError()
+        return original_unlink(locator, *args, **kwargs)
+
+    monkeypatch.setattr(artifacts, "validate_regular_file_identity", fail_source_validation)
+    monkeypatch.setattr(artifacts, "unlink_regular_file", refuse_clone_cleanup)
+
+    with pytest.raises(WorkspaceEscapeError):
+        storage.clone_thread_for_fork(source.thread_id, "provider-fork")
+
+    with pytest.raises(QuotaExceededError):
+        quota.reserve("private", amount_bytes=1)
+    concurrent_claim.release()
+
+
+def test_copy_helper_close_failure_accounts_retained_file(
+    tmp_path, monkeypatch
+) -> None:
+    storage, _workspace_root = _storage_with_small_quotas(tmp_path)
+    source = storage.create_thread(title="Source", mode=RunMode.FULL_AUTO)
+    _add_eight_byte_private_capture(storage, source.thread_id)
+    quota = storage._disk_quota()
+    concurrent_claim = quota.reserve("private", amount_bytes=0)
+    artifacts = storage._home_assistant_artifacts_boundary()
+    original_create = artifacts.create_file_exclusive
+    original_unlink = artifacts.unlink_regular_file
+    source_locator = f"{source.thread_id}/browser/capture.bin"
+
+    class CloseRaises:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def __getattr__(self, name):
+            return getattr(self.stream, name)
+
+        def close(self):
+            self.stream.close()
+            raise OSError("close reported an uncertain result")
+
+    def create_with_close_failure(locator):
+        stream = original_create(locator)
+        return stream if locator == source_locator else CloseRaises(stream)
+
+    def retain_clone_copy(locator, *args, **kwargs):
+        if locator != source_locator:
+            raise WorkspaceEscapeError()
+        return original_unlink(locator, *args, **kwargs)
+
+    monkeypatch.setattr(artifacts, "create_file_exclusive", create_with_close_failure)
+    monkeypatch.setattr(artifacts, "unlink_regular_file", retain_clone_copy)
+
+    with pytest.raises(OSError, match="close reported"):
+        storage.clone_thread_for_fork(source.thread_id, "provider-fork")
+
+    with pytest.raises(QuotaExceededError):
+        quota.reserve("private", amount_bytes=1)
+    concurrent_claim.release()
+
+
+@pytest.mark.parametrize("project_kind", ["direct", "imported"])
+def test_native_fork_projection_reuses_special_project_workspace_and_safe_history(
+    tmp_path, project_kind: str
+) -> None:
+    storage, _, workspace_root = _home_assistant_storage(tmp_path)
+    project = (
+        storage.ensure_direct_project()
+        if project_kind == "direct"
+        else storage.ensure_imported_project()
+    )
+    source = storage.create_thread(
+        title="Existing chat", mode=RunMode.FULL_AUTO, project_id=project.project_id
+    )
+    storage.append_thread_event(
+        thread_id=source.thread_id,
+        event_type="message.completed",
+        payload={"role": "user", "text": "Keep this"},
+    )
+    storage.append_thread_event(
+        thread_id=source.thread_id,
+        event_type="item.completed",
+        payload={"type": "toolCall", "arguments": {"secret": "private"}},
+    )
+
+    fork = storage.clone_thread_for_fork(source.thread_id, "provider-fork")
+
+    assert fork.workspace_id == source.workspace_id
+    assert fork.workspace_path == source.workspace_path
+    assert (workspace_root / fork.workspace_path).is_dir()
+    assert fork.codex_thread_id == "provider-fork"
+    events = storage.list_thread_events(fork.thread_id)
+    assert any(event.payload.get("text") == "Keep this" for event in events)
+    assert all(event.event_type != "item.completed" for event in events)
+
+
+@pytest.mark.parametrize("failure_stage", ["after_outbox_commit", "before_event_append"])
+def test_native_fork_outbox_recovery_never_publishes_empty_skeleton(
+    tmp_path, failure_stage: str
+) -> None:
+    if os.name == "nt":
+        pytest.skip("secure Home Assistant workspace operations require POSIX dir_fd support")
+    fail = False
+
+    def inject(stage: str) -> None:
+        if fail and stage == failure_stage:
+            raise OSError("injected durable outbox failure")
+
+    storage = BridgeStorage(
+        root_path=tmp_path / "private-state",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=tmp_path / "workspaces",
+        outbox_failure_injector=inject,
+    )
+    source = storage.create_thread(title="Source", mode=RunMode.FULL_AUTO)
+    storage.append_thread_event(
+        thread_id=source.thread_id,
+        event_type="message.completed",
+        payload={"role": "assistant", "text": "Safe history"},
+    )
+    fail = True
+
+    with pytest.raises(DurableMutationPendingError):
+        storage.clone_thread_for_fork(source.thread_id, "provider-fork")
+
+    fail = False
+    storage.durable_outbox.reconcile()
+    forks = [
+        thread
+        for thread in storage.list_threads(include_archived=True)
+        if thread.thread_id != source.thread_id
+    ]
+    assert len(forks) == 1
+    assert forks[0].codex_thread_id == "provider-fork"
+    assert any(
+        event.payload.get("text") == "Safe history"
+        for event in storage.list_thread_events(forks[0].thread_id)
+    )
+
+
+def test_native_fork_local_workspace_failure_releases_reservation_without_empty_chat(
+    tmp_path, monkeypatch
+) -> None:
+    storage, _, _ = _home_assistant_storage(tmp_path)
+    source = storage.create_thread(title="Source", mode=RunMode.FULL_AUTO)
+    before_reservations = storage.quota_manager.active_reservations
+    original_create_directory = storage.workspace_boundary.create_directory
+
+    def fail_once(relative: str):
+        monkeypatch.setattr(
+            storage.workspace_boundary,
+            "create_directory",
+            original_create_directory,
+        )
+        raise WorkspaceEscapeError()
+
+    monkeypatch.setattr(
+        storage.workspace_boundary, "create_directory", fail_once
+    )
+    with pytest.raises(WorkspaceEscapeError):
+        storage.clone_thread_for_fork(source.thread_id, "provider-fork")
+
+    assert storage.quota_manager.active_reservations == before_reservations
+    assert [thread.thread_id for thread in storage.list_threads()] == [source.thread_id]
 
 
 def test_account_rebind_detaches_provider_when_historical_workspace_is_missing(

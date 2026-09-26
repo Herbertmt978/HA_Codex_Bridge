@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Callable
 from contextlib import contextmanager
 from copy import deepcopy
@@ -79,7 +80,12 @@ from .runtime_state import (
     RuntimeStateStore,
     runtime_fingerprint,
 )
-from .storage import BridgeStorage, ProjectMutationError, ThreadNotFoundError
+from .storage import (
+    BridgeStorage,
+    DurableMutationPendingError,
+    ProjectMutationError,
+    ThreadNotFoundError,
+)
 from .workspace import WorkspaceBoundaryError
 
 
@@ -173,6 +179,21 @@ class RuntimeAuthenticationRequiredError(RuntimeBrokerError):
         super().__init__(
             "ChatGPT sign-in must be verified before Codex can start a turn."
         )
+
+
+class RuntimeThreadOperationConflictError(RuntimeBrokerError):
+    code = "runtime_thread_operation_conflict"
+
+    def __init__(self) -> None:
+        super().__init__("The chat cannot be forked in its current state.")
+
+
+class RuntimeThreadOperationUnknownError(RuntimeBrokerError):
+    code = "runtime_thread_operation_unknown"
+    status_code = 503
+
+    def __init__(self) -> None:
+        super().__init__("Codex fork state could not be verified; refresh the chat before retrying.")
 
 
 class RuntimeClosedError(RuntimeBrokerError):
@@ -600,6 +621,183 @@ class RuntimeBroker:
                 self._assert_threads_deletable_locked({thread_id})
                 self._purge_threads_locked({thread_id})
                 self.storage.delete_thread(thread_id)
+
+    def fork_thread(self, thread_id: str):
+        """Fork only a verified, idle native thread in the current account generation."""
+        try:
+            lease = self.gate.acquire_auth_mutation()
+        except Exception as exc:
+            raise RuntimeThreadOperationConflictError() from exc
+        generation = self.app_server.generation
+        forked_id: str | None = None
+        try:
+            if self._provider_admission_check is None or not self._provider_admission_check():
+                raise RuntimeAuthenticationRequiredError()
+            source = self.storage.load_thread(thread_id)
+            if (
+                not source.codex_thread_id
+                or source.status != "idle"
+                or source.active_run_id
+                or source.active_turn_id
+                or source.pending_prompts
+                or source.archived_at is not None
+            ):
+                raise RuntimeThreadOperationConflictError()
+            cwd = str(self.storage.resolve_workspace_path(source.workspace_path))
+            response = self.app_server.request(
+                "thread/fork",
+                {"threadId": source.codex_thread_id, "cwd": cwd},
+                timeout_seconds=self.control_request_timeout_seconds,
+            )
+            if generation != self.app_server.generation:
+                raise RuntimeThreadOperationUnknownError()
+            if (
+                not isinstance(response, dict)
+                or not isinstance(response.get("thread"), dict)
+                or not isinstance(response.get("cwd"), str)
+            ):
+                raise RuntimeThreadOperationUnknownError()
+            native_thread = response["thread"]
+            native_id = native_thread.get("id")
+            native_cwd = native_thread.get("cwd")
+            if (
+                not isinstance(native_id, str)
+                or not native_id.strip()
+                or len(native_id) > 512
+                or native_id == source.codex_thread_id
+                or not isinstance(native_cwd, str)
+            ):
+                raise RuntimeThreadOperationUnknownError()
+            canonical_cwd = os.path.normcase(os.path.realpath(cwd))
+            if (
+                os.path.normcase(os.path.realpath(native_cwd)) != canonical_cwd
+                or os.path.normcase(os.path.realpath(response["cwd"])) != canonical_cwd
+            ):
+                raise RuntimeThreadOperationUnknownError()
+            if any(
+                thread.codex_thread_id == native_id
+                for thread in self.storage.list_threads(include_archived=True)
+            ):
+                raise RuntimeThreadOperationUnknownError()
+            forked_id = native_id
+            if generation != self.app_server.generation or not self._provider_admission_check():
+                raise RuntimeThreadOperationUnknownError()
+            return self.storage.clone_thread_for_fork(thread_id, native_id)
+        except Exception as exc:
+            if (
+                forked_id is not None
+                and generation == self.app_server.generation
+                and not isinstance(exc, DurableMutationPendingError)
+            ):
+                try:
+                    self.app_server.request(
+                        "thread/delete", {"threadId": forked_id},
+                        timeout_seconds=self.control_request_timeout_seconds,
+                    )
+                except Exception:
+                    pass
+            raise
+        finally:
+            lease.release()
+
+    def move_thread_project(
+        self,
+        thread_id: str,
+        project_id: str,
+        navigation_revision: int,
+        workspace_artifact_ids: tuple[str, ...] = (),
+    ):
+        """Native-fork to the destination cwd, then atomically rebind the local chat."""
+        try:
+            lease = self.gate.acquire_auth_mutation()
+        except Exception as exc:
+            raise RuntimeThreadOperationConflictError() from exc
+        generation = self.app_server.generation
+        forked_id: str | None = None
+        try:
+            if self._provider_admission_check is None or not self._provider_admission_check():
+                raise RuntimeAuthenticationRequiredError()
+            source = self.storage.load_thread(thread_id)
+            if (
+                not source.codex_thread_id
+                or source.project_id == project_id
+                or source.status != "idle"
+                or source.active_run_id
+                or source.active_turn_id
+                or source.pending_prompts
+                or source.archived_at is not None
+                or source.navigation_revision != navigation_revision
+            ):
+                raise RuntimeThreadOperationConflictError()
+            with self.storage.project_mutation_guard():
+                self.storage.validate_workspace_artifact_selection(
+                    thread_id, workspace_artifact_ids
+                )
+                destination = self.storage.load_project(project_id)
+                if destination.archived_at is not None or destination.kind is not ProjectKind.PROJECT:
+                    raise RuntimeThreadOperationConflictError()
+                cwd = str(self.storage.resolve_workspace_path(destination.root_path))
+                response = self.app_server.request(
+                    "thread/fork",
+                    {"threadId": source.codex_thread_id, "cwd": cwd},
+                    timeout_seconds=self.control_request_timeout_seconds,
+                )
+                if generation != self.app_server.generation:
+                    raise RuntimeThreadOperationUnknownError()
+                if (
+                    not isinstance(response, dict)
+                    or not isinstance(response.get("thread"), dict)
+                    or not isinstance(response.get("cwd"), str)
+                ):
+                    raise RuntimeThreadOperationUnknownError()
+                native_thread = response["thread"]
+                native_id = native_thread.get("id")
+                native_cwd = native_thread.get("cwd")
+                if (
+                    not isinstance(native_id, str)
+                    or not native_id.strip()
+                    or len(native_id) > 512
+                    or native_id == source.codex_thread_id
+                    or not isinstance(native_cwd, str)
+                ):
+                    raise RuntimeThreadOperationUnknownError()
+                canonical_cwd = os.path.normcase(os.path.realpath(cwd))
+                if (
+                    os.path.normcase(os.path.realpath(native_cwd)) != canonical_cwd
+                    or os.path.normcase(os.path.realpath(response["cwd"])) != canonical_cwd
+                ):
+                    raise RuntimeThreadOperationUnknownError()
+                if any(
+                    thread.codex_thread_id == native_id
+                    for thread in self.storage.list_threads(include_archived=True)
+                ):
+                    raise RuntimeThreadOperationUnknownError()
+                forked_id = native_id
+                if generation != self.app_server.generation or not self._provider_admission_check():
+                    raise RuntimeThreadOperationUnknownError()
+                return self.storage.move_thread_to_project(
+                    thread_id,
+                    project_id,
+                    native_id,
+                    expected_navigation_revision=navigation_revision,
+                    workspace_artifact_ids=workspace_artifact_ids,
+                )
+        except Exception as exc:
+            if (
+                forked_id is not None
+                and generation == self.app_server.generation
+                and not isinstance(exc, DurableMutationPendingError)
+            ):
+                try:
+                    self.app_server.request(
+                        "thread/delete", {"threadId": forked_id},
+                        timeout_seconds=self.control_request_timeout_seconds,
+                    )
+                except Exception:
+                    pass
+            raise
+        finally:
+            lease.release()
 
     def delete_project(self, project_id: str) -> None:
         """Delete a project only when none of its chats has runtime ownership."""

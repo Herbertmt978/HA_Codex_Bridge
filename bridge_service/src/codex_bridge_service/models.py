@@ -96,6 +96,10 @@ class ArtifactRecord(BaseModel):
     relative_path: str | None = None
     size_bytes: int | None = None
     source: ArtifactSource = ArtifactSource.WORKSPACE
+    original_private_source: ArtifactSource | None = None
+    original_private_stored_path: str | None = None
+    original_private_relative_path: str | None = None
+    copied_for_chat: bool = Field(default=False, strict=True)
 
 
 class ProjectRecord(BaseModel):
@@ -109,6 +113,14 @@ class ProjectRecord(BaseModel):
     created_at: str
     updated_at: str
     archived_at: str | None = None
+
+
+class ChatSectionRecord(BaseModel):
+    section_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=80)
+    revision: int = Field(default=1, strict=True, ge=1)
+    created_at: str
+    updated_at: str
 
 
 class ThreadEventRecord(BaseModel):
@@ -209,6 +221,10 @@ class ThreadRecord(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     archived_at: str | None = None
+    pinned: bool = Field(default=False, strict=True)
+    unread: bool = Field(default=False, strict=True)
+    section_id: str | None = Field(default=None, min_length=1, max_length=128)
+    navigation_revision: int = Field(default=1, strict=True, ge=1)
 
 
 class ThreadViewRecord(ThreadRecord):
@@ -246,6 +262,10 @@ class PublicThreadRecord(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     archived_at: str | None = None
+    pinned: bool = Field(default=False, strict=True)
+    unread: bool = Field(default=False, strict=True)
+    section_id: str | None = Field(default=None, min_length=1, max_length=128)
+    navigation_revision: int = Field(default=1, strict=True, ge=1)
     project_name: str
     project_root_path: str
     project_kind: ProjectKind = ProjectKind.PROJECT
@@ -550,6 +570,7 @@ class BridgeReadinessRecord(BaseModel):
             "account_profile_details_v1",
             "office_preview_v1",
             "discord_channel_v1",
+            "chat_operations_v1",
         ],
         ...,
     ] = (

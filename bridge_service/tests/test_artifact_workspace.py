@@ -232,6 +232,149 @@ def test_home_assistant_concurrent_sync_deduplicates_and_stale_save_preserves_ar
     assert len(events) == 1
 
 
+def test_project_move_copies_owned_upload_and_output_and_keeps_links_resolvable(tmp_path) -> None:
+    storage, thread, _, workspace_root, source_workspace = _home_assistant_thread(tmp_path)
+    attachment = storage.attach_file(
+        thread_id=thread.thread_id,
+        filename="input.txt",
+        mime_type="text/plain",
+        content=BytesIO(b"uploaded context"),
+        relative_path="input.txt",
+    )
+    artifact_boundary = storage._home_assistant_artifacts_boundary()
+    artifact_boundary.create_directory(f"{thread.thread_id}/generated")
+    artifact_locator = f"{thread.thread_id}/generated/result.png"
+    with artifact_boundary.create_file_exclusive(artifact_locator) as output:
+        output.write(b"generated output")
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-thread-before-move"
+    record.artifacts.append(
+        ArtifactRecord(
+            artifact_id="art_owned_output",
+            filename="result.png",
+            mime_type="image/png",
+            source=ArtifactSource.GENERATED_IMAGE,
+            stored_path=artifact_locator,
+            relative_path="result.png",
+            size_bytes=len(b"generated output"),
+        )
+    )
+    (source_workspace / "project-guide.txt").write_bytes(b"project-owned file")
+    record.artifacts.append(
+        ArtifactRecord(
+            artifact_id="art_unselected_workspace_file",
+            filename="project-guide.txt",
+            mime_type="text/plain",
+            source=ArtifactSource.WORKSPACE,
+            stored_path=f"{record.workspace_path}/project-guide.txt",
+            relative_path="project-guide.txt",
+            size_bytes=len(b"project-owned file"),
+        )
+    )
+    (source_workspace / "discovered-report.txt").write_bytes(b"discovered report")
+    retained_archive = storage.create_workspace_archive(thread.thread_id)
+    record.artifacts.append(
+        ArtifactRecord(
+            artifact_id="art_workspace_report",
+            filename="discovered-report.txt",
+            mime_type="text/plain",
+            source=ArtifactSource.WORKSPACE,
+            stored_path=f"{record.workspace_path}/discovered-report.txt",
+            relative_path="discovered-report.txt",
+            size_bytes=len(b"discovered report"),
+        )
+    )
+    storage.save_thread(record)
+    original = storage.get_artifact(thread.thread_id, "art_owned_output")
+    destination = storage.create_project(name="Destination", root_path="projects/destination")
+
+    moved = storage.move_thread_to_project(
+        thread.thread_id,
+        destination.project_id,
+        "provider-thread-after-move",
+        expected_navigation_revision=thread.navigation_revision,
+        workspace_artifact_ids=("art_workspace_report",),
+    )
+
+    moved_workspace = workspace_root.joinpath(*moved.workspace_path.split("/"))
+    copied_upload = moved_workspace / ".codex-bridge-moved" / thread.thread_id / "move-2" / "attachments" / f"{attachment.attachment_id}-input.txt"
+    copied_output = moved_workspace / ".codex-bridge-moved" / thread.thread_id / "move-2" / "generated" / "art_owned_output" / "result.png"
+    copied_discovered = moved_workspace / ".codex-bridge-moved" / thread.thread_id / "move-2" / "outputs" / "art_workspace_report" / "discovered-report.txt"
+    assert moved.project_id == destination.project_id
+    assert moved.codex_thread_id == "provider-thread-after-move"
+    assert copied_upload.read_bytes() == b"uploaded context"
+    assert copied_output.read_bytes() == b"generated output"
+    assert copied_discovered.read_bytes() == b"discovered report"
+    assert not (moved_workspace / ".codex-bridge-moved" / thread.thread_id / "move-2" / "outputs" / "art_unselected_workspace_file" / "project-guide.txt").exists()
+    assert "art_unselected_workspace_file" not in {
+        artifact.artifact_id for artifact in storage.load_thread(thread.thread_id).artifacts
+    }
+    assert (source_workspace / "project-guide.txt").read_bytes() == b"project-owned file"
+    assert (source_workspace / ".codex-bridge-moved" / thread.thread_id / "attachments" / f"{attachment.attachment_id}-input.txt").exists() is False
+    assert storage.get_attachment(thread.thread_id, attachment.attachment_id).stored_path == attachment.stored_path
+    rebound_output = storage.get_artifact(thread.thread_id, "art_owned_output")
+    assert rebound_output.source is ArtifactSource.WORKSPACE
+    assert rebound_output.stored_path == f"{moved.workspace_path}/.codex-bridge-moved/{thread.thread_id}/move-2/generated/art_owned_output/result.png"
+    assert original.stored_path != rebound_output.stored_path
+    downloaded_artifact, stream, downloaded_size = storage.open_artifact(
+        thread.thread_id, "art_workspace_report"
+    )
+    with stream:
+        assert downloaded_artifact.source is ArtifactSource.WORKSPACE
+        assert downloaded_size == len(b"discovered report")
+        assert stream.read() == b"discovered report"
+    private_archive_path = storage.artifacts_dir.joinpath(
+        *retained_archive.stored_path.split("/")
+    )
+    private_output_path = storage.artifacts_dir.joinpath(
+        *original.stored_path.split("/")
+    )
+    intermediate = storage.create_project(
+        name="Intermediate", root_path="projects/intermediate"
+    )
+    moved_again = storage.move_thread_to_project(
+        thread.thread_id,
+        intermediate.project_id,
+        "provider-thread-move-three",
+        expected_navigation_revision=moved.navigation_revision,
+    )
+    moved_back = storage.move_thread_to_project(
+        thread.thread_id,
+        destination.project_id,
+        "provider-thread-move-four",
+        expected_navigation_revision=moved_again.navigation_revision,
+    )
+    final_output = storage.get_artifact(thread.thread_id, "art_owned_output")
+    assert moved_back.navigation_revision == moved.navigation_revision + 2
+    assert final_output.stored_path.endswith(
+        f"move-{moved_back.navigation_revision}/generated/art_owned_output/result.png"
+    )
+    final_report = storage.get_artifact(thread.thread_id, "art_workspace_report")
+    assert final_report.copied_for_chat is True
+    report, report_stream, report_size = storage.open_artifact(
+        thread.thread_id, "art_workspace_report"
+    )
+    with report_stream:
+        assert report.copied_for_chat is True
+        assert report_size == len(b"discovered report")
+        assert report_stream.read() == b"discovered report"
+    assert "art_unselected_workspace_file" not in {
+        artifact.artifact_id
+        for artifact in storage.load_thread(thread.thread_id).artifacts
+    }
+    after_move_upload = storage.attach_file(
+        thread_id=thread.thread_id,
+        filename="after.txt",
+        mime_type="text/plain",
+        content=BytesIO(b"new upload after move"),
+        relative_path="after.txt",
+    )
+    assert storage.get_attachment(thread.thread_id, after_move_upload.attachment_id).filename == "after.txt"
+    storage.delete_thread(thread.thread_id)
+    assert not private_archive_path.exists()
+    assert not private_output_path.exists()
+
+
 def test_home_assistant_download_stream_is_descriptor_pinned_and_hardened(
     tmp_path,
     monkeypatch,

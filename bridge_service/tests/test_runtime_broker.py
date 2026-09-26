@@ -34,8 +34,10 @@ from codex_bridge_service.browser_broker import BrowserInvocationContext
 from codex_bridge_service.capabilities import CapabilitiesManager
 from codex_bridge_service.codex_app_server_contract import (
     AppServerProtocolValidator,
+    ProtocolContractError,
     load_bundled_protocol_contract,
 )
+from codex_bridge_service.automations import AutomationConflictError, AutomationStore
 from codex_bridge_service.event_store import EventStoreAdmissionError
 from codex_bridge_service.models import (
     ArtifactRecord,
@@ -53,6 +55,8 @@ from codex_bridge_service.runtime_broker import (
     RuntimeBrokerError,
     RuntimeEventPayloadTooLargeError,
     InteractionStaleError,
+    RuntimeThreadOperationConflictError,
+    RuntimeThreadOperationUnknownError,
 )
 from codex_bridge_service.runtime_gate import RuntimeGate, RuntimeMutationConflictError
 from codex_bridge_service.runtime_policy import (
@@ -482,6 +486,59 @@ def _new_thread(
         project_id=project.project_id,
         mode=mode,
     )
+
+
+def _home_assistant_operation_thread(tmp_path: Path):
+    if os.name == "nt":
+        pytest.skip("secure Home Assistant workspace operations require POSIX dir_fd support")
+    storage = BridgeStorage(
+        root_path=tmp_path / "private-state",
+        runtime_profile=RuntimeProfile.HOME_ASSISTANT,
+        workspace_root=tmp_path / "workspaces",
+    )
+    source = storage.create_thread(title="Native operations", mode=RunMode.FULL_AUTO)
+    record = storage.load_thread(source.thread_id)
+    record.codex_thread_id = "provider-source"
+    storage.save_thread(record)
+    destination = storage.create_project(
+        name="Move destination", root_path="projects/move-destination"
+    )
+    return storage, source, destination
+
+
+def _thread_fork_response(
+    native_id: str,
+    cwd: str,
+    *,
+    top_cwd: str | None = None,
+    nested_cwd: str | None = None,
+    include_top_cwd: bool = True,
+) -> dict[str, Any]:
+    response: dict[str, Any] = {
+        "thread": _thread(native_id, cwd=nested_cwd or cwd),
+        "model": "gpt-5.6-codex",
+        "modelProvider": "openai",
+        "approvalPolicy": "never",
+        "approvalsReviewer": "user",
+        "sandbox": {"type": "readOnly", "networkAccess": False},
+    }
+    if include_top_cwd:
+        response["cwd"] = top_cwd or cwd
+    return response
+
+
+class _PostForkTransitionPeer(ValidatorBackedAppServer):
+    def __init__(self, transition: Callable[[], None]) -> None:
+        super().__init__()
+        self._transition = transition
+
+    def request(self, method: str, params: Any = None, *, timeout_seconds=None):
+        response = super().request(
+            method, params, timeout_seconds=timeout_seconds
+        )
+        if method == "thread/fork":
+            self._transition()
+        return response
 
 
 def _broker(
@@ -3691,6 +3748,215 @@ def test_provider_admission_check_failure_rejects_prompt_without_leaking_error(
         assert "private auth-coordinator failure" not in str(rejected.value)
         assert not client.requests
         assert storage.load_thread(thread.thread_id).status == "idle"
+    finally:
+        broker.close()
+
+
+def test_fork_rejects_busy_thread_and_uncertain_provider_result_without_rebinding(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    record = storage.load_thread(thread.thread_id)
+    record.codex_thread_id = "provider-source"
+    storage.save_thread(record)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client, provider_admission_check=lambda: True)
+    try:
+        busy = storage.load_thread(thread.thread_id)
+        busy.status = "running"
+        busy.active_run_id = "run_busy"
+        storage.save_thread(busy)
+        with pytest.raises(RuntimeThreadOperationConflictError):
+            broker.fork_thread(thread.thread_id)
+        assert not client.requests
+
+        idle = storage.load_thread(thread.thread_id)
+        idle.status = "idle"
+        idle.active_run_id = None
+        storage.save_thread(idle)
+        client.script("thread/fork", AppServerTimeoutError("thread/fork"))
+        with pytest.raises(AppServerTimeoutError):
+            broker.fork_thread(thread.thread_id)
+        assert storage.load_thread(thread.thread_id).codex_thread_id == "provider-source"
+        assert [method for method, _ in client.requests] == ["thread/fork"]
+    finally:
+        broker.close()
+
+
+def test_native_fork_and_project_move_commit_verified_provider_threads(tmp_path: Path) -> None:
+    storage, source, destination = _home_assistant_operation_thread(tmp_path)
+    storage.append_thread_event(
+        thread_id=source.thread_id,
+        event_type="message.completed",
+        payload={"role": "assistant", "text": "Safe prior answer"},
+    )
+    client = ValidatorBackedAppServer()
+    source_cwd = str(storage.resolve_workspace_path(source.workspace_path))
+    destination_cwd = str(storage.resolve_workspace_path(destination.root_path))
+    client.script("thread/fork", _thread_fork_response("provider-fork", source_cwd))
+    broker = _broker(storage, client, provider_admission_check=lambda: True)
+    try:
+        fork = broker.fork_thread(source.thread_id)
+        assert fork.codex_thread_id == "provider-fork"
+        assert fork.workspace_path == source.workspace_path
+        assert any(
+            event.payload.get("text") == "Safe prior answer"
+            for event in storage.list_thread_events(fork.thread_id)
+        )
+        assert [method for method, _ in client.requests] == ["thread/fork"]
+        assert not _requests(client, "turn/start")
+        assert storage.load_thread(source.thread_id).codex_thread_id == "provider-source"
+
+        client.script(
+            "thread/fork",
+            _thread_fork_response("provider-moved", destination_cwd),
+        )
+        moved = broker.move_thread_project(
+            source.thread_id,
+            destination.project_id,
+            source.navigation_revision,
+        )
+        assert moved.project_id == destination.project_id
+        assert moved.codex_thread_id == "provider-moved"
+        assert moved.workspace_path == destination.root_path
+        assert [method for method, _ in client.requests] == [
+            "thread/fork",
+            "thread/fork",
+        ]
+        assert not _requests(client, "turn/start")
+    finally:
+        broker.close()
+
+
+def test_project_move_to_current_project_rejects_before_native_fork(tmp_path: Path) -> None:
+    storage, source, _destination = _home_assistant_operation_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client, provider_admission_check=lambda: True)
+    try:
+        with pytest.raises(RuntimeThreadOperationConflictError):
+            broker.move_thread_project(
+                source.thread_id,
+                source.project_id,
+                source.navigation_revision,
+            )
+
+        assert not client.requests
+        assert storage.load_thread(source.thread_id).codex_thread_id == "provider-source"
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize(
+    ("native_id_kind", "cwd_kind", "include_top_cwd"),
+    [
+        ("source", "correct", True),
+        ("existing", "correct", True),
+        ("oversized", "correct", True),
+        ("new", "wrong", True),
+        ("new", "correct", False),
+    ],
+)
+def test_native_fork_never_deletes_or_binds_unverified_provider_handles(
+    tmp_path: Path,
+    native_id_kind: str,
+    cwd_kind: str,
+    include_top_cwd: bool,
+) -> None:
+    storage, source, _destination = _home_assistant_operation_thread(tmp_path)
+    other = storage.create_thread(title="Other chat", mode=RunMode.FULL_AUTO)
+    other_record = storage.load_thread(other.thread_id)
+    other_record.codex_thread_id = "provider-existing"
+    storage.save_thread(other_record)
+    cwd = str(storage.resolve_workspace_path(source.workspace_path))
+    native_id = {
+        "source": "provider-source",
+        "existing": "provider-existing",
+        "oversized": "p" * 513,
+        "new": "provider-unverified",
+    }[native_id_kind]
+    response = _thread_fork_response(
+        native_id,
+        cwd,
+        nested_cwd=str(tmp_path / "wrong-cwd") if cwd_kind == "wrong" else cwd,
+        include_top_cwd=include_top_cwd,
+    )
+    client = ValidatorBackedAppServer()
+    client.script("thread/fork", response)
+    broker = _broker(storage, client, provider_admission_check=lambda: True)
+    try:
+        expected_error = ProtocolContractError if not include_top_cwd else RuntimeThreadOperationUnknownError
+        with pytest.raises(expected_error):
+            broker.fork_thread(source.thread_id)
+        assert storage.load_thread(source.thread_id).codex_thread_id == "provider-source"
+        assert storage.load_thread(other.thread_id).codex_thread_id == "provider-existing"
+        assert not _requests(client, "thread/delete")
+        assert len(storage.list_threads(include_archived=True)) == 2
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize("transition", ["account_admission", "generation"])
+def test_native_fork_rechecks_account_and_generation_before_local_rebind(
+    tmp_path: Path, transition: str
+) -> None:
+    storage, source, _destination = _home_assistant_operation_thread(tmp_path)
+    cwd = str(storage.resolve_workspace_path(source.workspace_path))
+    admission = {"allowed": True}
+    if transition == "account_admission":
+        peer: _PostForkTransitionPeer = _PostForkTransitionPeer(
+            lambda: admission.update(allowed=False)
+        )
+        generation = peer.generation
+    else:
+        peer = _PostForkTransitionPeer(
+            lambda: setattr(peer, "generation", peer.generation + 1)
+        )
+        generation = peer.generation
+    peer.script("thread/fork", _thread_fork_response("provider-after-switch", cwd))
+    broker = _broker(
+        storage,
+        peer,
+        provider_admission_check=lambda: admission["allowed"],
+    )
+    try:
+        with pytest.raises(RuntimeThreadOperationUnknownError):
+            broker.fork_thread(source.thread_id)
+        assert peer.generation == generation + (transition == "generation")
+        assert storage.load_thread(source.thread_id).codex_thread_id == "provider-source"
+        assert len(storage.list_threads(include_archived=True)) == 1
+        assert _requests(peer, "thread/fork")
+        assert not _requests(peer, "thread/start")
+    finally:
+        broker.close()
+
+
+def test_scheduled_continuation_blocks_move_before_native_fork(tmp_path: Path) -> None:
+    storage, source, destination = _home_assistant_operation_thread(tmp_path)
+    schedule = AutomationStore(tmp_path / "automations")
+    schedule.create(
+        {
+            "name": "Continue this chat",
+            "prompt": "Summarise new work",
+            "target": {"kind": "continue_thread", "thread_id": source.thread_id},
+            "mode": "observe",
+            "schedule": {
+                "kind": "once",
+                "at": "2026-10-01T09:00:00Z",
+            },
+        }
+    )
+    client = ValidatorBackedAppServer()
+    broker = _broker(storage, client, provider_admission_check=lambda: True)
+    try:
+        with pytest.raises(AutomationConflictError):
+            with schedule.protect_thread_move(source.thread_id):
+                broker.move_thread_project(
+                    source.thread_id,
+                    destination.project_id,
+                    source.navigation_revision,
+                )
+        assert not client.requests
+        assert storage.load_thread(source.thread_id).codex_thread_id == "provider-source"
     finally:
         broker.close()
 

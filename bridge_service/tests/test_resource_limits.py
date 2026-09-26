@@ -171,6 +171,91 @@ def test_failed_mutation_releases_quota_for_a_retry() -> None:
     assert manager.active_reservations == 0
 
 
+def test_retained_copy_quota_commit_blocks_growth_with_concurrent_reservation() -> None:
+    measured = {"usage": 0, "free": 100}
+    manager = QuotaManager(
+        pools={
+            "workspace": QuotaPool(
+                limit_bytes=10,
+                usage_bytes=lambda: measured["usage"],
+                free_bytes=lambda: measured["free"],
+                total_bytes=lambda: 100,
+                filesystem_id=lambda: "workspace-test-device",
+            )
+        },
+        minimum_free_bytes=0,
+    )
+    unrelated = manager.reserve("workspace", amount_bytes=0)
+    retained_copy = manager.reserve("workspace", amount_bytes=8)
+    retained_copy.consume(8)
+    measured["usage"] = 8
+    retained_copy.commit(persisted_bytes=8)
+
+    with pytest.raises(QuotaExceededError):
+        manager.reserve("workspace", amount_bytes=3)
+
+    assert manager.active_reservations == 1
+    unrelated.release()
+    assert manager.active_reservations == 0
+
+
+def test_retained_copy_quota_commit_preserves_minimum_free_space_with_concurrent_claim() -> None:
+    measured = {"usage": 0, "free": 20}
+    manager = QuotaManager(
+        pools={
+            "workspace": QuotaPool(
+                limit_bytes=100,
+                usage_bytes=lambda: measured["usage"],
+                free_bytes=lambda: measured["free"],
+                total_bytes=lambda: 100,
+                filesystem_id=lambda: "workspace-free-space-test-device",
+            )
+        },
+        minimum_free_bytes=10,
+    )
+    unrelated = manager.reserve("workspace", amount_bytes=0)
+    retained_copy = manager.reserve("workspace", amount_bytes=4)
+    retained_copy.consume(4)
+    measured["usage"] = 4
+    measured["free"] = 16
+    retained_copy.commit(persisted_bytes=4)
+
+    with pytest.raises(QuotaExceededError):
+        manager.reserve("workspace", amount_bytes=7)
+
+    assert manager.active_reservations == 1
+    unrelated.release()
+    assert manager.active_reservations == 0
+
+
+def test_quarantined_quota_pool_fails_closed_until_manager_restart() -> None:
+    measured = {"usage": 0, "free": 100}
+    manager = QuotaManager(
+        pools={
+            "workspace": QuotaPool(
+                limit_bytes=100,
+                usage_bytes=lambda: measured["usage"],
+                free_bytes=lambda: measured["free"],
+                total_bytes=lambda: 100,
+                filesystem_id=lambda: "quota-quarantine-test",
+            )
+        },
+        minimum_free_bytes=0,
+    )
+    retained = manager.reserve("workspace", amount_bytes=8)
+    retained.consume(8)
+    concurrent = manager.reserve("workspace", amount_bytes=0)
+    retained.quarantine()
+
+    with pytest.raises(QuotaExceededError):
+        manager.reserve("workspace", amount_bytes=1)
+    with pytest.raises(QuotaExceededError):
+        concurrent.consume(1)
+
+    assert retained.active is True
+    assert concurrent.consumed_bytes == 0
+
+
 def test_new_manager_recovers_from_stale_reservations_and_counts_partial_files(
     tmp_path,
 ) -> None:

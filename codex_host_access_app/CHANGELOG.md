@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.7
+
+- Bundles the Sigstore-verified Codex runtime `0.157.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.15.0` without changing its Integration API compatibility.
+
 ## 1.8.6
 
 - Keeps the optional Host Access App aligned with Codex Bridge `1.8.6`.

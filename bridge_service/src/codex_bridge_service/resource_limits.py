@@ -271,6 +271,10 @@ class QuotaReservation:
     def release(self) -> None:
         self._manager._release(self)
 
+    def quarantine(self) -> None:
+        """Fail closed for this pool when retained disk usage is unknowable."""
+        self._manager._quarantine(self)
+
     def __enter__(self) -> "QuotaReservation":
         if not self.active:
             raise ReservationConflictError(self.pool)
@@ -323,6 +327,7 @@ class QuotaManager:
         self._lock = RLock()
         self._closed = False
         self._owner_id = owner_id or _PROCESS_INSTANCE_ID
+        self._quarantined_pools: set[str] = set()
         if not self._owner_id.strip() or len(self._owner_id) > 200:
             raise ValueError("quota owner id is invalid")
         self._ledger_lock: _LedgerLockLease | None = None
@@ -402,6 +407,8 @@ class QuotaManager:
             raise QuotaExceededError(pool)
         with self._lock:
             self._pool(pool)
+            if pool in self._quarantined_pools:
+                raise QuotaExceededError(pool)
             filesystem_id = self._filesystem_id(pool)
             reservation_id = f"qres_{uuid4().hex}"
             with self._transaction():
@@ -628,6 +635,8 @@ class QuotaManager:
         *,
         observed_consumed_growth: int = 0,
     ) -> None:
+        if pool in self._quarantined_pools:
+            raise QuotaExceededError(pool)
         state = self._connection.execute(
             """
             SELECT baseline_usage_bytes, baseline_free_bytes
@@ -781,6 +790,14 @@ class QuotaManager:
                 self._require_active(reservation)
                 self._finish(reservation)
             reservation._active = False
+
+    def _quarantine(self, reservation: QuotaReservation) -> None:
+        with self._lock:
+            self._require_open()
+            if reservation._manager is not self:
+                raise ReservationConflictError(reservation.pool)
+            self._require_active(reservation)
+            self._quarantined_pools.add(reservation.pool)
 
     def _require_active(
         self,

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+import voluptuous as vol
 
 from custom_components.codex_bridge.bridge_api import (
     BridgeApiConflictError,
@@ -42,6 +43,10 @@ from custom_components.codex_bridge.websocket_api import (
     ws_subscribe_events,
     ws_unsubscribe_events,
     ws_update_stdio_mcp,
+    ws_update_thread,
+    ws_create_chat_section,
+    ws_update_chat_section,
+    ws_delete_chat_section,
 )
 
 
@@ -150,6 +155,78 @@ async def test_v1_subscription_acknowledges_and_forwards_auth_without_a_chat() -
             },
         )
     ]
+
+
+async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits() -> None:
+    runtime, _broker = _runtime()
+    hass = _Hass(runtime)
+    connection = _Connection()
+    runtime.client.async_update_thread.return_value = {"thread_id": "thr_safe"}
+
+    ws_update_thread(
+        hass,
+        connection,
+        {
+            "id": 91,
+            "type": f"{DOMAIN}/update_thread",
+            "thread_id": "thr_safe",
+            "pinned": True,
+            "unread": False,
+            "section_id": "sec_research",
+            "navigation_revision": 7,
+        },
+    )
+    await hass.finish()
+
+    runtime.client.async_update_thread.assert_awaited_once_with(
+        "thr_safe",
+        {
+            "pinned": True,
+            "unread": False,
+            "section_id": "sec_research",
+            "navigation_revision": 7,
+        },
+    )
+    assert connection.results == [(91, {"thread_id": "thr_safe"})]
+    with pytest.raises(vol.Invalid):
+        ws_update_thread._ws_schema(
+            {
+                "type": f"{DOMAIN}/update_thread",
+                "thread_id": "thr_safe",
+                "section_id": "x" * 129,
+                "navigation_revision": 7,
+            }
+        )
+    with pytest.raises(vol.Invalid):
+        ws_update_thread._ws_schema(
+            {
+                "type": f"{DOMAIN}/update_thread",
+                "thread_id": "thr_safe",
+                "pinned": True,
+                "navigation_revision": 0,
+            }
+        )
+    with pytest.raises(vol.Invalid):
+        ws_create_chat_section._ws_schema(
+            {"type": f"{DOMAIN}/create_chat_section", "name": ""}
+        )
+    with pytest.raises(vol.Invalid):
+        ws_update_chat_section._ws_schema(
+            {
+                "type": f"{DOMAIN}/update_chat_section",
+                "section_id": "sec_research",
+                "name": "Research",
+                "revision": 0,
+            }
+        )
+    with pytest.raises(vol.Invalid):
+        ws_delete_chat_section._ws_schema(
+            {
+                "type": f"{DOMAIN}/delete_chat_section",
+                "section_id": "sec_research",
+                "revision": 0,
+            }
+        )
 
 
 async def test_start_auth_login_defaults_to_non_destructive_mode() -> None:

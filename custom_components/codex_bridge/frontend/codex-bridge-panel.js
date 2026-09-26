@@ -460,13 +460,13 @@ function field(doc, name, label, value, options = null, type2 = "text") {
     row.append(picker);
     return row;
   }
-  const control = element(doc, type2 === "textarea" ? "textarea" : "input");
-  control.name = name;
-  control.dataset.desktopField = name;
-  control.setAttribute("aria-label", label);
-  if (type2 !== "textarea") control.type = type2;
-  control.value = String(value ?? "");
-  row.append(control);
+  const control2 = element(doc, type2 === "textarea" ? "textarea" : "input");
+  control2.name = name;
+  control2.dataset.desktopField = name;
+  control2.setAttribute("aria-label", label);
+  if (type2 !== "textarea") control2.type = type2;
+  control2.value = String(value ?? "");
+  row.append(control2);
   return row;
 }
 function staticRow(doc, label, value) {
@@ -477,20 +477,20 @@ function staticRow(doc, label, value) {
 function checkRow(doc, name, label, checked) {
   const row = element(doc, "label", "schedule-row schedule-check-row");
   row.append(element(doc, "span", "schedule-row-label", label));
-  const control = element(doc, "input");
-  control.type = "checkbox";
-  control.name = name;
-  control.dataset.desktopField = name;
-  control.setAttribute("aria-label", label);
-  control.checked = checked === true;
-  row.append(control);
+  const control2 = element(doc, "input");
+  control2.type = "checkbox";
+  control2.name = name;
+  control2.dataset.desktopField = name;
+  control2.setAttribute("aria-label", label);
+  control2.checked = checked === true;
+  row.append(control2);
   return row;
 }
 function refreshScheduleForm(form) {
-  const values = Object.fromEntries([...form.querySelectorAll("[data-desktop-field]")].map((control) => [control.name, control.value]));
+  const values = Object.fromEntries([...form.querySelectorAll("[data-desktop-field]")].map((control2) => [control2.name, control2.value]));
   for (const row of form.querySelectorAll("[data-repeat-for]")) {
     row.hidden = !row.dataset.repeatFor.split(" ").includes(values.repeat);
-    for (const control of row.querySelectorAll("input,select")) control.required = !row.hidden;
+    for (const control2 of row.querySelectorAll("input,select")) control2.required = !row.hidden;
   }
   const custom = values.repeat === "custom";
   const time = form.querySelector('[name="time"]');
@@ -506,7 +506,7 @@ function refreshScheduleForm(form) {
   monthly.hidden = values.repeat !== "monthly" || Number(values.month_day) < 29;
   const previewChoice = form.querySelector('[name="notification_preview"]');
   if (previewChoice) {
-    const hasPhone = [...form.querySelectorAll('input[name^="mobile_target:"]')].some((control) => control.checked);
+    const hasPhone = [...form.querySelectorAll('input[name^="mobile_target:"]')].some((control2) => control2.checked);
     previewChoice.disabled = !hasPhone;
     if (!hasPhone) previewChoice.checked = false;
   }
@@ -32241,6 +32241,102 @@ function getRunActivityViewModel(thread = {}, events = []) {
   };
 }
 
+// frontend/src/conversation-timeline.js
+var MAX_CONVERSATION_TURNS = 12500;
+var SNIPPET_LIMIT = 120;
+var TERMINAL_LABELS = Object.freeze({
+  completed: "Run completed without a recorded answer",
+  cancelled: "Run cancelled",
+  failed: "Run failed",
+  interrupted: "Run interrupted",
+  cleared: "Queued turn cleared"
+});
+function snippet(value) {
+  if (typeof value !== "string") return "";
+  const compact = value.replace(/\s+/gu, " ").trim();
+  if (compact.length <= SNIPPET_LIMIT) return compact;
+  return `${compact.slice(0, SNIPPET_LIMIT - 1).trimEnd()}…`;
+}
+function projectConversationTurns(events = []) {
+  const turns = [];
+  const byRun = /* @__PURE__ */ new Map();
+  let lastUserTurn = null;
+  for (const event of Array.isArray(events) ? events : []) {
+    const type2 = event?.event_type;
+    if (!Number.isSafeInteger(event?.sequence) || event.sequence <= 0) continue;
+    const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+    const runId = typeof payload.run_id === "string" && payload.run_id ? payload.run_id : null;
+    let turn = runId ? byRun.get(runId) : null;
+    if (type2 === "run.queue_cleared") {
+      for (const queuedTurn of runId ? turn ? [turn] : [] : turns.filter((item) => item.queued)) {
+        queuedTurn.queued = false;
+        queuedTurn.outcome ||= "cleared";
+      }
+      continue;
+    }
+    if (["run.completed", "run.cancelled", "run.failed", "run.interrupted"].includes(type2)) {
+      if (!turn && !runId) turn = lastUserTurn;
+      if (turn) {
+        turn.queued = false;
+        turn.outcome = type2.slice(4);
+      }
+      continue;
+    }
+    if (["run.queued", "run.started", "run.dequeued"].includes(type2)) {
+      if (turn) turn.queued = type2 === "run.queued";
+      continue;
+    }
+    if (type2 !== "message.created" && type2 !== "message.completed") continue;
+    if (type2 === "message.created") {
+      if (!turn) {
+        turn = { runId, firstSequence: event.sequence, userSequence: event.sequence, prompt: "", response: "", queued: false };
+        turns.push(turn);
+        if (runId) byRun.set(runId, turn);
+      }
+      turn.userSequence ??= event.sequence;
+      turn.firstSequence = Math.min(turn.firstSequence, event.sequence);
+      turn.prompt = snippet([turn.prompt, snippet(payload.text)].filter(Boolean).join(" "));
+      turn.queued ||= payload.queued === true;
+      lastUserTurn = turn;
+      continue;
+    }
+    if (!turn && !runId && lastUserTurn) turn = lastUserTurn;
+    if (!turn) {
+      turn = { runId, firstSequence: event.sequence, userSequence: null, prompt: "", response: "", queued: false };
+      turns.push(turn);
+      if (runId) byRun.set(runId, turn);
+    }
+    turn.firstSequence = Math.min(turn.firstSequence, event.sequence);
+    const response = snippet(payload.text);
+    if (response) turn.response = snippet([turn.response, response].filter(Boolean).join(" · "));
+  }
+  const ordered = turns.sort((left, right) => left.firstSequence - right.firstSequence).slice(-MAX_CONVERSATION_TURNS);
+  return ordered.map((turn, index) => {
+    const number = index + 1;
+    const pending = Boolean(turn.prompt && !turn.response && !turn.outcome);
+    const outcomeLabel = !turn.response ? TERMINAL_LABELS[turn.outcome] || "" : "";
+    const label = snippet([
+      `Turn ${number}.`,
+      turn.queued && "Queued",
+      outcomeLabel,
+      pending && "Codex response in progress",
+      turn.prompt && `You: ${turn.prompt}`,
+      turn.response && `Codex: ${turn.response}`
+    ].filter(Boolean).join(" "));
+    return {
+      key: String(turn.userSequence ?? turn.firstSequence),
+      anchorSequence: turn.userSequence ?? turn.firstSequence,
+      index: number,
+      prompt: turn.prompt,
+      response: turn.response,
+      queued: turn.queued,
+      pending,
+      outcomeLabel,
+      label
+    };
+  });
+}
+
 // frontend/src/uploads.js
 var UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
 var SHA256_WORDS = new Uint32Array([
@@ -33070,12 +33166,12 @@ function renderMcpElicitation(container, interaction, { pending = false, draft =
       const label = document.createElement("label");
       label.textContent = `${safeText2(field2.label, 160)}${field2.required ? " *" : ""}`;
       const saved = draft[field2.name];
-      let control;
+      let control2;
       if (field2.kind === "multi_select") {
-        control = document.createElement("fieldset");
+        control2 = document.createElement("fieldset");
         const legend = document.createElement("legend");
         legend.textContent = label.textContent;
-        control.append(legend);
+        control2.append(legend);
         for (const [index, option] of (field2.options || []).entries()) {
           const choice = document.createElement("label");
           const checkbox = document.createElement("input");
@@ -33084,41 +33180,41 @@ function renderMcpElicitation(container, interaction, { pending = false, draft =
           checkbox.checked = Array.isArray(saved) && saved.includes(option);
           checkbox.disabled = pending;
           choice.append(checkbox, document.createTextNode(safeText2(field2.option_labels?.[index] || option, 160)));
-          control.append(choice);
+          control2.append(choice);
         }
       } else if (field2.kind === "select" || field2.kind === "boolean") {
-        control = document.createElement("select");
+        control2 = document.createElement("select");
         const empty = document.createElement("option");
         empty.value = "";
         empty.textContent = "Select an answer";
-        control.append(empty);
+        control2.append(empty);
         const choices = field2.kind === "boolean" ? [["true", "Yes"], ["false", "No"]] : (field2.options || []).map((option, index) => [option, field2.option_labels?.[index] || option]);
         for (const [value, text3] of choices) {
           const option = document.createElement("option");
           option.value = value;
           option.textContent = safeText2(text3, 160);
-          control.append(option);
+          control2.append(option);
         }
-        control.value = saved === void 0 ? "" : String(saved);
-        control.required = Boolean(field2.required);
+        control2.value = saved === void 0 ? "" : String(saved);
+        control2.required = Boolean(field2.required);
       } else {
-        control = document.createElement("input");
-        control.type = { email: "email", uri: "url", date: "date", "date-time": "datetime-local" }[field2.format] || (field2.kind === "integer" || field2.kind === "number" ? "number" : "text");
-        control.value = saved === void 0 ? "" : String(saved);
-        control.required = Boolean(field2.required && !(field2.kind === "string" && !field2.format && (!Number.isInteger(field2.min_length) || field2.min_length === 0)));
-        if (field2.kind === "integer") control.step = "1";
-        if (field2.kind === "number") control.step = "any";
-        if (Number.isInteger(field2.min_length)) control.minLength = field2.min_length;
-        if (Number.isInteger(field2.max_length)) control.maxLength = field2.max_length;
-        if (typeof field2.minimum === "number") control.min = field2.minimum;
-        if (typeof field2.maximum === "number") control.max = field2.maximum;
+        control2 = document.createElement("input");
+        control2.type = { email: "email", uri: "url", date: "date", "date-time": "datetime-local" }[field2.format] || (field2.kind === "integer" || field2.kind === "number" ? "number" : "text");
+        control2.value = saved === void 0 ? "" : String(saved);
+        control2.required = Boolean(field2.required && !(field2.kind === "string" && !field2.format && (!Number.isInteger(field2.min_length) || field2.min_length === 0)));
+        if (field2.kind === "integer") control2.step = "1";
+        if (field2.kind === "number") control2.step = "any";
+        if (Number.isInteger(field2.min_length)) control2.minLength = field2.min_length;
+        if (Number.isInteger(field2.max_length)) control2.maxLength = field2.max_length;
+        if (typeof field2.minimum === "number") control2.min = field2.minimum;
+        if (typeof field2.maximum === "number") control2.max = field2.maximum;
       }
-      control.disabled = pending;
+      control2.disabled = pending;
       if (field2.kind !== "multi_select") {
-        label.append(control);
+        label.append(control2);
         row.append(label);
       } else {
-        row.append(control);
+        row.append(control2);
       }
       if (field2.description) {
         const description = document.createElement("p");
@@ -33160,9 +33256,9 @@ function collectMcpContent(container, interaction) {
   for (const field2 of interaction?.display?.mcp_fields || []) {
     const value = draft[field2.name];
     const row = [...container.querySelectorAll("[data-mcp-field]")].find((item) => item.dataset.mcpField === field2.name);
-    const control = row?.querySelector("input, select");
-    if (field2.kind !== "multi_select" && control && !control.checkValidity()) {
-      control.reportValidity();
+    const control2 = row?.querySelector("input, select");
+    if (field2.kind !== "multi_select" && control2 && !control2.checkValidity()) {
+      control2.reportValidity();
       return null;
     }
     if (value === "" || Array.isArray(value) && !value.length && !field2.required) {
@@ -33400,19 +33496,19 @@ function renderUserInput(container, model) {
       const id = `question-${accessibleId}-${question.domId}-option-${index + 1}`;
       const optionLabel = document.createElement("label");
       optionLabel.htmlFor = id;
-      const control = document.createElement("input");
-      control.type = question.multiple ? "checkbox" : "radio";
-      control.id = id;
-      control.name = `question-${accessibleId}-${question.domId}`;
-      control.value = option.label;
-      control.dataset.questionId = question.id;
-      control.dataset.answerValue = option.label;
-      control.checked = question.selected.includes(option.label);
+      const control2 = document.createElement("input");
+      control2.type = question.multiple ? "checkbox" : "radio";
+      control2.id = id;
+      control2.name = `question-${accessibleId}-${question.domId}`;
+      control2.value = option.label;
+      control2.dataset.questionId = question.id;
+      control2.dataset.answerValue = option.label;
+      control2.checked = question.selected.includes(option.label);
       const copy = document.createElement("span");
       copy.textContent = option.label;
       const description = document.createElement("small");
       description.textContent = option.description;
-      optionLabel.append(control, copy, description);
+      optionLabel.append(control2, copy, description);
       fieldset.append(optionLabel);
     }
     if (question.allowFreeText) {
@@ -33449,8 +33545,8 @@ function renderUserInput(container, model) {
 function collectUserInputAnswers(container, model) {
   const answers = [];
   for (const question of model.questions) {
-    const selected = [...container.querySelectorAll("[data-question-id][data-answer-value]:checked")].filter((control) => control.dataset.questionId === question.id).map((control) => plainText2(control.value, MAX_FREE_TEXT));
-    const freeText = [...container.querySelectorAll('[data-question-id][data-question-free-text="true"]')].find((control) => control.dataset.questionId === question.id);
+    const selected = [...container.querySelectorAll("[data-question-id][data-answer-value]:checked")].filter((control2) => control2.dataset.questionId === question.id).map((control2) => plainText2(control2.value, MAX_FREE_TEXT));
+    const freeText = [...container.querySelectorAll('[data-question-id][data-question-free-text="true"]')].find((control2) => control2.dataset.questionId === question.id);
     let values = selected;
     if (freeText) {
       const value = plainText2(freeText.value, MAX_FREE_TEXT);
@@ -33581,15 +33677,15 @@ function renderStdioPackages(doc, state, { available = false, management = false
     form.append(text(doc, "h3", updating ? `Update ${server?.name || "server"}` : "Add isolated server", "desktop-subheading"));
     if (!updating) {
       const name = text(doc, "label", "", "desktop-field");
-      const control = doc.createElement("input");
-      control.type = "text";
-      control.required = true;
-      control.maxLength = 64;
-      control.pattern = "[a-z][a-z0-9_-]*";
-      control.autocomplete = "off";
-      control.dataset.desktopField = "stdio_name";
-      control.value = state.formDraft?.stdio_name || "";
-      name.append(text(doc, "span", "Server name", "desktop-field-label"), control);
+      const control2 = doc.createElement("input");
+      control2.type = "text";
+      control2.required = true;
+      control2.maxLength = 64;
+      control2.pattern = "[a-z][a-z0-9_-]*";
+      control2.autocomplete = "off";
+      control2.dataset.desktopField = "stdio_name";
+      control2.value = state.formDraft?.stdio_name || "";
+      name.append(text(doc, "span", "Server name", "desktop-field-label"), control2);
       form.append(name);
     } else form.append(text(doc, "p", "Updating pauses the server and ends its active sessions. Its tools remain blocked until you review and resume it.", "desktop-note"));
     const choice = text(doc, "label", "", "desktop-field");
@@ -33706,30 +33802,30 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEn
   const staticAuth = credentialsEnabled && ["bearer", "headers"].includes(state.formDraft?.auth_mode);
   const field2 = (label, name, type2 = "text") => {
     const wrap = text(doc, "label", "", "desktop-field");
-    const control = doc.createElement("input");
-    control.type = type2;
-    control.name = name;
-    control.dataset.desktopField = name;
-    control.value = state.formDraft?.[name] ?? "";
-    control.autocomplete = "off";
-    control.spellcheck = false;
-    control.required = ["name", "url"].includes(name);
+    const control2 = doc.createElement("input");
+    control2.type = type2;
+    control2.name = name;
+    control2.dataset.desktopField = name;
+    control2.value = state.formDraft?.[name] ?? "";
+    control2.autocomplete = "off";
+    control2.spellcheck = false;
+    control2.required = ["name", "url"].includes(name);
     if (name === "name") {
-      control.pattern = "[a-z][a-z0-9_\\-]{0,63}";
-      control.title = "Start with a lowercase letter. Use lowercase letters, numbers, hyphens or underscores, up to 64 characters.";
+      control2.pattern = "[a-z][a-z0-9_\\-]{0,63}";
+      control2.title = "Start with a lowercase letter. Use lowercase letters, numbers, hyphens or underscores, up to 64 characters.";
     }
-    wrap.append(text(doc, "span", label, "desktop-field-label"), control);
+    wrap.append(text(doc, "span", label, "desktop-field-label"), control2);
     return wrap;
   };
   const checkbox = (label, name, required = false) => {
     const wrap = text(doc, "label", "", "mcp-consent");
-    const control = doc.createElement("input");
-    control.type = "checkbox";
-    control.dataset.desktopField = name;
-    control.name = name;
-    control.checked = state.formDraft?.[name] === true;
-    control.required = required;
-    wrap.append(control, text(doc, "span", label));
+    const control2 = doc.createElement("input");
+    control2.type = "checkbox";
+    control2.dataset.desktopField = name;
+    control2.name = name;
+    control2.checked = state.formDraft?.[name] === true;
+    control2.required = required;
+    wrap.append(control2, text(doc, "span", label));
     return wrap;
   };
   form.append(field2("Name", "name"));
@@ -33913,9 +34009,9 @@ function renderMcpConnectionForm(doc, state) {
   if (relayed) options.push(["replace", "Use a new credential"], ["remove", "Remove saved credential"]);
   const action = state.formDraft?.credential_action || "";
   const choice = selection(doc, { name: "credential_action", label: "Authentication when changing destination", value: action, options });
-  const control = choice.querySelector("select");
-  control.required = true;
-  control.dataset.desktopField = "credential_action";
+  const control2 = choice.querySelector("select");
+  control2.required = true;
+  control2.dataset.desktopField = "credential_action";
   form.append(text(doc, "span", "Authentication when changing destination", "desktop-field-label"), choice);
   if (action === "replace") {
     const replacement = { ...state, formDraft: { ...state.formDraft, auth_mode: state.formDraft?.auth_mode || (["bearer", "headers"].includes(server.auth) ? server.auth : "bearer") } };
@@ -34057,31 +34153,31 @@ var input = (documentRef, label, name, value = "", type2 = "text") => {
   const wrap = documentRef.createElement("label");
   wrap.className = "desktop-field";
   wrap.append(text2(documentRef, "span", label, "desktop-field-label"));
-  const control = documentRef.createElement(type2 === "textarea" ? "textarea" : "input");
-  control.name = name;
-  control.value = value == null ? "" : String(value);
-  control.dataset.desktopField = name;
-  if (type2 !== "textarea") control.type = type2;
-  if (type2 === "textarea") control.rows = 4;
-  wrap.append(control);
+  const control2 = documentRef.createElement(type2 === "textarea" ? "textarea" : "input");
+  control2.name = name;
+  control2.value = value == null ? "" : String(value);
+  control2.dataset.desktopField = name;
+  if (type2 !== "textarea") control2.type = type2;
+  if (type2 === "textarea") control2.rows = 4;
+  wrap.append(control2);
   return wrap;
 };
 var selectField = (documentRef, label, name, options, value = "") => {
   const wrap = documentRef.createElement("label");
   wrap.className = "desktop-field";
   wrap.append(text2(documentRef, "span", label, "desktop-field-label"));
-  const control = documentRef.createElement("select");
-  control.name = name;
-  control.dataset.desktopField = name;
+  const control2 = documentRef.createElement("select");
+  control2.name = name;
+  control2.dataset.desktopField = name;
   for (const option of options) {
     const node2 = documentRef.createElement("option");
     node2.value = option.value;
     node2.textContent = option.label;
     node2.selected = option.value === value;
     node2.disabled = Boolean(option.disabled);
-    control.append(node2);
+    control2.append(node2);
   }
-  wrap.append(control);
+  wrap.append(control2);
   return wrap;
 };
 function displayValue(value, key = "") {
@@ -34192,10 +34288,10 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     } else {
       form.append(text2(documentRef, "p", "Describe a title or instruction change, then review it before saving.", "desktop-note"));
       const description = input(documentRef, "Change request", "edit_description", formValue(state, "edit_description"), "textarea");
-      const control = description.querySelector("textarea");
-      control.placeholder = "Rename to Morning heating check";
-      control.maxLength = 4e3;
-      control.required = true;
+      const control2 = description.querySelector("textarea");
+      control2.placeholder = "Rename to Morning heating check";
+      control2.maxLength = 4e3;
+      control2.required = true;
       form.append(description);
       form.append(text2(documentRef, "p", "Examples: Rename to Morning heating check; Set instructions to Summarise yesterday's events.", "desktop-note"));
     }
@@ -34219,10 +34315,10 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     form.append(text2(documentRef, "h3", "Describe a scheduled task"));
     form.append(text2(documentRef, "p", `Include when it should run and what Codex should do. Times use Home Assistant's ${defaultTimezone} time zone. Nothing runs until you review and create the task.`, "desktop-note"));
     const description = input(documentRef, "Task and timing", "description", formValue(state, "description"), "textarea");
-    const control = description.querySelector("textarea");
-    control.placeholder = "Every weekday at 9 am, summarise yesterday's events";
-    control.maxLength = 4e3;
-    control.required = true;
+    const control2 = description.querySelector("textarea");
+    control2.placeholder = "Every weekday at 9 am, summarise yesterday's events";
+    control2.maxLength = 4e3;
+    control2.required = true;
     form.append(description);
     form.append(text2(documentRef, "p", "Examples: Every Monday at 2 pm, check the heating; On 24 September 2026 at 09:00, prepare a report.", "desktop-note"));
     const error = text2(documentRef, "p", state.formError || "", "schedule-error");
@@ -34347,15 +34443,15 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   const tabItems = [["general", "General"], ["access", "Access"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) {
-    const control = button2(documentRef, label, "select-settings-tab", { tab: id });
-    control.className = "settings-tab";
-    control.id = `settings-tab-${id}`;
-    control.dataset.settingsTab = id;
-    control.setAttribute("role", "tab");
-    control.setAttribute("aria-controls", "settings-panel");
-    control.setAttribute("aria-selected", String(tab === id));
-    control.tabIndex = tab === id ? 0 : -1;
-    tabs.append(control);
+    const control2 = button2(documentRef, label, "select-settings-tab", { tab: id });
+    control2.className = "settings-tab";
+    control2.id = `settings-tab-${id}`;
+    control2.dataset.settingsTab = id;
+    control2.setAttribute("role", "tab");
+    control2.setAttribute("aria-controls", "settings-panel");
+    control2.setAttribute("aria-selected", String(tab === id));
+    control2.tabIndex = tab === id ? 0 : -1;
+    tabs.append(control2);
   }
   section2.append(tabs);
   const panel = documentRef.createElement("section");
@@ -34730,8 +34826,827 @@ function proposeAutomationEditDescription(description) {
   throw new Error("Describe one change: ‘Rename this task to …’ or ‘Set the instructions to …’. You can change the title or instructions only.");
 }
 
+// frontend/src/chat-context-menu.js
+var chatMenuCss = `
+  .chat-context-menu { position:fixed; z-index:70; width:min(348px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); overflow:auto; padding:6px; border:1px solid var(--border-color); border-radius:14px; background:var(--surface-bg); color:var(--text-color); box-shadow:0 8px 28px #0002; }
+  .chat-context-menu[hidden], .chat-menu-dialog[hidden] { display:none; }
+  .chat-context-menu button { display:flex; align-items:center; gap:12px; width:100%; min-height:40px; border:0; padding:9px 12px; border-radius:7px; background:transparent; color:inherit; font:inherit; font-weight:400; text-align:left; }
+  .chat-context-menu button:hover, .chat-context-menu button:focus-visible { background:var(--surface-muted); }
+  .chat-context-menu button:focus-visible { outline:2px solid var(--accent-color); outline-offset:-2px; }
+  .chat-context-menu button:disabled { opacity:.55; cursor:default; }
+  .chat-context-menu button[hidden] { display:none; }
+  .chat-context-menu .chat-menu-icon { display:flex; width:20px; flex:none; }
+  .chat-context-menu svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
+  .chat-menu-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chat-menu-shortcut { color:var(--muted-color); font-size:12px; white-space:nowrap; }
+  .chat-menu-divider { border:0; border-top:1px solid var(--border-color); margin:6px -6px; }
+  .chat-menu-page { animation:chat-menu-expand 130ms ease-out; }
+  .chat-menu-root { animation:none; }
+  .chat-menu-submenu { position:fixed; z-index:71; width:min(300px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); overflow:auto; padding:6px; border:1px solid var(--border-color); border-radius:12px; background:var(--surface-bg); box-shadow:0 8px 28px #0002; }
+  @media (max-width:640px), (pointer:coarse) { .chat-context-menu.has-submenu .chat-menu-root { display:none; } .chat-menu-submenu { position:static; width:auto; padding:0; border:0; box-shadow:none; } .chat-context-menu button { min-height:44px; } .chat-menu-shortcut { display:none; } }
+  .chat-menu-status { margin:6px 12px; color:var(--muted-color); font-size:13px; line-height:1.4; overflow-wrap:anywhere; }
+  .chat-menu-status:empty { display:none; }
+  .chat-menu-dialog { position:fixed; inset:0; z-index:80; display:grid; place-items:center; padding:16px; background:#0005; }
+  .chat-menu-dialog-card { width:min(420px,100%); max-height:calc(100dvh - 32px); overflow:auto; padding:22px; border:1px solid var(--border-color); border-radius:18px; background:var(--surface-bg); box-shadow:0 12px 40px #0003; }
+  .chat-menu-dialog-card h2 { margin:0 0 18px; font-size:20px; }
+  .chat-menu-dialog-card label { display:grid; gap:8px; }
+  .chat-menu-dialog-card input { width:100%; box-sizing:border-box; padding:12px; border:1px solid var(--border-color); border-radius:9px; color:var(--text-color); background:var(--surface-bg); font:inherit; }
+  .chat-menu-dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+  .chat-menu-dialog-actions button { min-height:44px; }
+  .chat-move-files { max-height:min(36dvh,320px); overflow:auto; margin:16px 0 0; padding:12px; border:1px solid var(--border-color); border-radius:10px; }
+  .chat-move-files legend { padding:0 6px; font-weight:600; }
+  .chat-move-files label { display:flex; align-items:start; gap:10px; min-height:44px; padding:8px 0; }
+  .chat-move-files input[type="checkbox"] { width:20px; height:20px; flex:none; margin:2px 0 0; padding:0; accent-color:var(--accent-color); }
+  .chat-move-file-name { display:block; overflow-wrap:anywhere; }
+  .chat-move-file-path { display:block; color:var(--muted-color); font-size:12px; overflow-wrap:anywhere; }
+  .chat-row.unread .thread-name { font-weight:650; }
+  .chat-row.unread .thread-name::after { content:' •'; color:var(--accent-color); }
+  .chat-navigation-group { margin:8px 0; }
+  .chat-navigation-group summary { cursor:pointer; min-height:44px; display:flex; align-items:center; gap:8px; padding:8px 12px; font-weight:600; }
+  .chat-navigation-group summary svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
+  @keyframes chat-menu-expand { from { opacity:.65; transform:translateX(5px); } to { opacity:1; transform:translateX(0); } }
+  @media (pointer:coarse) { .chat-context-menu button { min-height:44px; } .chat-menu-shortcut { display:none; } }
+  @media (prefers-reduced-motion:reduce) { .chat-menu-page { animation:none; } }
+  :host([data-motion="reduced"]) .chat-menu-page { animation:none; }
+`;
+function conversationCopy(events, { markdown = false, renderText = (text3) => text3 } = {}) {
+  const messages = [];
+  let characters = 0;
+  for (const event of events) {
+    const payload = event?.payload;
+    if (!payload || typeof payload.text !== "string") continue;
+    const role = event.event_type === "message.created" && (!payload.role || payload.role === "user") ? "You" : event.event_type === "message.completed" && (!payload.role || payload.role === "assistant") ? "Codex" : null;
+    if (!role) continue;
+    characters += payload.text.length + 16;
+    if (characters > 2e6) throw new Error("This conversation is too large to copy safely.");
+    messages.push(`${markdown ? `## ${role}` : `${role}:`}
+${markdown ? payload.text : renderText(payload.text)}`);
+  }
+  return messages.join("\n\n");
+}
+var control = (label, action, icon, shortcut = "", value = null) => ({ label, action, icon, shortcut, value });
+var ChatContextMenu = class {
+  constructor(panel, icons2) {
+    this.panel = panel;
+    this.icons = icons2;
+    this.sections = [];
+    this.sectionsLoaded = false;
+    this.busy = /* @__PURE__ */ new Set();
+    this.uncertain = /* @__PURE__ */ new Set();
+    this.generation = 0;
+    this.point = { x: 8, y: 8 };
+    this.menu = document.createElement("div");
+    this.menu.className = "chat-context-menu";
+    this.menu.id = "chat-context-menu";
+    this.menu.hidden = true;
+    this.menu.setAttribute("role", "menu");
+    this.dialog = document.createElement("div");
+    this.dialog.className = "chat-menu-dialog";
+    this.dialog.hidden = true;
+    panel.shadowRoot.append(this.menu, this.dialog);
+    this.menu.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const item = event.target.closest("button[data-chat-action]");
+      if (item && !item.disabled) void this.perform(item.dataset.chatAction, item._chatValue);
+    });
+    this.menu.addEventListener("mouseover", (event) => {
+      const item = event.target.closest('button[data-chat-action="submenu"]');
+      if (item && !item.disabled && !window.matchMedia?.("(pointer:coarse)").matches) {
+        window.clearTimeout(this.hoverTimer);
+        this.hoverTimer = window.setTimeout(() => {
+          if (this.menu.hidden || !item.isConnected) return;
+          this.page = item._chatValue;
+          this.notice = "";
+          this.render({ preserveFocus: true });
+        }, 220);
+      } else if (event.target.closest(".chat-menu-root button") && this.page) {
+        window.clearTimeout(this.hoverTimer);
+        this.hoverTimer = window.setTimeout(() => {
+          this.page = null;
+          this.render({ preserveFocus: true });
+        }, 220);
+      }
+    });
+    this.menu.addEventListener("mouseout", (event) => {
+      if (event.target.closest('button[data-chat-action="submenu"]')?.contains(event.relatedTarget)) return;
+      window.clearTimeout(this.hoverTimer);
+    });
+    this.outside = (event) => {
+      const path = event.composedPath();
+      if (!path.includes(this.menu) && !path.includes(this.dialog) && !path.includes(this.trigger)) this.close();
+    };
+    this.resize = () => this.close();
+  }
+  get supported() {
+    return this.panel._config?.capabilities?.includes("chat_operations_v1") === true;
+  }
+  get compact() {
+    return window.innerWidth <= 640 || window.matchMedia?.("(pointer:coarse)")?.matches === true;
+  }
+  thread(id = this.threadId) {
+    return this.panel._threads.find((thread) => thread.thread_id === id) || (this.panel._activeThread?.thread_id === id ? this.panel._activeThread : null);
+  }
+  sync() {
+    if (this.menu.hidden) return;
+    this.syncTrigger();
+    if (!this.thread()) {
+      this.close();
+      return;
+    }
+    if (!this.supported && ["project", "section", "fork", "manage-sections", "manage-section"].includes(this.page)) this.page = null;
+    const key = JSON.stringify([this.thread(), this.supported, this.sections, this.page, this.busy.has(this.threadId), this.uncertain.has(this.threadId)]);
+    if (key !== this.projectionKey) this.render({ preserveFocus: true });
+  }
+  syncTrigger() {
+    if (this.header) return;
+    const current = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button3) => button3.dataset.threadId === this.threadId);
+    if (current) {
+      this.trigger = current;
+      current.setAttribute("aria-expanded", String(!this.menu.hidden));
+      current.setAttribute("aria-controls", this.menu.id);
+      current.closest(".chat-row")?.classList.toggle("actions-open", !this.menu.hidden);
+    }
+  }
+  async loadSections() {
+    if (this.sectionsLoading) return this.sectionsLoading;
+    this.sectionsAttempted = true;
+    this.sectionsLoading = (async () => {
+      const response = await this.panel._callWS("list_chat_sections");
+      this.sections = (Array.isArray(response) ? response : response?.sections || []).filter((item) => item && typeof item.section_id === "string" && typeof item.name === "string" && Number.isSafeInteger(item.revision)).slice(0, 100);
+      this.sectionsLoaded = true;
+      this.panel._renderedNavigationKey = null;
+      if (this.panel.isConnected) this.panel._renderNavigationSections();
+    })();
+    try {
+      await this.sectionsLoading;
+    } finally {
+      this.sectionsLoading = null;
+    }
+  }
+  connect() {
+    document.addEventListener("pointerdown", this.outside, true);
+    window.addEventListener("resize", this.resize);
+  }
+  disconnect() {
+    this.close();
+    this.closeDialog();
+    document.removeEventListener("pointerdown", this.outside, true);
+    window.removeEventListener("resize", this.resize);
+  }
+  async show(threadId, trigger, point = null, { header = false } = {}) {
+    if (!this.thread(threadId)) return;
+    if (!this.menu.hidden && this.threadId === threadId && trigger === this.trigger && !point) {
+      this.close({ focus: true });
+      return;
+    }
+    this.close();
+    this.panel._hideTooltip();
+    this.panel._closeRailMenus();
+    this.threadId = threadId;
+    this.trigger = trigger;
+    this.header = header;
+    this.page = null;
+    this.notice = this.uncertain.has(threadId) ? "A previous change could not be verified. Refresh the chat list and check the result before trying again." : "";
+    const rect = trigger?.getBoundingClientRect();
+    this.point = point || { x: rect?.left || 8, y: rect?.bottom || 8 };
+    this.menu.hidden = false;
+    this.trigger?.setAttribute("aria-expanded", "true");
+    this.trigger?.closest(".chat-row")?.classList.add("actions-open");
+    this.trigger?.setAttribute("aria-controls", this.menu.id);
+    this.render();
+    this.menu.querySelector("button:not(:disabled)")?.focus();
+    const generation = this.generation;
+    if (this.supported) {
+      try {
+        await this.loadSections();
+      } catch {
+        if (generation === this.generation) this.notice = "Sections could not be loaded. Refresh to try again.";
+      }
+      if (generation === this.generation && !this.menu.hidden) this.render({ preserveFocus: true });
+    }
+  }
+  close({ focus = false } = {}) {
+    window.clearTimeout(this.hoverTimer);
+    this.generation += 1;
+    this.menu.hidden = true;
+    this.trigger?.setAttribute("aria-expanded", "false");
+    this.trigger?.closest(".chat-row")?.classList.remove("actions-open");
+    if (focus) this.returnFocus();
+  }
+  returnFocus() {
+    const replacement = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button3) => button3.dataset.threadId === this.threadId);
+    (this.trigger?.isConnected ? this.trigger : replacement || this.panel.shadowRoot.getElementById("chat-menu-button"))?.focus();
+  }
+  entries(page = this.page) {
+    const thread = this.thread();
+    if (!thread) return [];
+    if (page === "project") return [
+      control("Back", "back", "chevronLeft"),
+      null,
+      ...this.panel._projects.filter((project) => project.kind === "project" && !project.archived_at && project.project_id !== thread.project_id).map((project) => control(project.name || "Direct chats", "move", "folder", "", project.project_id))
+    ];
+    if (page === "section") return [
+      control("Back", "back", "chevronLeft"),
+      null,
+      control("No section", "section", "chat", "", null),
+      ...this.sections.map((section2) => control(section2.name, "section", "menu", "", section2.section_id)),
+      null,
+      control("New section…", "create-section", "plus"),
+      ...this.sections.length ? [control("Manage sections…", "manage-sections", "settings")] : [],
+      ...thread.section_id && this.sections.some((section2) => section2.section_id === thread.section_id) ? [
+        control("Rename this section…", "rename-section", "edit", "", thread.section_id),
+        control("Remove this section…", "remove-section", "trash", "", thread.section_id)
+      ] : []
+    ];
+    if (page === "manage-sections") return [
+      control("Back", "back", "chevronLeft"),
+      null,
+      ...this.sections.map((section2) => control(section2.name, "manage-section", "menu", "", section2.section_id))
+    ];
+    if (page === "manage-section") return [
+      control("Back", "back", "chevronLeft"),
+      null,
+      control("Rename section…", "rename-section", "edit", "", this.managedSection),
+      control("Remove section…", "remove-section", "trash", "", this.managedSection)
+    ];
+    if (page === "copy") return [
+      control("Back", "back", "chevronLeft"),
+      null,
+      control("Chat title", "copy-title", "chat"),
+      control("Chat link", "copy-link", "external"),
+      control("Conversation text", "copy-text", "copy"),
+      control("Conversation Markdown", "copy-markdown", "file")
+    ];
+    if (page === "fork") return [
+      control("Back", "back", "chevronLeft"),
+      null,
+      control("Fork conversation", "fork", "pullRequest")
+    ];
+    return [
+      control("Rename", "rename", "edit", "Alt+Ctrl+R"),
+      ...this.supported ? [
+        control(thread.pinned ? "Unpin" : "Pin", "pin", "pin", "Alt+Ctrl+P"),
+        control(thread.unread ? "Mark as read" : "Mark as unread", "unread", "eye", "Ctrl+Shift+U")
+      ] : [],
+      control(thread.archived_at ? "Restore" : "Archive", "archive", thread.archived_at ? "restore" : "archive", "Ctrl+Shift+A"),
+      control("Permanently delete", "delete", "trash"),
+      null,
+      ...this.supported ? [control("Project", "submenu", "folder", "", "project"), control("Section", "submenu", "menu", "", "section"), null] : [],
+      control("Share", "copy-link", "upload"),
+      control("Copy", "submenu", "copy", "", "copy"),
+      null,
+      ...this.supported ? [control("Fork", "submenu", "pullRequest", "", "fork"), null] : [],
+      control("Open in new window", "open", "external"),
+      ...this.header ? [null, control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : [],
+      ...(this.uncertain.has(this.threadId) || this.notice) && !this.header ? [null, control("Refresh", "refresh", "refresh")] : []
+    ];
+  }
+  render({ preserveFocus = false } = {}) {
+    this.projectionKey = JSON.stringify([this.thread(), this.supported, this.sections, this.page, this.busy.has(this.threadId), this.uncertain.has(this.threadId)]);
+    const old = this.menu.contains(this.panel.shadowRoot.activeElement) ? this.panel.shadowRoot.activeElement : null;
+    const selected = old ? [old.dataset.chatAction, old._chatValue] : null;
+    this.menu.replaceChildren();
+    this.menu.setAttribute("aria-label", `Actions for ${this.thread()?.title || "chat"}`);
+    this.menu.setAttribute("aria-busy", String(this.busy.has(this.threadId)));
+    this.menu.classList.toggle("has-submenu", Boolean(this.page));
+    const buildPage = (entries, nested = false) => {
+      const page = document.createElement("div");
+      page.className = nested ? "chat-menu-page chat-menu-submenu" : "chat-menu-page chat-menu-root";
+      if (nested) {
+        page.setAttribute("role", "menu");
+        page.setAttribute("aria-label", `${this.page} options`);
+      }
+      for (const entry of entries) {
+        if (!entry) {
+          const line = document.createElement("hr");
+          line.className = "chat-menu-divider";
+          line.setAttribute("role", "separator");
+          page.append(line);
+          continue;
+        }
+        const button3 = document.createElement("button");
+        button3.type = "button";
+        button3.dataset.chatAction = entry.action;
+        button3._chatValue = entry.value;
+        button3.setAttribute("role", "menuitem");
+        button3.tabIndex = -1;
+        button3.disabled = this.busy.has(this.threadId) || this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action);
+        if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) button3.disabled = true;
+        if (entry.action === "section" && !this.sectionsLoaded) button3.disabled = true;
+        if (entry.action === "back") button3.hidden = !this.compact;
+        if (entry.action === "submenu") {
+          button3.setAttribute("aria-haspopup", "menu");
+          button3.setAttribute("aria-expanded", String(this.page === entry.value || entry.value === "section" && this.page?.startsWith("manage-section")));
+        }
+        const icon = document.createElement("span");
+        icon.className = "chat-menu-icon";
+        this.panel._setTrustedButtonContent(icon, this.icons[entry.icon] || this.icons.chat);
+        const label = document.createElement("span");
+        label.className = "chat-menu-label";
+        label.textContent = entry.label;
+        button3.append(icon, label);
+        if (entry.shortcut) {
+          const hint = document.createElement("span");
+          hint.className = "chat-menu-shortcut";
+          hint.textContent = entry.shortcut;
+          button3.append(hint);
+        }
+        if (entry.shortcut) button3.setAttribute("aria-keyshortcuts", entry.shortcut.replace("Ctrl", "Control"));
+        if (entry.action === "submenu") {
+          const arrow = document.createElement("span");
+          this.panel._setTrustedButtonContent(arrow, this.icons.chevronRight);
+          button3.append(arrow);
+        }
+        page.append(button3);
+      }
+      return page;
+    };
+    this.menu.append(buildPage(this.entries(null)));
+    const submenu = this.page ? buildPage(this.entries(), true) : null;
+    if (submenu) this.menu.append(submenu);
+    const status = document.createElement("p");
+    status.className = "chat-menu-status";
+    status.setAttribute("role", "status");
+    status.textContent = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
+    (submenu || this.menu).append(status);
+    this.position();
+    if (preserveFocus && selected) {
+      ([...this.menu.querySelectorAll("button")].find((button3) => !button3.hidden && !button3.disabled && button3.dataset.chatAction === selected[0] && button3._chatValue === selected[1]) || this.menu.querySelector("button:not(:disabled):not([hidden])"))?.focus();
+    }
+  }
+  position() {
+    const view = window.visualViewport;
+    const width = view?.width || window.innerWidth;
+    const height = view?.height || window.innerHeight;
+    const left = view?.offsetLeft || 0, top = view?.offsetTop || 0;
+    const rect = this.menu.getBoundingClientRect();
+    this.menu.style.left = `${Math.max(left + 8, Math.min(this.point.x, left + width - rect.width - 8))}px`;
+    this.menu.style.top = `${Math.max(top + 8, Math.min(this.point.y, top + height - rect.height - 8))}px`;
+    this.menu.style.maxHeight = `${Math.max(44, height - 16)}px`;
+    const submenu = this.menu.querySelector(".chat-menu-submenu");
+    if (submenu && !this.compact) {
+      const anchorPage = this.page.startsWith("manage-section") ? "section" : this.page;
+      const anchor = [...this.menu.querySelectorAll('.chat-menu-root [data-chat-action="submenu"]')].find((button3) => button3._chatValue === anchorPage)?.getBoundingClientRect() || rect;
+      const parent = this.menu.getBoundingClientRect();
+      const child = submenu.getBoundingClientRect();
+      const x2 = parent.right + child.width + 8 <= left + width ? parent.right + 4 : parent.left - child.width - 4;
+      submenu.style.left = `${Math.max(left + 8, Math.min(x2, left + width - child.width - 8))}px`;
+      submenu.style.top = `${Math.max(top + 8, Math.min(anchor.top, top + height - child.height - 8))}px`;
+      submenu.style.maxHeight = `${Math.max(44, height - 16)}px`;
+    }
+  }
+  handleKey(event) {
+    if (!this.dialog.hidden) {
+      if (event.key === "Escape" && !this.dialogBusy) {
+        event.preventDefault();
+        this.closeDialog({ focus: true });
+        return true;
+      }
+      if (event.key === "Tab") {
+        this.trapDialog(event);
+        return true;
+      }
+      return true;
+    }
+    if (!this.menu.hidden) {
+      const current = this.panel.shadowRoot.activeElement;
+      const container = current?.closest(".chat-menu-submenu") || this.menu.querySelector(".chat-menu-root");
+      const items = [...container.querySelectorAll("button:not(:disabled):not([hidden])")];
+      if (event.key === "Escape" || event.key === "ArrowLeft" && this.page) {
+        event.preventDefault();
+        if (this.page) void this.perform("back");
+        else this.close({ focus: true });
+        return true;
+      }
+      if (event.key === "Tab") {
+        this.close({ focus: true });
+        return false;
+      }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const index = items.indexOf(current);
+        const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+        items[next]?.focus();
+        return true;
+      }
+      if (event.key === "ArrowRight" && current?.dataset.chatAction === "submenu") {
+        event.preventDefault();
+        void this.perform("submenu", current._chatValue);
+        return true;
+      }
+      if (["Enter", " "].includes(event.key) && current?.dataset.chatAction) {
+        event.preventDefault();
+        if (!current.disabled) void this.perform(current.dataset.chatAction, current._chatValue);
+        return true;
+      }
+      return false;
+    }
+    const target = event.target;
+    if (this.panel._activeDestination !== "chats" || !this.panel._selectedThreadId || this.panel._pendingDeletion || this.panel._hostAccessDialog || this.panel._appMenuOpen || this.panel._showThreadForm || this.panel._showProjectForm || target?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="dialog"],.xterm')) return false;
+    const key = event.key.toLowerCase();
+    const action = event.ctrlKey && event.altKey && !event.shiftKey && !event.metaKey ? key === "r" ? "rename" : key === "p" && this.supported ? "pin" : null : event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey ? key === "u" && this.supported ? "unread" : key === "a" ? "archive" : null : null;
+    if (!action) return false;
+    event.preventDefault();
+    this.threadId = this.panel._selectedThreadId;
+    this.trigger = target;
+    const rect = target.getBoundingClientRect();
+    this.point = { x: rect.left, y: rect.bottom };
+    void this.perform(action);
+    return true;
+  }
+  async perform(action, value = null) {
+    if (!this.dialog.hidden) return;
+    const thread = this.thread();
+    if (!thread) {
+      this.close();
+      return;
+    }
+    if (this.busy.has(thread.thread_id)) return;
+    if (action === "submenu" || action === "back" || action === "manage-sections" || action === "manage-section") {
+      const previous = this.page;
+      if (["manage-sections", "manage-section"].includes(action) && !this.supported) return;
+      if (action === "submenu" && ["project", "section", "fork"].includes(value) && !this.supported) return;
+      this.page = action === "back" ? this.page === "manage-section" ? "manage-sections" : this.page === "manage-sections" ? "section" : null : action === "submenu" ? value : action;
+      if (action === "manage-section") this.managedSection = value;
+      this.notice = "";
+      this.render();
+      if (this.page) this.menu.querySelector(".chat-menu-submenu button:not(:disabled):not([hidden])")?.focus();
+      else [...this.menu.querySelectorAll('button[data-chat-action="submenu"]')].find((button3) => button3._chatValue === previous)?.focus();
+      return;
+    }
+    if (["pin", "unread", "section", "move", "fork", "create-section", "rename-section", "remove-section"].includes(action) && !this.supported) return;
+    if (["move", "fork"].includes(action) && this.panel._runActivityForThread(thread).busy) return;
+    if (action === "move" && !this.panel._projects.some((project) => project.project_id === value && project.kind === "project" && !project.archived_at && project.project_id !== thread.project_id)) return;
+    if (this.uncertain.has(thread.thread_id) && !["refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown"].includes(action)) return;
+    if (action === "rename") {
+      this.openDialog("Rename chat", "Chat title", thread.title || "", async (title) => this.mutate(thread, "update_thread", { title }));
+      return;
+    }
+    if (action === "move") {
+      await this.openMoveDialog(thread, value);
+      return;
+    }
+    if (action === "create-section") {
+      this.openDialog("New section", "Section name", "", async (name) => {
+        if (!this.supported) throw new Error("Chat sections are no longer available. Refresh before trying again.");
+        const section2 = await this.panel._callWS("create_chat_section", { name });
+        this.sections.push(section2);
+        this.sectionsLoaded = true;
+        await this.mutate(thread, "update_thread", { section_id: section2.section_id, navigation_revision: thread.navigation_revision });
+      });
+      return;
+    }
+    if (action === "rename-section" || action === "remove-section") {
+      const section2 = this.sections.find((item) => item.section_id === value);
+      if (!section2) return;
+      this.openDialog(action === "remove-section" ? "Remove section" : "Rename section", action === "remove-section" ? null : "Section name", section2.name, async (name) => {
+        if (!this.supported) throw new Error("Chat sections are no longer available. Refresh before trying again.");
+        if (action === "remove-section") {
+          await this.panel._callWS("delete_chat_section", { section_id: section2.section_id, revision: section2.revision });
+          this.sections = this.sections.filter((item) => item.section_id !== section2.section_id);
+        } else {
+          const updated = await this.panel._callWS("update_chat_section", { section_id: section2.section_id, revision: section2.revision, name });
+          this.sections = this.sections.map((item) => item.section_id === section2.section_id ? updated : item);
+        }
+        await this.panel._loadThreads();
+        this.panel._renderedNavigationKey = null;
+        this.panel._render();
+      }, { description: action === "remove-section" ? "Chats in this section stay available. Only the grouping is removed." : "", submit: action === "remove-section" ? "Remove section" : "Save" });
+      return;
+    }
+    if (action === "settings") {
+      this.close();
+      this.panel._openThreadFormForEdit(thread.thread_id);
+      return;
+    }
+    if (action === "delete") {
+      const trigger = this.trigger;
+      this.close();
+      await this.panel._deleteThread(thread.thread_id, trigger);
+      return;
+    }
+    if (action === "archive") {
+      this.busy.add(thread.thread_id);
+      this.close();
+      try {
+        await (thread.archived_at ? this.panel._restoreThread(thread.thread_id) : this.panel._archiveThread(thread.thread_id));
+      } finally {
+        this.busy.delete(thread.thread_id);
+      }
+      return;
+    }
+    if (action === "open") {
+      const url = authenticatedChatUrl(window.location, thread.thread_id);
+      if (url) window.open(url, "_blank", "noopener,noreferrer");
+      this.close();
+      return;
+    }
+    const generation = this.generation;
+    const isOwner = () => generation === this.generation && this.threadId === thread.thread_id && this.panel.isConnected;
+    this.busy.add(thread.thread_id);
+    this.render({ preserveFocus: true });
+    try {
+      if (action === "pin" || action === "unread" || action === "section") {
+        const updates = action === "pin" ? { pinned: !thread.pinned } : action === "unread" ? { unread: !thread.unread } : { section_id: value };
+        await this.mutate(thread, "update_thread", { ...updates, navigation_revision: thread.navigation_revision });
+      } else if (action === "fork") {
+        const fork = await this.panel._callWS("fork_thread", { thread_id: thread.thread_id });
+        if (isOwner()) this.panel._adoptCreatedThread(fork);
+        else {
+          this.panel._threads = [fork, ...this.panel._threads.filter((item) => item.thread_id !== fork.thread_id)];
+          this.panel._render();
+        }
+      } else if (action === "refresh") {
+        await this.panel._loadProjects();
+        await this.panel._loadThreads();
+        if (this.supported) await this.loadSections();
+        this.uncertain.delete(thread.thread_id);
+        this.panel._render();
+      } else if (["copy-title", "copy-link", "copy-text", "copy-markdown"].includes(action)) {
+        const text3 = action === "copy-title" ? thread.title || "Untitled chat" : action === "copy-link" ? authenticatedChatUrl(window.location, thread.thread_id) : conversationCopy(await this.panel._loadThreadEventHistory(thread.thread_id), { markdown: action === "copy-markdown", renderText: (value2) => {
+          const container = document.createElement("div");
+          this.panel._renderMessageBody(container, value2);
+          return [...container.querySelectorAll(".bubble-text,.code-text")].map((part) => part.textContent).join("\n");
+        } });
+        if (!text3) throw new Error("There are no conversation messages to copy.");
+        await this.panel._writeClipboardText(text3);
+        this.panel.shadowRoot.getElementById("share-status").textContent = action === "copy-link" ? "Chat link copied. Home Assistant sign-in is required." : "Copied to clipboard.";
+      }
+      if (isOwner()) this.close({ focus: action !== "fork" });
+    } catch (error) {
+      const writes = ["pin", "unread", "section", "move", "fork"];
+      if (writes.includes(action) && !this.knownFailure(error)) this.uncertain.add(thread.thread_id);
+      if (isOwner()) {
+        this.notice = this.errorMessage(error, writes.includes(action));
+        this.menu.hidden = false;
+      }
+    } finally {
+      this.busy.delete(thread.thread_id);
+      if (isOwner() && !this.menu.hidden) this.render();
+    }
+  }
+  knownFailure(error) {
+    const code2 = error?.code || error?.body?.code || error?.body?.detail?.code;
+    return ["navigation_revision_conflict", "thread_busy", "provider_thread_unavailable", "workspace_copy_conflict", "workspace_boundary_error", "chat_operations_unavailable"].includes(code2);
+  }
+  errorMessage(error, write = false) {
+    return `${normalizeDesktopError(error) || "The action could not be completed."}${write ? " Refresh the chat list and check the result before trying again." : ""}`;
+  }
+  async mutate(thread, operation, fields) {
+    const updated = await this.panel._callWS(operation, { thread_id: thread.thread_id, ...fields });
+    this.panel._threads = this.panel._threads.map((item) => item.thread_id === thread.thread_id ? updated : item);
+    if (this.panel._selectedThreadId === thread.thread_id) {
+      this.panel._activeThread = updated;
+      this.panel._selectedProjectId = updated.project_id;
+    }
+    this.panel._renderedNavigationKey = null;
+    this.panel._clearError();
+    this.panel._render();
+    return updated;
+  }
+  async markOpened(threadId) {
+    const thread = this.thread(threadId);
+    if (!this.supported || !thread?.unread || this.busy.has(threadId)) return;
+    this.busy.add(threadId);
+    try {
+      await this.mutate(thread, "update_thread", { unread: false, navigation_revision: thread.navigation_revision });
+    } catch {
+    } finally {
+      this.busy.delete(threadId);
+    }
+  }
+  async openMoveDialog(thread, projectId) {
+    const destination = this.panel._projects.find((project) => project.project_id === projectId);
+    const review = { threadId: thread.thread_id, sourceProjectId: thread.project_id, revision: thread.navigation_revision, projectId, destinationRoot: destination?.root_path, ready: false, writing: false, choices: [] };
+    const localFailure = (message) => Object.assign(new Error(message), { code: "move_review_changed" });
+    const controls = this.openDialog("Move chat", null, "", async () => {
+      const current = this.thread(review.threadId);
+      const target = this.panel._projects.find((project) => project.project_id === review.projectId);
+      if (this.moveReview !== review || !review.ready) throw localFailure("The file review is no longer available. Refresh before trying again.");
+      if (!this.supported) throw localFailure("Moving chats is no longer available. Refresh before trying again.");
+      if (!current || !Number.isSafeInteger(review.revision) || review.revision < 1 || current.project_id !== review.sourceProjectId || current.navigation_revision !== review.revision || !target || target.kind !== "project" || target.archived_at || target.project_id === current.project_id || target.root_path !== review.destinationRoot) {
+        throw localFailure("The chat or destination changed during this review. Refresh and review the move again.");
+      }
+      if (this.busy.has(review.threadId) || this.uncertain.has(review.threadId) || this.panel._runActivityForThread(current).busy || current.archived_at) {
+        throw localFailure("The chat is busy or a previous change needs checking. Refresh before trying again.");
+      }
+      const selected = review.choices.filter((choice) => choice.input.checked).map((choice) => choice.id);
+      if (selected.length > 100 || new Set(selected).size !== selected.length) throw localFailure("Choose no more than 100 project files.");
+      review.writing = true;
+      this.busy.add(review.threadId);
+      for (const choice of review.choices) choice.input.disabled = true;
+      try {
+        await this.mutate(current, "move_thread_project", { project_id: review.projectId, navigation_revision: review.revision, workspace_artifact_ids: selected });
+      } finally {
+        this.busy.delete(review.threadId);
+      }
+    }, {
+      description: `Move “${thread.title || "Untitled chat"}” to “${destination?.name || "Project"}”. Uploaded files, this chat's private generated images, captures and archives, and files copied by an earlier move are copied automatically. Ordinary project files are shared: select only the files you want to copy. Unselected files and originals stay in the source workspace.`,
+      submit: "Move chat",
+      uncertainOnFailure: (failure) => review.writing && !this.knownFailure(failure)
+    });
+    this.moveReview = review;
+    controls.confirm.disabled = true;
+    const files = document.createElement("fieldset");
+    files.className = "chat-move-files";
+    const legend = document.createElement("legend");
+    legend.textContent = "Project files to copy (optional)";
+    files.append(legend);
+    const status = document.createElement("p");
+    status.className = "chat-menu-status";
+    status.setAttribute("role", "status");
+    status.textContent = "Loading project files…";
+    files.append(status);
+    controls.card.insertBefore(files, controls.error);
+    controls.cancel.focus();
+    try {
+      const artifacts = await this.panel._callWS("list_artifacts", { thread_id: review.threadId });
+      if (this.moveReview !== review || this.dialog.hidden || !this.panel.isConnected) return;
+      if (!Array.isArray(artifacts)) throw new Error("Project files could not be loaded. Close this review and try again.");
+      const ids = /* @__PURE__ */ new Set();
+      const candidates = artifacts.filter((artifact) => artifact?.source === "workspace" && artifact.copied_for_chat !== true);
+      for (const artifact of candidates.slice(0, 100)) {
+        if (typeof artifact.artifact_id !== "string" || !artifact.artifact_id || artifact.artifact_id.length > 128 || ids.has(artifact.artifact_id) || typeof artifact.filename !== "string" || !artifact.filename || typeof artifact.relative_path !== "string" || artifact.copied_for_chat !== void 0 && typeof artifact.copied_for_chat !== "boolean") {
+          throw new Error("Project files could not be verified. Close this review and refresh before trying again.");
+        }
+        ids.add(artifact.artifact_id);
+        const label = document.createElement("label");
+        const input2 = document.createElement("input");
+        input2.type = "checkbox";
+        input2.checked = false;
+        const detail = document.createElement("span");
+        const name = document.createElement("span");
+        name.className = "chat-move-file-name";
+        name.textContent = artifact.filename.slice(0, 255);
+        const path = document.createElement("span");
+        path.className = "chat-move-file-path";
+        path.textContent = artifact.relative_path.slice(0, 1024);
+        detail.append(name, path);
+        label.append(input2, detail);
+        files.append(label);
+        review.choices.push({ id: artifact.artifact_id, input: input2 });
+      }
+      status.textContent = candidates.length > 100 ? "Showing the first 100 project files. Files outside this list are not copied." : candidates.length ? "Project files are optional. Select only files you want to copy." : "There are no ordinary project files to select.";
+      review.ready = true;
+      controls.confirm.disabled = false;
+    } catch {
+      if (this.moveReview !== review || this.dialog.hidden || !this.panel.isConnected) return;
+      status.textContent = "Project files could not be loaded or verified. Close this review and refresh before trying again.";
+      controls.confirm.hidden = true;
+      controls.cancel.textContent = "Close";
+    }
+  }
+  openDialog(title, label, value, save, { description = "", submit = "Save", uncertainOnFailure = () => true } = {}) {
+    this.closeDialog();
+    this.close();
+    this.dialog.replaceChildren();
+    this.dialog.hidden = false;
+    const ownerThreadId = this.threadId;
+    const shell = this.panel.shadowRoot.querySelector(".shell");
+    if (shell) {
+      shell.inert = true;
+      shell.setAttribute("aria-hidden", "true");
+    }
+    const card = document.createElement("form");
+    card.className = "chat-menu-dialog-card";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    const heading = document.createElement("h2");
+    heading.id = "chat-menu-dialog-title";
+    heading.textContent = title;
+    card.setAttribute("aria-labelledby", heading.id);
+    card.append(heading);
+    let input2;
+    if (label) {
+      const field2 = document.createElement("label");
+      field2.textContent = label;
+      input2 = document.createElement("input");
+      input2.type = "text";
+      input2.value = value;
+      input2.maxLength = label === "Chat title" ? 160 : 80;
+      input2.required = true;
+      field2.append(input2);
+      card.append(field2);
+    }
+    if (description) {
+      const text3 = document.createElement("p");
+      text3.textContent = description;
+      card.append(text3);
+    }
+    const error = document.createElement("p");
+    error.setAttribute("role", "alert");
+    error.className = "chat-menu-status";
+    card.append(error);
+    const actions = document.createElement("div");
+    actions.className = "chat-menu-dialog-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    const confirm2 = document.createElement("button");
+    confirm2.type = "submit";
+    confirm2.textContent = submit;
+    cancel.addEventListener("click", () => this.closeDialog({ focus: true }));
+    actions.append(cancel, confirm2);
+    card.append(actions);
+    this.dialog.append(card);
+    this.dialog.addEventListener("click", (event) => event.stopPropagation(), { once: true });
+    card.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.dialogBusy || confirm2.disabled || confirm2.hidden || input2 && !input2.value.trim()) return;
+      this.dialogBusy = true;
+      confirm2.disabled = true;
+      cancel.disabled = true;
+      if (input2) input2.disabled = true;
+      let saved = false;
+      try {
+        await save(input2?.value.trim());
+        saved = true;
+      } catch (failure) {
+        error.textContent = this.errorMessage(failure, true);
+        confirm2.hidden = true;
+        cancel.textContent = "Close";
+        if (uncertainOnFailure(failure)) this.uncertain.add(ownerThreadId);
+      } finally {
+        this.dialogBusy = false;
+        cancel.disabled = false;
+        if (input2) input2.disabled = false;
+        if (saved) this.closeDialog({ focus: true });
+        else cancel.focus();
+      }
+    });
+    queueMicrotask(() => {
+      if (card.isConnected && !this.dialog.hidden) {
+        (input2 || (confirm2.disabled ? cancel : confirm2)).focus();
+        input2?.select();
+      }
+    });
+    return { card, confirm: confirm2, cancel, error };
+  }
+  closeDialog({ focus = false } = {}) {
+    if (this.dialogBusy) return;
+    this.moveReview = null;
+    this.dialog.hidden = true;
+    const shell = this.panel.shadowRoot.querySelector(".shell");
+    if (shell && !this.panel._pendingDeletion && !this.panel._hostAccessDialog) {
+      shell.inert = false;
+      shell.removeAttribute("aria-hidden");
+    }
+    if (focus) this.returnFocus();
+  }
+  trapDialog(event) {
+    const items = [...this.dialog.querySelectorAll("input:not(:disabled),button:not(:disabled):not([hidden])")];
+    const active = this.panel.shadowRoot.activeElement;
+    if (event.shiftKey && active === items[0]) {
+      event.preventDefault();
+      items.at(-1)?.focus();
+    } else if (!event.shiftKey && active === items.at(-1)) {
+      event.preventDefault();
+      items[0]?.focus();
+    }
+  }
+  isGrouped(thread) {
+    return this.supported && !thread.archived_at && (thread.pinned || thread.section_id && this.sections.some((section2) => section2.section_id === thread.section_id));
+  }
+  renderNavigation() {
+    let container = this.panel.shadowRoot.getElementById("chat-navigation-sections");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "chat-navigation-sections";
+      this.panel.shadowRoot.getElementById("direct-section")?.before(container);
+    }
+    const previous = new Map([...container.querySelectorAll("details")].map((item) => [item.dataset.group, item.open]));
+    container.replaceChildren();
+    if (!this.supported) return;
+    if (!this.sectionsAttempted && this.panel._hass) void this.loadSections().catch(() => {
+    });
+    const groups = [{ section_id: "pinned", name: "Pinned", pinned: true }, ...this.sections];
+    for (const group of groups) {
+      const threads = this.panel._threads.filter((thread) => this.panel._threadIsPrimaryActive(thread) && this.panel._threadMatchesQuery(thread) && (group.pinned ? thread.pinned : !thread.pinned && thread.section_id === group.section_id));
+      if (!threads.length && (group.pinned || this.panel._searchQuery.trim())) continue;
+      const details = document.createElement("details");
+      details.className = "chat-navigation-group";
+      details.dataset.group = group.section_id;
+      details.open = previous.get(group.section_id) ?? true;
+      const summary = document.createElement("summary");
+      const icon = document.createElement("span");
+      this.panel._setTrustedButtonContent(icon, this.icons[group.pinned ? "pin" : "menu"]);
+      summary.append(icon, document.createTextNode(group.name));
+      details.append(summary);
+      for (const thread of threads) details.append(this.panel._threadRow(thread));
+      if (!threads.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-note";
+        empty.textContent = "No chats in this section.";
+        details.append(empty);
+      }
+      container.append(details);
+    }
+  }
+};
+
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.6";
+var PANEL_VERSION = "1.8.7";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -35904,10 +36819,7 @@ template.innerHTML = `
     .thread-controls > .icon-button { width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; }
     .thread-controls > button:hover, .thread-controls > button[aria-pressed="true"] { background: var(--surface-muted); }
     .thread-share { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0; background: var(--surface-muted); font-size: var(--font-control-size); }
-    .thread-menu { position: absolute; top: 38px; right: 0; z-index: 8; display: grid; min-width: 200px; padding: 6px; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px #0002; }
-    .thread-menu[hidden], .bottom-panel[hidden] { display: none; }
-    .thread-menu button { text-align: left; border: 0; background: transparent; padding: 9px; font-weight: 400; }
-    .thread-menu button:hover { background: var(--surface-muted); }
+    .bottom-panel[hidden] { display: none; }
     .resource-row { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 36px; padding: 6px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-color); font-size: var(--font-body-size); font-weight: 400; text-align: left; text-decoration: none; }
     .resource-row:hover { background: var(--surface-muted); }
     .resource-row svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -38383,11 +39295,226 @@ template.innerHTML = `
     .status-banner,
     .error-strip,
     .interaction-region,
-    .message-list,
     .run-activity-region {
       width: min(calc(100% - 32px), var(--conversation-width));
       margin-inline: auto;
     }
+
+    .conversation-layout {
+      display: grid;
+      grid-template-columns: 0 minmax(0, 1fr);
+      align-items: start;
+      gap: 0;
+      width: min(calc(100% - 32px), var(--conversation-width));
+      margin-inline: auto;
+      flex: 0 0 auto;
+    }
+
+    .conversation-layout > .message-list { grid-column: 2; }
+
+    #conversation-timeline[hidden] { display: none; }
+    #conversation-timeline {
+      position: sticky;
+      top: 12px;
+      z-index: 4;
+      width: 24px;
+      transform: translateX(-28px);
+      height: min(380px, calc(100dvh - 220px));
+      min-height: 120px;
+      margin-top: 20px;
+      overflow: visible;
+    }
+
+    .timeline-track {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-block: 6px;
+      scrollbar-width: thin;
+    }
+
+    .timeline-item {
+      display: flex;
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
+    .timeline-item:focus-visible {
+      outline: 2px solid var(--focus-ring-color);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 2px var(--focus-ring-contrast);
+    }
+
+    .timeline-marker {
+      display: block;
+      width: 4px;
+      height: 2px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--muted-color) 35%, transparent);
+      transition: width 140ms ease, background-color 140ms ease;
+    }
+
+    .timeline-item:hover .timeline-marker,
+    .timeline-item:focus-visible .timeline-marker,
+    .timeline-item[aria-current="location"] .timeline-marker {
+      width: 16px;
+      background: var(--text-color);
+    }
+
+    .timeline-mobile-label { display: none; }
+
+    .timeline-preview {
+      position: absolute;
+      top: var(--timeline-preview-position, 50%);
+      left: calc(100% + 8px);
+      z-index: 5;
+      display: grid;
+      width: min(300px, calc(100vw - 48px));
+      gap: 5px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      text-align: left;
+      box-shadow: 0 8px 28px color-mix(in srgb, var(--text-color) 18%, transparent);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translate(4px, -50%);
+      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+    }
+
+    .timeline-preview-title { font-size: var(--font-caption-size); font-weight: 600; }
+    .timeline-preview-copy {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--muted-color);
+      font-size: var(--font-caption-size);
+      line-height: 1.4;
+      white-space: normal;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    #conversation-timeline:has(.timeline-item:hover) .timeline-preview-desktop,
+    #conversation-timeline:has(.timeline-item:focus-visible) .timeline-preview-desktop {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(0, -50%);
+    }
+
+    .timeline-preview-inline { display: none; }
+    .timeline-track.is-scrollable { justify-content: flex-start; }
+    .timeline-disclosure { display: none; }
+    .timeline-disclosure[hidden] { display: none; }
+    .timeline-track[hidden],
+    .timeline-preview-inline[hidden],
+    .timeline-preview-desktop[hidden] { display: none; }
+
+
+    .conversation-layout.timeline-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: min(calc(100% - 32px), var(--conversation-width));
+    }
+
+    .timeline-compact #conversation-timeline {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      width: 100%;
+      transform: none;
+      height: auto;
+      min-height: 0;
+      margin: 0;
+      padding: 4px 0;
+      background: var(--canvas-bg);
+    }
+
+    .timeline-compact .timeline-disclosure {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      text-align: left;
+    }
+
+    .timeline-compact .timeline-disclosure:focus-visible {
+      outline: 2px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    .timeline-compact #conversation-timeline:not(.is-open) .timeline-track { display: none; }
+    .timeline-compact .timeline-preview-desktop { display: none; }
+
+    .timeline-compact .timeline-track {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      width: 100%;
+      height: auto;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-inline: contain;
+      padding: 2px 2px 6px;
+      scroll-snap-type: x proximity;
+    }
+
+    .timeline-compact .timeline-item {
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 44px;
+      height: 44px;
+      padding: 0 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      scroll-snap-align: start;
+    }
+
+    .timeline-compact .timeline-item[aria-current="location"] {
+      border-color: color-mix(in srgb, var(--accent-color) 68%, var(--border-color) 32%);
+      background: var(--accent-soft);
+    }
+
+    .timeline-compact .timeline-marker,
+    .timeline-compact .timeline-preview { display: none; }
+    .timeline-compact .timeline-mobile-label { display: block; font-size: var(--font-caption-size); white-space: nowrap; }
+
+    .timeline-compact .timeline-preview-inline:not([hidden]) {
+      display: grid;
+      gap: 5px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+    }
+
+    .timeline-compact .message-list { padding-top: 12px; }
+
 
     .status-banner.visible,
     .error-strip.visible {
@@ -38474,6 +39601,9 @@ template.innerHTML = `
     }
 
     .message-list {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
       padding: 20px 0 8px;
       gap: 18px;
       flex: 0 0 auto;
@@ -40259,12 +41389,11 @@ template.innerHTML = `
         </div>
         <div class="row-actions thread-controls">
           <div class="status-text" id="thread-status-text"></div>
-          <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="thread-menu" id="chat-menu-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="chat-context-menu" id="chat-menu-button"></button>
           <button class="thread-share" type="button" data-action="share-chat" title="Copy chat link · Home Assistant sign-in required" aria-label="Copy chat link · Home Assistant sign-in required" id="share-chat-button"></button>
           <button class="icon-button" type="button" data-action="toggle-activity" title="Show activity" aria-label="Show activity" aria-pressed="false" id="toggle-activity-button"></button>
           <button class="icon-button" type="button" data-action="toggle-bottom-panel" title="Toggle bottom panel" aria-label="Toggle bottom panel" aria-controls="bottom-panel" aria-expanded="false" id="toggle-bottom-button"></button>
           <button class="icon-button" type="button" data-action="toggle-context" title="Toggle side panel" aria-label="Toggle side panel" aria-controls="context-drawer" aria-expanded="true" id="toggle-context-button"></button>
-          <div class="thread-menu" id="thread-menu" hidden></div>
           <span id="share-status" class="sr-only" role="status"></span>
         </div>
       </div>
@@ -40281,7 +41410,15 @@ template.innerHTML = `
             <div id="onboarding"></div>
           </section>
         </div>
-        <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div class="conversation-layout" id="conversation-layout">
+          <nav id="conversation-timeline" aria-label="Conversation turns" hidden>
+            <button class="timeline-disclosure" id="conversation-timeline-toggle" type="button" data-action="toggle-conversation-timeline" aria-expanded="false" aria-controls="conversation-timeline-track" hidden>Jump to message</button>
+            <div class="timeline-track" id="conversation-timeline-track" role="group" aria-label="Conversation turns" hidden></div>
+            <div class="timeline-preview-inline" id="conversation-timeline-preview" hidden></div>
+            <div class="timeline-preview timeline-preview-desktop" id="conversation-timeline-desktop-preview" aria-hidden="true" hidden></div>
+          </nav>
+          <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+        </div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       </div>
@@ -40423,6 +41560,8 @@ var icons = {
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
   folder: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2"></path>'),
+  pin: iconSvg('<path d="m9 3 6 0-1 6 4 4v2H6v-2l4-4Z"></path><path d="M12 15v6"></path>'),
+  eye: iconSvg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle>'),
   edit: iconSvg('<path d="M12 20h9"></path><path d="m16.5 3.5 4 4L8 20H4v-4Z"></path>'),
   chat: iconSvg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path>'),
   copy: iconSvg('<rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>'),
@@ -40457,6 +41596,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const terminalStyle = document.createElement("style");
     terminalStyle.textContent = xterm_default;
     this.shadowRoot.append(terminalStyle);
+    const chatMenuStyle = document.createElement("style");
+    chatMenuStyle.textContent = chatMenuCss;
+    this.shadowRoot.append(chatMenuStyle);
+    this._chatContextMenu = new ChatContextMenu(this, icons);
     this._terminal = new WorkspaceTerminalView(
       this.shadowRoot.getElementById("terminal-host"),
       (operation, payload) => this._callWS("terminal", { operation, ...payload }),
@@ -40479,7 +41622,6 @@ var CodexBridgePanel = class extends HTMLElement {
     this._selectedProjectId = null;
     this._selectedThreadId = null;
     this._sharedThreadChecked = false;
-    this._chatMenuOpen = false;
     this._contextVisible = true;
     this._bottomPanelOpen = false;
     this._activityView = false;
@@ -40493,6 +41635,11 @@ var CodexBridgePanel = class extends HTMLElement {
     this._speechLastFinalResult = -1;
     this._speechAvailable = true;
     this._events = [];
+    this._conversationTurns = [];
+    this._timelineSelectedSequence = null;
+    this._timelineTabStopSequence = null;
+    this._timelineMobileOpen = false;
+    this._timelinePreviewSequence = null;
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
     this._artifactRefreshRetryTimer = null;
@@ -40606,7 +41753,6 @@ var CodexBridgePanel = class extends HTMLElement {
     this._queuedRender = false;
     this._collapsedProjects = {};
     this._expandedProjectActions = {};
-    this._expandedThreadActions = {};
     this._collapsedSections = {
       direct: false,
       archived: true
@@ -40619,6 +41765,9 @@ var CodexBridgePanel = class extends HTMLElement {
     this._contextDrawerMedia = null;
     this._contextDrawerMediaListener = null;
     this._contextDrawerMediaListening = false;
+    this._timelineCompactMedia = null;
+    this._timelineCompactMediaListener = null;
+    this._timelineCompactMediaListening = false;
     this._sideTab = "activity";
     this._pendingDeletion = null;
     this._deletionReturnFocus = null;
@@ -40647,6 +41796,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   connectedCallback() {
     this._installStaticUi();
+    this._chatContextMenu.connect();
     this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.addEventListener("resize", this._viewportResizeListener);
@@ -40660,6 +41810,10 @@ var CodexBridgePanel = class extends HTMLElement {
       this._contextDrawerMedia.addEventListener("change", this._contextDrawerMediaListener);
       this._contextDrawerMediaListening = true;
     }
+    if (this._timelineCompactMedia && this._timelineCompactMediaListener && !this._timelineCompactMediaListening) {
+      this._timelineCompactMedia.addEventListener("change", this._timelineCompactMediaListener);
+      this._timelineCompactMediaListening = true;
+    }
     if (this._config && this._hass) {
       this._startSystemEventSubscription();
     }
@@ -40670,6 +41824,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
   }
   disconnectedCallback() {
+    this._chatContextMenu.disconnect();
     this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
@@ -40692,6 +41847,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._mobileDrawerMediaListening = false;
     this._contextDrawerMedia?.removeEventListener("change", this._contextDrawerMediaListener);
     this._contextDrawerMediaListening = false;
+    this._timelineCompactMedia?.removeEventListener("change", this._timelineCompactMediaListener);
+    this._timelineCompactMediaListening = false;
   }
   _syncViewportHeight() {
     const top = Math.max(0, Math.round(this.getBoundingClientRect().top));
@@ -40699,6 +41856,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const viewportBottom = window.visualViewport ? window.visualViewport.offsetTop + window.visualViewport.height : window.innerHeight;
     this.style.height = `${Math.max(0, Math.round(viewportBottom - top))}px`;
     if (this._addMenuOpen) this._syncAddMenuHeight();
+    if (this.shadowRoot?.getElementById("conversation-timeline") && this._timelineCompactLayout !== this._isConversationTimelineCompact()) {
+      this._timelineMobileOpen = false;
+      this._renderConversationTimeline();
+    }
   }
   _syncAddMenuHeight() {
     const menu = this.shadowRoot.getElementById("add-menu");
@@ -40815,9 +41976,15 @@ var CodexBridgePanel = class extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("dictation-button"), icons.microphone);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
-    for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
-      this._setTooltipTarget(control, control.getAttribute("aria-label") || control.getAttribute("title") || "");
+    for (const control2 of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
+      this._setTooltipTarget(control2, control2.getAttribute("aria-label") || control2.getAttribute("title") || "");
     }
+    this.shadowRoot.addEventListener("contextmenu", (event) => {
+      const row = event.target instanceof Element ? event.target.closest(".chat-row[data-chat-thread-id]") : null;
+      if (!row) return;
+      event.preventDefault();
+      void this._chatContextMenu.show(row.dataset.chatThreadId, row.querySelector(".thread-actions-toggle"), event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : null);
+    });
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
@@ -40826,6 +41993,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
     this.shadowRoot.addEventListener("mouseover", (event) => this._handleTooltipPointerOver(event));
+    this.shadowRoot.addEventListener("mouseover", (event) => this._handleTimelinePointerOver(event));
     this.shadowRoot.addEventListener("mouseout", (event) => this._handleTooltipPointerOut(event));
     this._mobileDrawerMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 880px)") : {
       matches: false,
@@ -40851,6 +42019,15 @@ var CodexBridgePanel = class extends HTMLElement {
     this._contextDrawerMediaListener = () => this._syncMobileDrawer();
     this._contextDrawerMedia.addEventListener("change", this._contextDrawerMediaListener);
     this._contextDrawerMediaListening = true;
+    this._timelineCompactMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 880px), (pointer: coarse)") : { matches: false, addEventListener() {
+    }, removeEventListener() {
+    } };
+    this._timelineCompactMediaListener = () => {
+      this._timelineMobileOpen = false;
+      this._renderConversationTimeline();
+    };
+    this._timelineCompactMedia.addEventListener("change", this._timelineCompactMediaListener);
+    this._timelineCompactMediaListening = true;
     this._syncMobileDrawer();
     this._syncComposerDiagnostics();
     this.shadowRoot.getElementById("file-input").addEventListener("change", (event) => {
@@ -40971,10 +42148,6 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._addMenuOpen && !eventTarget?.closest("#add-menu, #add-menu-button")) {
       this._setAddMenuOpen(false);
     }
-    if (this._chatMenuOpen && !eventTarget?.closest("#thread-menu, #chat-menu-button")) {
-      this._chatMenuOpen = false;
-      this._renderChatControls();
-    }
     if (this._appMenuOpen && !eventTarget?.closest("#app-menu, #app-menu-toggle")) {
       this._closeAppMenu();
     }
@@ -40992,14 +42165,16 @@ var CodexBridgePanel = class extends HTMLElement {
     if (actionTarget.closest("#add-menu")) {
       this._setAddMenuOpen(false, { restoreFocus: action === "upload-file" || action === "upload-folder" });
     }
-    if (actionTarget.closest("#thread-menu")) {
-      this._chatMenuOpen = false;
-      this._renderChatControls();
-    }
     if (actionTarget.closest(".rail-pane") && !["toggle-project-actions", "toggle-thread-actions"].includes(action)) {
       this._closeRailMenus();
     }
     switch (action) {
+      case "jump-to-conversation-turn":
+        this._jumpToConversationTurn(actionTarget);
+        break;
+      case "toggle-conversation-timeline":
+        this._setConversationTimelineOpen(!this._timelineMobileOpen);
+        break;
       case "toggle-add-menu":
         this._setAddMenuOpen(!this._addMenuOpen);
         break;
@@ -41008,9 +42183,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this.shadowRoot.getElementById("desktop-feature-surface")?.focus();
         break;
       case "toggle-chat-menu":
-        this._chatMenuOpen = !this._chatMenuOpen;
-        this._renderChatControls();
-        if (this._chatMenuOpen) this.shadowRoot.querySelector("#thread-menu button")?.focus();
+        void this._chatContextMenu.show(this._selectedThreadId, actionTarget, null, { header: true });
         break;
       case "share-chat":
         void this._shareChat();
@@ -41105,12 +42278,12 @@ var CodexBridgePanel = class extends HTMLElement {
         this._openProjectFormForCreate();
         break;
       case "refresh-thread":
-        this._chatMenuOpen = false;
+        this._chatContextMenu.close();
         this._renderChatControls();
         this._refreshActiveThread();
         break;
       case "edit-current-chat":
-        this._chatMenuOpen = false;
+        this._chatContextMenu.close();
         this._renderChatControls();
         this._openThreadFormForEdit(this._selectedThreadId);
         break;
@@ -41160,7 +42333,7 @@ var CodexBridgePanel = class extends HTMLElement {
         this._toggleProjectActions(actionTarget.dataset.projectId || "");
         break;
       case "toggle-thread-actions":
-        this._toggleThreadActions(actionTarget.dataset.threadId || "");
+        void this._chatContextMenu.show(actionTarget.dataset.threadId || "", actionTarget);
         break;
       case "select-project":
         this._closeMobileDrawer({ restoreFocus: false });
@@ -41343,7 +42516,6 @@ var CodexBridgePanel = class extends HTMLElement {
     if (target.id === "search-input") {
       this._searchQuery = target.value;
       this._expandedProjectActions = {};
-      this._expandedThreadActions = {};
       this._render();
       return;
     }
@@ -41488,6 +42660,23 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (this._chatContextMenu.handleKey(event)) return;
+    if (event.key === "Escape" && this._timelineMobileOpen && target.closest("#conversation-timeline")) {
+      event.preventDefault();
+      this._setConversationTimelineOpen(false, { restoreFocus: true });
+      return;
+    }
+    if (target.matches(".timeline-item") && target.closest("#conversation-timeline")) {
+      const items = [...this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")];
+      const currentIndex = items.indexOf(target);
+      if (items.length && ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) {
+        const forward = ["ArrowDown", "ArrowRight"].includes(event.key);
+        const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (currentIndex + (forward ? 1 : -1) + items.length) % items.length;
+        event.preventDefault();
+        this._focusTimelineItem(items[nextIndex]);
+      }
+      return;
+    }
     if (this._hostAccessDialog) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -41578,13 +42767,6 @@ var CodexBridgePanel = class extends HTMLElement {
       this._setAddMenuOpen(false, { restoreFocus: true });
       return;
     }
-    if (event.key === "Escape" && this._chatMenuOpen) {
-      event.preventDefault();
-      this._chatMenuOpen = false;
-      this._renderChatControls();
-      this.shadowRoot.getElementById("chat-menu-button")?.focus();
-      return;
-    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -41629,8 +42811,16 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _handleFocusIn(event) {
     const target = event.target;
-    this._showTooltipForTarget(target);
+    const timelineItem = target instanceof HTMLElement && target.matches(".timeline-item");
+    if (!timelineItem) this._showTooltipForTarget(target);
     this._scrollInteractionTargetIntoView(target);
+    if (timelineItem) {
+      this._timelinePreviewSequence = target.dataset.sequence;
+      this._timelineTabStopSequence = Number(target.dataset.sequence);
+      this._updateTimelineTabStops();
+      this._renderTimelineDesktopPreview(target.dataset.sequence);
+      this._renderTimelineMobilePreview(target.dataset.sequence);
+    }
     if (!this._isRefreshLockTarget(target)) {
       return;
     }
@@ -41673,17 +42863,17 @@ var CodexBridgePanel = class extends HTMLElement {
     const nav = this.shadowRoot.getElementById("desktop-destinations");
     if (!nav) return;
     for (const [index, destination] of DESTINATIONS.entries()) {
-      let control = nav.children[index];
-      if (!control) {
-        control = document.createElement("button");
-        control.type = "button";
-        control.className = "desktop-destination";
-        control.dataset.action = "select-desktop-destination";
-        control.dataset.destination = destination.id;
-        this._setTrustedButtonContent(control, icons[destination.icon], destination.label);
-        nav.append(control);
+      let control2 = nav.children[index];
+      if (!control2) {
+        control2 = document.createElement("button");
+        control2.type = "button";
+        control2.className = "desktop-destination";
+        control2.dataset.action = "select-desktop-destination";
+        control2.dataset.destination = destination.id;
+        this._setTrustedButtonContent(control2, icons[destination.icon], destination.label);
+        nav.append(control2);
       }
-      control.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
+      control2.setAttribute("aria-current", this._activeDestination === destination.id ? "page" : "false");
     }
   }
   _renderAppMenu() {
@@ -42581,6 +43771,7 @@ var CodexBridgePanel = class extends HTMLElement {
     } else if (action === "list-automation-runs") {
       try {
         state.data.runs = normalizeDesktopList(await this._callWS("list_automation_runs", { automation_id: dataset.id }));
+        await this._loadDesktopDestination("scheduled", { force: true });
         state.notice = `${state.data.runs.length} run${state.data.runs.length === 1 ? "" : "s"} loaded.`;
       } catch (error) {
         state.error = normalizeDesktopError(error);
@@ -43044,7 +44235,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const pending = this._pendingDeletion;
     if (!pending) {
       layer.hidden = true;
-      if (shell && !this._hostAccessDialog) {
+      if (shell && !this._hostAccessDialog && this._chatContextMenu.dialog.hidden) {
         shell.inert = false;
         shell.removeAttribute("aria-hidden");
       }
@@ -43346,8 +44537,8 @@ var CodexBridgePanel = class extends HTMLElement {
           draft: this._interactionAnswers.get(interaction.interaction_id) || {}
         });
         if (mutation?.state === "retryable") {
-          for (const control of wrapper.querySelectorAll(".mcp-form-fields input, .mcp-form-fields select")) {
-            control.disabled = true;
+          for (const control2 of wrapper.querySelectorAll(".mcp-form-fields input, .mcp-form-fields select")) {
+            control2.disabled = true;
           }
           for (const button3 of wrapper.querySelectorAll(".decision-actions button")) {
             const original = button3.dataset.decision === mutation.decision || button3.dataset.action === "answer-mcp-form" && mutation.kind === "mcp_form";
@@ -44045,7 +45236,6 @@ var CodexBridgePanel = class extends HTMLElement {
       this._searchQuery,
       this._collapsedProjects,
       this._expandedProjectActions,
-      this._expandedThreadActions,
       this._collapsedSections,
       this._selectedProjectId,
       this._selectedThreadId,
@@ -44058,6 +45248,7 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     this._renderedNavigationKey = key;
+    this._chatContextMenu.renderNavigation();
     this._renderDirectSection();
     this._renderProjectList();
     this._renderArchivedSection();
@@ -44310,13 +45501,14 @@ var CodexBridgePanel = class extends HTMLElement {
     const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
     const statusLabel = this._threadStatusLabel(thread, activity) || "Ready";
     const selected = thread.thread_id === this._selectedThreadId;
-    const expanded = Boolean(this._expandedThreadActions[thread.thread_id]);
+    const expanded = !this._chatContextMenu.menu.hidden && this._chatContextMenu.threadId === thread.thread_id;
     const row = document.createElement("div");
-    row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}${expanded ? " actions-open" : ""}`;
+    row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}${thread.unread ? " unread" : ""}${expanded ? " actions-open" : ""}`;
+    row.dataset.chatThreadId = String(thread.thread_id || "");
     const select = this._actionButton(
       `chat-select${selected ? " active" : ""}`,
       "select-thread",
-      `Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
+      `${thread.unread ? "Unread, " : ""}Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
     );
     select.dataset.threadId = String(thread.thread_id || "");
     this._setTooltipTarget(select, `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`);
@@ -44329,7 +45521,7 @@ var CodexBridgePanel = class extends HTMLElement {
     select.append(this._textElement("span", "thread-name", thread.title || "Untitled chat"), status);
     const rowActions = document.createElement("div");
     rowActions.className = "row-actions";
-    const menuId = `thread-secondary-actions-${thread.thread_id}`;
+    const menuId = "chat-context-menu";
     const more = this._actionButton(
       "icon-button small thread-actions-toggle",
       "toggle-thread-actions",
@@ -44342,22 +45534,7 @@ var CodexBridgePanel = class extends HTMLElement {
     more.setAttribute("aria-haspopup", "true");
     this._setTrustedButtonContent(more, icons.more);
     rowActions.append(more);
-    const threadActions = document.createElement("div");
-    threadActions.id = menuId;
-    threadActions.className = "rail-action-menu thread-actions";
-    threadActions.setAttribute("aria-label", `Actions for ${thread.title || "chat"}`);
-    threadActions.hidden = !expanded;
-    const archiveAction = archived ? "restore-thread" : "archive-thread";
-    const archiveLabel = archived ? "Restore chat" : "Archive chat";
-    const archiveIcon = archived ? icons.restore : icons.archive;
-    const archiveButton = this._actionButton("rail-menu-item", archiveAction, archiveLabel);
-    archiveButton.dataset.threadId = String(thread.thread_id || "");
-    this._setTrustedButtonContent(archiveButton, archiveIcon, archiveLabel);
-    const deleteButton = this._actionButton("rail-menu-item", "delete-thread", "Delete chat");
-    deleteButton.dataset.threadId = String(thread.thread_id || "");
-    this._setTrustedButtonContent(deleteButton, icons.trash, "Delete chat");
-    threadActions.append(archiveButton, deleteButton);
-    row.append(select, rowActions, threadActions);
+    row.append(select, rowActions);
     return row;
   }
   _renderToolbar() {
@@ -44946,6 +46123,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderedThreadId = null;
       this._renderedSequence = 0;
       messageList.replaceChildren(this._mainEmptyState());
+      this._renderConversationTimeline();
       return;
     }
     const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
@@ -44960,6 +46138,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
       this._syncStreamingMessage(messageList, activity);
+      this._renderConversationTimeline();
       return;
     }
     if (eventsToRender.length && messageList.querySelector(".empty-state")) {
@@ -44975,9 +46154,185 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderedSequence = event.sequence;
     }
     this._syncStreamingMessage(messageList, activity);
+    this._renderConversationTimeline();
     if (shouldStick) {
       this._scrollMessagesToBottom();
     }
+  }
+  _isConversationTimelineCompact() {
+    const availableWidth = this.shadowRoot?.getElementById("conversation-scroll")?.clientWidth || 0;
+    return Boolean(this._timelineCompactMedia?.matches || availableWidth > 0 && availableWidth < 1016);
+  }
+  _renderConversationTimeline() {
+    const navigation = this.shadowRoot.getElementById("conversation-timeline");
+    const track = this.shadowRoot.getElementById("conversation-timeline-track");
+    if (!navigation || !track) return;
+    const turns = this._selectedThreadId ? projectConversationTurns(this._events) : [];
+    this._conversationTurns = turns;
+    navigation.hidden = turns.length === 0;
+    const compact = this._isConversationTimelineCompact();
+    this._timelineCompactLayout = compact;
+    navigation.closest(".conversation-layout")?.classList.toggle("timeline-compact", compact);
+    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
+    disclosure.hidden = !compact;
+    disclosure.setAttribute("aria-expanded", String(compact && this._timelineMobileOpen));
+    navigation.classList.toggle("is-open", this._timelineMobileOpen);
+    track.hidden = compact && !this._timelineMobileOpen;
+    const visibleCapacity = Math.max(1, Math.floor((Math.min(380, window.innerHeight - 220) - 12) / 24));
+    track.classList.toggle("is-scrollable", turns.length > visibleCapacity);
+    if (!turns.length) {
+      track.replaceChildren();
+      this._timelineSelectedSequence = null;
+      this._timelineTabStopSequence = null;
+      this._timelineMobileOpen = false;
+      this._timelinePreviewSequence = null;
+      navigation.classList.remove("is-open");
+      disclosure.setAttribute("aria-expanded", "false");
+      track.hidden = compact;
+      this._renderTimelineMobilePreview(null);
+      this._renderTimelineDesktopPreview(null);
+      return;
+    }
+    const keys = new Set(turns.map((turn) => turn.key));
+    if (!keys.has(String(this._timelineSelectedSequence))) {
+      this._timelineSelectedSequence = turns.at(-1).anchorSequence;
+    }
+    if (!keys.has(String(this._timelineTabStopSequence))) {
+      this._timelineTabStopSequence = this._timelineSelectedSequence;
+    }
+    const existing = new Map([...track.querySelectorAll(".timeline-item")].map((button3) => [button3.dataset.turnKey, button3]));
+    turns.forEach((turn, index) => {
+      let button3 = existing.get(turn.key);
+      if (!button3) {
+        button3 = document.createElement("button");
+        button3.type = "button";
+        button3.className = "timeline-item";
+        button3.dataset.action = "jump-to-conversation-turn";
+        const marker = this._textElement("span", "timeline-marker", "");
+        marker.setAttribute("aria-hidden", "true");
+        const mobileLabel = this._textElement("span", "timeline-mobile-label", `Turn ${turn.index}`);
+        mobileLabel.setAttribute("aria-hidden", "true");
+        button3.append(marker, mobileLabel);
+      }
+      const label = this._timelineTurnLabel(turn);
+      const signature = `${turn.index}|${turn.prompt}|${turn.response}|${turn.queued}|${turn.pending}|${turn.outcomeLabel}|${turn.anchorSequence}`;
+      if (button3.dataset.renderSignature !== signature) {
+        button3.setAttribute("aria-label", label);
+        button3.dataset.renderSignature = signature;
+        button3.dataset.turnKey = turn.key;
+        button3.dataset.sequence = String(turn.anchorSequence);
+        button3.querySelector(".timeline-mobile-label").textContent = `Turn ${turn.index}`;
+      }
+      button3.toggleAttribute("aria-current", turn.anchorSequence === this._timelineSelectedSequence);
+      if (button3.hasAttribute("aria-current")) button3.setAttribute("aria-current", "location");
+      button3.tabIndex = turn.anchorSequence === this._timelineTabStopSequence ? 0 : -1;
+      const atPosition = track.children[index];
+      if (atPosition !== button3) track.insertBefore(button3, atPosition || null);
+      existing.delete(turn.key);
+    });
+    for (const button3 of existing.values()) button3.remove();
+    const activePreview = this._timelinePreviewSequence;
+    this._renderTimelineDesktopPreview(activePreview, turns);
+    this._renderTimelineMobilePreview(this._timelineMobileOpen ? String(this._timelineSelectedSequence) : null, turns);
+  }
+  _timelineTurnLabel(turn) {
+    if (typeof turn.label === "string") return turn.label.slice(0, 120);
+    const parts = [`Turn ${turn.index}`];
+    if (turn.prompt) parts.push(`You: ${turn.prompt}`);
+    if (turn.response) parts.push(`Codex: ${turn.response}`);
+    else if (turn.pending) parts.push("Codex response in progress");
+    if (turn.queued) parts.push("Queued");
+    return parts.join(". ");
+  }
+  _timelinePreviewChildren(turn) {
+    const children = [this._textElement("span", "timeline-preview-title", `Turn ${turn.index}${turn.queued ? " · Queued" : ""}`)];
+    if (turn.prompt) children.push(this._textElement("span", "timeline-preview-copy", `You: ${turn.prompt}`));
+    if (turn.response) children.push(this._textElement("span", "timeline-preview-copy", `Codex: ${turn.response}`));
+    else if (turn.pending) children.push(this._textElement("span", "timeline-preview-copy", "Codex response in progress"));
+    else if (turn.outcomeLabel) children.push(this._textElement("span", "timeline-preview-copy", turn.outcomeLabel));
+    return children;
+  }
+  _renderTimelineMobilePreview(sequence2, turns = this._conversationTurns) {
+    const preview = this.shadowRoot.getElementById("conversation-timeline-preview");
+    if (!preview) return;
+    const turn = turns.find((item) => item.key === String(sequence2));
+    preview.hidden = !turn;
+    if (!turn) {
+      preview.replaceChildren();
+      return;
+    }
+    preview.replaceChildren(...this._timelinePreviewChildren(turn));
+  }
+  _renderTimelineDesktopPreview(sequence2, turns = this._conversationTurns) {
+    const preview = this.shadowRoot.getElementById("conversation-timeline-desktop-preview");
+    const navigation = this.shadowRoot.getElementById("conversation-timeline");
+    const button3 = [...this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")].find((item) => item.dataset.sequence === String(sequence2 ?? ""));
+    const turn = turns.find((item) => item.key === String(sequence2));
+    if (!preview || !navigation || !button3 || !turn) {
+      if (preview) preview.hidden = true;
+      return;
+    }
+    preview.hidden = false;
+    preview.replaceChildren(...this._timelinePreviewChildren(turn));
+    const navRect = navigation.getBoundingClientRect();
+    const buttonRect = button3.getBoundingClientRect();
+    const previewHeight = preview.getBoundingClientRect().height || 96;
+    const center = buttonRect.top - navRect.top + buttonRect.height / 2;
+    const y2 = Math.max(previewHeight / 2, Math.min(navRect.height - previewHeight / 2, center));
+    navigation.style.setProperty("--timeline-preview-position", `${y2}px`);
+  }
+  _handleTimelinePointerOver(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button3 = target.closest("#conversation-timeline .timeline-item");
+    if (!button3 || button3.matches(":focus-visible")) return;
+    this._timelinePreviewSequence = button3.dataset.sequence;
+    this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+  }
+  _setConversationTimelineOpen(open, { restoreFocus = false } = {}) {
+    this._timelineMobileOpen = open;
+    const navigation = this.shadowRoot.getElementById("conversation-timeline");
+    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
+    const track = this.shadowRoot.getElementById("conversation-timeline-track");
+    navigation?.classList.toggle("is-open", open);
+    if (track) track.hidden = !open && this._isConversationTimelineCompact();
+    disclosure?.setAttribute("aria-expanded", String(open));
+    this._renderTimelineMobilePreview(open ? String(this._timelineSelectedSequence) : null);
+    if (!open) this._renderTimelineDesktopPreview(null);
+    if (restoreFocus) disclosure?.focus();
+  }
+  _updateTimelineTabStops() {
+    for (const button3 of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
+      button3.tabIndex = Number(button3.dataset.sequence) === this._timelineTabStopSequence ? 0 : -1;
+    }
+  }
+  _focusTimelineItem(button3) {
+    if (!button3) return;
+    this._timelineTabStopSequence = Number(button3.dataset.sequence);
+    this._updateTimelineTabStops();
+    button3.focus();
+  }
+  _jumpToConversationTurn(button3) {
+    if (!(button3 instanceof HTMLElement)) return;
+    const sequence2 = Number(button3.dataset.sequence);
+    if (!Number.isSafeInteger(sequence2) || sequence2 <= 0) return;
+    const list = this.shadowRoot.getElementById("message-list");
+    const scroller = this.shadowRoot.getElementById("conversation-scroll");
+    const target = [...list?.querySelectorAll("[data-sequence]") || []].find((node2) => Number(node2.dataset.sequence) === sequence2);
+    if (!target || !scroller) return;
+    this._timelineSelectedSequence = sequence2;
+    this._timelineTabStopSequence = sequence2;
+    this._updateTimelineTabStops();
+    for (const item of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
+      if (Number(item.dataset.sequence) === sequence2) item.setAttribute("aria-current", "location");
+      else item.removeAttribute("aria-current");
+    }
+    const compact = this._isConversationTimelineCompact();
+    if (compact) this._setConversationTimelineOpen(false, { restoreFocus: true });
+    else this._renderTimelineDesktopPreview(String(sequence2));
+    const scrollerRect = scroller.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    scroller.scrollTop += targetRect.top - scrollerRect.top - scroller.clientTop - 16;
   }
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
@@ -46195,22 +47550,8 @@ var CodexBridgePanel = class extends HTMLElement {
     root.getElementById("toggle-activity-button").setAttribute("aria-pressed", String(this._activityView && this._sideTab === "activity"));
     root.getElementById("share-chat-button").disabled = !this._selectedThreadId;
     root.getElementById("chat-menu-button").disabled = !this._selectedThreadId;
-    root.getElementById("chat-menu-button").setAttribute("aria-expanded", String(this._chatMenuOpen));
-    const menu = root.getElementById("thread-menu");
-    menu.hidden = !this._chatMenuOpen;
-    if (!this._chatMenuOpen) return;
-    const menuKey = `${this._selectedThreadId}:${this._activeThread?.archived_at || ""}`;
-    if (this._chatMenuKey === menuKey) return;
-    this._chatMenuKey = menuKey;
-    menu.replaceChildren();
-    for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
-      const button3 = document.createElement("button");
-      button3.type = "button";
-      button3.dataset.action = action;
-      button3.textContent = label;
-      button3.dataset.threadId = this._selectedThreadId;
-      menu.append(button3);
-    }
+    root.getElementById("chat-menu-button").setAttribute("aria-controls", "chat-context-menu");
+    this._chatContextMenu.sync();
   }
   async _shareChat() {
     const url = authenticatedChatUrl(window.location, this._selectedThreadId);
@@ -46737,40 +48078,20 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const expanded = !this._expandedProjectActions[projectId];
     this._expandedProjectActions = expanded ? { [projectId]: true } : {};
-    this._expandedThreadActions = {};
     this._syncRailMenus();
     this.shadowRoot.getElementById(`project-actions-toggle-${projectId}`)?.focus();
   }
-  _toggleThreadActions(threadId) {
-    if (!threadId) {
-      return;
-    }
-    const expanded = !this._expandedThreadActions[threadId];
-    this._expandedThreadActions = expanded ? { [threadId]: true } : {};
-    this._expandedProjectActions = {};
-    this._syncRailMenus();
-    this.shadowRoot.getElementById(`thread-actions-toggle-${threadId}`)?.focus();
-  }
   _hasOpenRailMenu() {
-    return Object.values(this._expandedProjectActions).some(Boolean) || Object.values(this._expandedThreadActions).some(Boolean);
+    return Object.values(this._expandedProjectActions).some(Boolean);
   }
   _closeRailMenus({ restoreFocus = false } = {}) {
     const projectId = Object.keys(this._expandedProjectActions).find(
       (candidate) => this._expandedProjectActions[candidate]
     );
-    const threadId = Object.keys(this._expandedThreadActions).find(
-      (candidate) => this._expandedThreadActions[candidate]
-    );
-    if (!projectId && !threadId) {
-      return;
-    }
+    if (!projectId) return;
     this._expandedProjectActions = {};
-    this._expandedThreadActions = {};
     this._syncRailMenus();
-    if (restoreFocus) {
-      const toggleId = projectId ? `project-actions-toggle-${projectId}` : `thread-actions-toggle-${threadId}`;
-      this.shadowRoot.getElementById(toggleId)?.focus();
-    }
+    if (restoreFocus) this.shadowRoot.getElementById(`project-actions-toggle-${projectId}`)?.focus();
   }
   _syncRailMenus() {
     for (const toggle of this.shadowRoot.querySelectorAll('[data-action="toggle-project-actions"]')) {
@@ -46780,16 +48101,6 @@ var CodexBridgePanel = class extends HTMLElement {
       toggle.setAttribute("aria-expanded", String(expanded));
       toggle.setAttribute("aria-label", label);
       this._setTooltipTarget(toggle, label);
-      this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
-    }
-    for (const toggle of this.shadowRoot.querySelectorAll('[data-action="toggle-thread-actions"]')) {
-      const expanded = Boolean(this._expandedThreadActions[toggle.dataset.threadId]);
-      const threadName = toggle.closest(".chat-row")?.querySelector(".thread-name")?.textContent || "chat";
-      const label = `${expanded ? "Hide" : "Show"} actions for ${threadName}`;
-      toggle.setAttribute("aria-expanded", String(expanded));
-      toggle.setAttribute("aria-label", label);
-      this._setTooltipTarget(toggle, label);
-      toggle.closest(".chat-row")?.classList.toggle("actions-open", expanded);
       this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
     }
   }
@@ -46817,6 +48128,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
   }
   async _selectThread(threadId) {
+    this._chatContextMenu.close();
+    void this._chatContextMenu.markOpened(threadId);
     if (!threadId) {
       return;
     }
@@ -46832,10 +48145,15 @@ var CodexBridgePanel = class extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       if (nextThreadId !== this._selectedThreadId) {
+        this._timelineSelectedSequence = null;
+        this._timelineTabStopSequence = null;
+        this._timelineMobileOpen = false;
+        this._timelinePreviewSequence = null;
+        this._conversationTurns = [];
         this._stopDictation({ abort: true });
         if (this._threadForm.threadId) this._showThreadForm = false;
         void this._terminal.close();
-        this._chatMenuOpen = false;
+        this._chatContextMenu.close();
       }
       this._stopPolling();
       this._clearArtifactRefreshRetry();
@@ -48702,12 +50020,12 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _directThreads(includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_kind === "direct" && (includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_kind === "direct" && (includeArchived || !thread.archived_at) && (includeArchived || !this._chatContextMenu.isGrouped(thread)) && this._threadMatchesQuery(thread)
     );
   }
   _projectThreads(projectId, includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_id === projectId && (includeArchived || !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_id === projectId && (includeArchived || !thread.archived_at) && (includeArchived || !this._chatContextMenu.isGrouped(thread)) && this._threadMatchesQuery(thread)
     );
   }
   _projectIsVisible(project) {
@@ -49062,6 +50380,10 @@ var CodexBridgePanel = class extends HTMLElement {
     target.removeAttribute("title");
   }
   _showTooltipForTarget(target) {
+    if (!this._chatContextMenu.menu.hidden || !this._chatContextMenu.dialog.hidden) {
+      this._hideTooltip();
+      return;
+    }
     if (window.matchMedia?.("(hover: none)").matches) {
       this._hideTooltip();
       return;
@@ -49190,19 +50512,19 @@ var CodexBridgePanel = class extends HTMLElement {
     return `project-chat-list-${encodeURIComponent(String(projectId || "project"))}`;
   }
   _toolbarUtility(label, thread, renderControl) {
-    const control = document.createElement("div");
-    control.className = "composer-utility";
-    control.append(this._textElement("span", "composer-utility-label", label));
+    const control2 = document.createElement("div");
+    control2.className = "composer-utility";
+    control2.append(this._textElement("span", "composer-utility-label", label));
     if (!thread) {
-      control.append(this._textElement("span", "label-text", "Select a chat."));
-      return control;
+      control2.append(this._textElement("span", "label-text", "Select a chat."));
+      return control2;
     }
     const field2 = document.createElement("span");
     field2.className = "composer-select";
     field2.append(renderControl());
     this._appendTrustedIcon(field2, icons.chevronDown);
-    control.append(field2);
-    return control;
+    control2.append(field2);
+    return control2;
   }
   _appendTrustedIcon(container, iconMarkup) {
     const iconTemplate = document.createElement("template");

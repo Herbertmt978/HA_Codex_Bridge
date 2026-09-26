@@ -1036,6 +1036,73 @@ async def test_thread_responses_strip_private_runtime_continuity(
     assert detail == expected
 
 
+async def test_chat_operations_require_negotiated_capability_before_any_operation(
+    bridge_server_factory,
+) -> None:
+    paths: list[str] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        paths.append(request.path)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        for action in (
+            client.async_list_chat_sections,
+            lambda: client.async_update_thread(
+                "thr_safe", {"pinned": True, "navigation_revision": 2}
+            ),
+            lambda: client.async_fork_thread("thr_safe"),
+            lambda: client.async_move_thread_project("thr_safe", "prj_target", 2),
+        ):
+            with pytest.raises(BridgeApiCapabilityError):
+                await action()
+
+    assert paths == ["/ready"]
+
+
+async def test_chat_operations_use_negotiated_payloads(
+    bridge_server_factory,
+) -> None:
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"].append("chat_operations_v1")
+    calls: list[tuple[str, str, dict | None]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(ready)
+        body = await request.json() if request.can_read_body else None
+        calls.append((request.method, request.path, body))
+        if request.path == "/chat-sections":
+            return web.json_response({"sections": []})
+        if request.path.endswith("/fork") or request.path.endswith("move-project"):
+            return web.json_response({"thread_id": "thr_safe", "pinned": True})
+        return web.json_response({"thread_id": "thr_safe", "pinned": True})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_list_chat_sections()
+        await client.async_update_thread(
+            "thr_safe",
+            {"pinned": True, "section_id": None, "navigation_revision": 3},
+        )
+        await client.async_move_thread_project(
+            "thr_safe", "prj_target", 3, ["art_selected"]
+        )
+        await client.async_fork_thread("thr_safe")
+
+    assert calls == [
+        ("GET", "/chat-sections", None),
+        ("PATCH", "/threads/thr_safe", {"pinned": True, "section_id": None, "navigation_revision": 3}),
+        ("POST", "/threads/thr_safe/move-project", {"project_id": "prj_target", "navigation_revision": 3, "workspace_artifact_ids": ["art_selected"]}),
+        ("POST", "/threads/thr_safe/fork", {}),
+    ]
+
+
 async def test_v1_rejects_legacy_buffered_file_and_event_transports(
     bridge_server_factory,
 ) -> None:
