@@ -6,7 +6,7 @@ ARG BUILD_ARCH=amd64
 LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
-    io.hass.version="1.9.2"
+    io.hass.version="1.10.0"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -18,6 +18,9 @@ COPY stdio-packages/ /opt/codex-stdio/packages/
 
 RUN set -eux; \
     case "${BUILD_ARCH}:${TARGETARCH}" in amd64:amd64|aarch64:arm64) ;; *) exit 1 ;; esac; \
+    # Scoped Git review requires the real Git executable in the App.
+    apk add --no-cache git; \
+    git --version >/dev/null; \
     /bin/bash -c 'source /usr/lib/bashio/bashio.sh; declare -F bashio::addon.ip_address >/dev/null'; \
     # Startup qualifies the explicitly enabled browser against this exact
     # Chromium package. ARM64 browser isolation is not yet qualified, so its
@@ -68,8 +71,8 @@ EXPOSE 8766
 
 ENTRYPOINT ["/usr/local/bin/codex-app-entrypoint"]
 
-ENV CODEX_BRIDGE_APP_VERSION="1.9.2" \
-    CODEX_BRIDGE_VERSION="0.16.1" \
+ENV CODEX_BRIDGE_APP_VERSION="1.10.0" \
+    CODEX_BRIDGE_VERSION="0.17.0" \
     CODEX_BRIDGE_CODEX_VERSION="0.157.1" \
     CODEX_BRIDGE_ARCH="${BUILD_ARCH}" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST="f2908f4f5e478bb3fa50dc5b128bc33116675f901683fd5f7d595283650cd6ec" \

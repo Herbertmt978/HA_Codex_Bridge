@@ -26,6 +26,7 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiTimeoutError,
     BridgeDownload,
     BridgeStreamResponse,
+    GIT_REVIEW_REQUEST_TIMEOUT,
     PLUGIN_LIST_REQUEST_TIMEOUT,
     REQUEST_TIMEOUT,
 )
@@ -37,6 +38,28 @@ from custom_components.codex_bridge.task_events import TaskEventForwarder
 FIXTURES = Path(__file__).parents[2] / "fixtures"
 TOKEN = "bridge-token-0123456789abcdef0123456789"
 DISCOVERY_UUID = "0123456789abcdef0123456789abcdef"
+
+
+async def test_git_review_uses_scoped_timeout_only(bridge_server_factory):
+    ready = _fixture("ready_v1.json")
+    ready["capabilities"].append("git_review_v1")
+    received = []
+
+    async def handler(request):
+        if request.path == "/ready":
+            return web.json_response(ready)
+        received.append(request.path)
+        return web.json_response({"files": []})
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        await client.async_git_review("thr_123", scope="unstaged")
+        assert received == ["/threads/thr_123/git-review"]
+        assert GIT_REVIEW_REQUEST_TIMEOUT.total == 30
+        assert GIT_REVIEW_REQUEST_TIMEOUT.sock_read == 25
+        assert REQUEST_TIMEOUT.sock_read == 20
 
 
 def _fixture(name: str) -> dict:
@@ -1059,6 +1082,34 @@ async def test_chat_operations_require_negotiated_capability_before_any_operatio
         ):
             with pytest.raises(BridgeApiCapabilityError):
                 await action()
+
+    assert paths == ["/ready"]
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"follow_up_mode": "queue"},
+        {"follow_up_mode": "steer"},
+        {"collaboration_mode": "plan"},
+        {"collaboration_mode": "default"},
+    ],
+)
+async def test_explicit_prompt_semantics_require_capability_before_post(
+    bridge_server_factory, kwargs
+) -> None:
+    paths: list[str] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        paths.append(request.path)
+        return web.json_response(_fixture("ready_v1.json"))
+
+    server = await bridge_server_factory(handler)
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(session, str(server.make_url("")), TOKEN)
+        await client.async_ready()
+        with pytest.raises(BridgeApiCapabilityError):
+            await client.async_send_prompt("thr_safe", "Review", **kwargs)
 
     assert paths == ["/ready"]
 

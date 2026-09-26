@@ -34,6 +34,7 @@ from .event_store import (
     EventStoreError,
     OutboxWrite,
     StoredEventRecord,
+    ThreadEventSequenceExpiredError,
 )
 from .generated_images import validate_generated_image_result
 from .models import (
@@ -42,6 +43,7 @@ from .models import (
     InteractionResultRecord,
     PendingInteractionRecord,
     ProjectKind,
+    QueuedPromptRecord,
     RunMode,
     RunRecord,
     RuntimeProfile,
@@ -267,6 +269,35 @@ class RuntimePromptPendingError(RuntimeBrokerError):
         super().__init__("This chat already has a Codex prompt waiting to start.")
 
 
+class QueuedPromptNotFoundError(RuntimeBrokerError):
+    code = "queued_prompt_not_found"
+
+    def __init__(self) -> None:
+        super().__init__("The prompt is no longer queued.")
+
+
+class QueuedPromptRevisionConflictError(RuntimeBrokerError):
+    code = "queued_prompt_revision_conflict"
+
+    def __init__(self) -> None:
+        super().__init__("The queued prompt changed; refresh the queue and try again.")
+
+
+class RuntimeCollaborationModeUnavailableError(RuntimeBrokerError):
+    code = "capabilities_unavailable"
+    status_code = 422
+
+    def __init__(self) -> None:
+        super().__init__("The locked Codex runtime does not support Plan mode.")
+
+
+class RuntimeCollaborationModeConflictError(RuntimeBrokerError):
+    code = "collaboration_mode_requires_queue"
+
+    def __init__(self) -> None:
+        super().__init__("Changing collaboration mode requires a queued turn.")
+
+
 class RuntimeThreadBusyError(RuntimeBrokerError):
     code = "runtime_thread_busy"
     retryable = True
@@ -365,6 +396,9 @@ _MAX_BROWSER_DYNAMIC_TEXT_BYTES = 32 * 1024
 _MAX_BROWSER_DYNAMIC_IMAGE_URL_BYTES = 6 * 1024 * 1024
 _MAX_BROWSER_DYNAMIC_ARGUMENT_BYTES = 32 * 1024
 _MAX_BROWSER_TOOL_REPLAYS_PER_TURN = 128
+_PLAN_BROWSER_READ_TOOLS = frozenset(
+    {"open", "navigate", "inspect", "wait", "screenshot", "pdf", "close"}
+)
 _NOTIFICATIONS = (
     "thread/tokenUsage/updated",
     "turn/started",
@@ -612,6 +646,28 @@ class RuntimeBroker:
             self._reconcile_generation_locked(generation, reason="bridge restarted")
             self._repair_orphaned_thread_projections_locked()
             self._started = True
+            queued = sorted(
+                (
+                    run
+                    for run in self._state.runs.values()
+                    if run.status == "queued" and run.prompt is not None
+                ),
+                key=lambda run: (run.created_at, run.run_id),
+            )
+            for run in queued:
+                lease = self.gate.reserve_prompt(
+                    client_request_id=run.client_request_id
+                )
+                self._leases[run.run_id] = lease
+                self._completion_events[run.run_id] = Event()
+                self._spawn_worker_locked(run.run_id)
+
+    @property
+    def supports_plan_mode(self) -> bool:
+        return (
+            getattr(self.app_server, "enable_experimental_api", False) is True
+            and getattr(self.app_server, "supports_collaboration_mode", False) is True
+        )
 
     def delete_thread(self, thread_id: str) -> None:
         """Delete an idle chat and its retained private runtime history."""
@@ -941,6 +997,8 @@ class RuntimeBroker:
         unattended: bool = False,
         host_unattended_approved: bool = False,
         web_search: Literal["live", "disabled"] | None = None,
+        follow_up_mode: Literal["auto", "queue", "steer"] = "auto",
+        collaboration_mode: Literal["default", "plan"] | None = None,
         admission: PromptAdmission | None = None,
         assist: bool = False,
     ) -> RunRecord:
@@ -952,6 +1010,8 @@ class RuntimeBroker:
             type(web_search) is not str or web_search not in {"live", "disabled"}
         ):
             raise ValueError("web_search must be live or disabled")
+        if follow_up_mode not in {"auto", "queue", "steer"}:
+            raise ValueError("follow_up_mode must be auto, queue, or steer")
         request_id = client_request_id or f"req_{uuid4().hex}"
         prompt = _prompt(prompt)
         request_id = _identifier(request_id, limit=256, label="client request id")
@@ -961,6 +1021,15 @@ class RuntimeBroker:
             maximum_bytes=self.limits.max_event_payload_bytes,
         )
         thread = self.storage.get_thread(thread_id)
+        selected_collaboration_mode = (
+            collaboration_mode
+            if collaboration_mode is not None
+            else (thread.collaboration_mode if not unattended else "default")
+        )
+        if selected_collaboration_mode not in {"default", "plan"}:
+            raise ValueError("collaboration_mode must be default or plan")
+        if selected_collaboration_mode == "plan" and not self.supports_plan_mode:
+            raise RuntimeCollaborationModeUnavailableError()
         if thread.assist_origin != assist or (assist and (
             thread.mode is not RunMode.OBSERVE or not unattended
             or web_search != "disabled"
@@ -1007,6 +1076,8 @@ class RuntimeBroker:
                     or existing_outcome.fingerprint != _fingerprint(prompt)
                     or existing_outcome.unattended != unattended
                     or existing_outcome.web_search != web_search
+                    or existing_outcome.follow_up_mode != follow_up_mode
+                    or existing_outcome.collaboration_mode != selected_collaboration_mode
                 ):
                     raise RuntimeRequestConflictError()
                 if existing_outcome.status == "uncertain":
@@ -1059,6 +1130,8 @@ class RuntimeBroker:
                     or existing_outcome.fingerprint != _fingerprint(prompt)
                     or existing_outcome.unattended != unattended
                     or existing_outcome.web_search != web_search
+                    or existing_outcome.follow_up_mode != follow_up_mode
+                    or existing_outcome.collaboration_mode != selected_collaboration_mode
                 ):
                     raise RuntimeRequestConflictError()
                 if existing_outcome.status == "uncertain":
@@ -1079,14 +1152,20 @@ class RuntimeBroker:
             ):
                 raise TurnCancellingError()
 
-            if any(
+            if follow_up_mode != "queue" and any(
                 run.thread_id == thread_id and run.status == "queued"
                 for run in self._state.runs.values()
             ):
                 raise RuntimePromptPendingError()
 
             active = self._active_run_for_thread_locked(thread_id)
-            if active is not None:
+            if (
+                active is not None
+                and follow_up_mode != "queue"
+                and active.collaboration_mode != selected_collaboration_mode
+            ):
+                raise RuntimeCollaborationModeConflictError()
+            if active is not None and follow_up_mode != "queue":
                 # The authoritative account can fail closed after the
                 # pre-lock check. An active run already owns a prompt lease,
                 # so this final check cannot reconcile account ownership; it
@@ -1104,6 +1183,8 @@ class RuntimeBroker:
                     unattended=False,
                     web_search=web_search,
                     fingerprint=_fingerprint(prompt),
+                    follow_up_mode=follow_up_mode,
+                    collaboration_mode=selected_collaboration_mode,
                     status="uncertain",
                     run_status=active.status,
                 )
@@ -1144,6 +1225,8 @@ class RuntimeBroker:
                         thread_id=thread_id,
                         unattended=unattended,
                         web_search=web_search,
+                        follow_up_mode=follow_up_mode,
+                        collaboration_mode=selected_collaboration_mode,
                         prompt=prompt,
                         prompt_fingerprint=_fingerprint(prompt),
                         mode=thread.mode,
@@ -1175,6 +1258,8 @@ class RuntimeBroker:
                         kind="prompt",
                         unattended=unattended,
                         web_search=web_search,
+                        follow_up_mode=follow_up_mode,
+                        collaboration_mode=selected_collaboration_mode,
                         fingerprint=run.prompt_fingerprint,
                         status="accepted",
                         run_status=run.status,
@@ -1215,8 +1300,25 @@ class RuntimeBroker:
                                 payload={"run_id": run.run_id},
                             )
                         )
-                    self._persist_locked(events=tuple(initial_events))
-                    self._set_thread_projection_locked(run)
+                    stored_events = self._persist_locked(
+                        events=tuple(initial_events)
+                    )
+                    run.message_sequence = next(
+                        (
+                            event.scope_sequence
+                            for event in stored_events
+                            if event.event_type == "message.created"
+                            and event.payload.get("run_id") == run.run_id
+                        ),
+                        None,
+                    )
+                    if run.message_sequence is not None:
+                        self._persist_locked()
+                    if not (
+                        lease.state == "queued"
+                        and self._active_run_for_thread_locked(thread_id) is not None
+                    ):
+                        self._set_thread_projection_locked(run)
                     self._spawn_worker_locked(run.run_id)
                 except RuntimeStateCommitUnknownError:
                     # The outbox may already own the accepted run and events.
@@ -1310,6 +1412,187 @@ class RuntimeBroker:
         finally:
             with self._lock:
                 self._finish_publication_locked(thread_id)
+
+    def list_queued_prompts(self, thread_id: str) -> list[QueuedPromptRecord]:
+        """Return a FIFO snapshot of prompts that have not started."""
+        self.storage.load_thread(thread_id)
+        with self._lock:
+            self._require_started_locked()
+            queued = sorted(
+                (
+                    run
+                    for run in self._state.runs.values()
+                    if run.thread_id == thread_id
+                    and run.status == "queued"
+                    and run.prompt is not None
+                ),
+                key=lambda run: (run.created_at, run.run_id),
+            )
+            return [
+                QueuedPromptRecord(
+                    run_id=run.run_id,
+                    prompt=run.prompt or "",
+                    created_at=run.created_at,
+                    revision=run.queue_revision,
+                    position=position,
+                    collaboration_mode=run.collaboration_mode,
+                )
+                for position, run in enumerate(queued, start=1)
+            ]
+
+    def update_queued_prompt(
+        self,
+        thread_id: str,
+        run_id: str,
+        prompt: str,
+        *,
+        expected_revision: int,
+    ) -> QueuedPromptRecord:
+        """Edit only a prompt that remains queued at the revision reviewed."""
+        normalized = _prompt(prompt)
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise ValueError("expected_revision must be a positive integer")
+        self.storage.load_thread(thread_id)
+        with self._lock:
+            self._require_started_locked()
+            run = self._state.runs.get(run_id)
+            if run is None or run.thread_id != thread_id or run.status != "queued":
+                raise QueuedPromptNotFoundError()
+            if run.queue_revision != expected_revision:
+                raise QueuedPromptRevisionConflictError()
+            fingerprint = _fingerprint(normalized)
+            _require_message_event_capacity(
+                prompt=normalized,
+                client_request_id=run.client_request_id,
+                maximum_bytes=self.limits.max_event_payload_bytes,
+            )
+            outcome = self._state.request_idempotency.get(run.client_request_id)
+            if outcome is None or outcome.run_id != run_id:
+                raise RuntimeUnavailableError()
+            previous_prompt = run.prompt
+            previous_fingerprint = run.prompt_fingerprint
+            previous_revision = run.queue_revision
+            previous_outcome_fingerprint = outcome.fingerprint
+            run.prompt = normalized
+            run.prompt_fingerprint = fingerprint
+            run.queue_revision += 1
+            outcome.fingerprint = fingerprint
+            message_sequence = run.message_sequence
+            if message_sequence is None:
+                try:
+                    message_sequence = next(
+                        (
+                            event.sequence
+                            for event in self.storage.list_thread_events(thread_id)
+                            if event.event_type == "message.created"
+                            and event.payload.get("run_id") == run_id
+                        ),
+                        None,
+                    )
+                except ThreadEventSequenceExpiredError:
+                    message_sequence = None
+            queue_events = [
+                EventDraft(
+                    scope="thread",
+                    thread_id=thread_id,
+                    event_type="run.queue_item_updated",
+                    payload={
+                        "run_id": run_id,
+                        "prompt": normalized,
+                        "revision": run.queue_revision,
+                    },
+                )
+            ]
+            if message_sequence is not None:
+                queue_events.append(
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="message.updated",
+                        payload={
+                            "run_id": run_id,
+                            "message_sequence": message_sequence,
+                            "role": "user",
+                            "text": normalized,
+                        },
+                    )
+                )
+            try:
+                self._persist_locked(events=tuple(queue_events))
+            except (DurableOperationTooLargeError, EventPayloadTooLargeError, EventStoreAdmissionError):
+                run.prompt = previous_prompt
+                run.prompt_fingerprint = previous_fingerprint
+                run.queue_revision = previous_revision
+                outcome.fingerprint = previous_outcome_fingerprint
+                raise
+            queued = sorted(
+                (
+                    item
+                    for item in self._state.runs.values()
+                    if item.thread_id == thread_id
+                    and item.status == "queued"
+                    and item.prompt is not None
+                ),
+                key=lambda item: (item.created_at, item.run_id),
+            )
+            position = next(
+                index
+                for index, item in enumerate(queued, start=1)
+                if item.run_id == run_id
+            )
+            return QueuedPromptRecord(
+                run_id=run_id,
+                prompt=normalized,
+                created_at=run.created_at,
+                revision=run.queue_revision,
+                position=position,
+                collaboration_mode=run.collaboration_mode,
+            )
+
+    def cancel_queued_prompt(self, thread_id: str, run_id: str) -> RunRecord:
+        """Remove one queued item atomically before its worker claims it."""
+        self.storage.load_thread(thread_id)
+        with self._lock:
+            self._require_started_locked()
+            run = self._state.runs.get(run_id)
+            if run is None or run.thread_id != thread_id or run.status != "queued":
+                raise QueuedPromptNotFoundError()
+            message_sequence = run.message_sequence
+            if message_sequence is None:
+                try:
+                    message_sequence = next(
+                        (
+                            event.sequence
+                            for event in self.storage.list_thread_events(thread_id)
+                            if event.event_type == "message.created"
+                            and event.payload.get("run_id") == run_id
+                        ),
+                        None,
+                    )
+                except ThreadEventSequenceExpiredError:
+                    message_sequence = None
+            preceding_events = (
+                (
+                    EventDraft(
+                        scope="thread",
+                        thread_id=thread_id,
+                        event_type="message.removed",
+                        payload={
+                            "run_id": run_id,
+                            "message_sequence": message_sequence,
+                        },
+                    ),
+                )
+                if message_sequence is not None
+                else ()
+            )
+            self._terminalize_locked(
+                run,
+                "cancelled",
+                "The queued prompt was cancelled.",
+                preceding_events=preceding_events,
+            )
+            return _run_record(run)
 
     def cancel_run(
         self,
@@ -1691,6 +1974,21 @@ class RuntimeBroker:
             for run in self._state.runs.values():
                 if run.status in _TERMINAL_RUN_STATES:
                     continue
+                if run.status == "queued" and run.follow_up_mode == "queue":
+                    # A queued prompt has not been dispatched to Codex. Keep
+                    # its durable identity and text so a new broker can safely
+                    # re-admit it after process restart.
+                    lease = self._leases.pop(run.run_id, None)
+                    if lease is not None:
+                        lease.cancel()
+                    # The old broker must stop owning its in-memory worker
+                    # even though this queued run remains durable. A worker
+                    # may already have passed lease admission and be about to
+                    # observe that the broker is closed in _start_turn().
+                    event = self._completion_events.pop(run.run_id, None)
+                    if event is not None:
+                        event.set()
+                    continue
                 if run.generation is not None:
                     generations.add(run.generation)
                 try:
@@ -1744,6 +2042,8 @@ class RuntimeBroker:
         except (RuntimeLeaseCancelledError, RuntimeLeaseTimeoutError):
             with self._lock:
                 run = self._state.runs.get(run_id)
+                if self._closed and run is not None and run.status == "queued":
+                    return
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
                     self._terminalize_locked(
                         run, "cancelled", "The queued prompt expired."
@@ -1950,7 +2250,10 @@ class RuntimeBroker:
             self._persist_locked()
             thread = self.storage.get_thread(run.thread_id)
             workspace = self.storage.resolve_workspace_path(run.workspace_path)
-            policy = mode_policy(run.mode, workspace)
+            policy = mode_policy(
+                RunMode.OBSERVE if run.collaboration_mode == "plan" else run.mode,
+                workspace,
+            )
             attachments_by_id = {
                 attachment.attachment_id: attachment
                 for attachment in thread.attachments
@@ -2012,7 +2315,10 @@ class RuntimeBroker:
             "config": thread_config,
         }
         host_lease = None
-        if run.mode is RunMode.HAOS_FULL_ACCESS:
+        if (
+            run.mode is RunMode.HAOS_FULL_ACCESS
+            and run.collaboration_mode != "plan"
+        ):
             if self._host_access is None or getattr(self.app_server, "enable_experimental_api", False) is not True:
                 raise HostAccessError("The runtime cannot provide host access tools.")
             host_lease = self._host_access.authorise(run.run_id, run.host_access_grant)
@@ -2107,18 +2413,34 @@ class RuntimeBroker:
             run.turn_start_dispatched = True
             self._persist_locked()
 
+        turn_params: dict[str, object] = {
+            "threadId": codex_thread_id,
+            "input": inputs,
+            "clientUserMessageId": run.client_request_id,
+            "cwd": str(workspace),
+            "model": run.model,
+            "effort": run.effort,
+            "approvalPolicy": policy.approval_policy,
+            "approvalsReviewer": "user",
+        }
+        # Codex retains turn overrides. Queue admission cannot predict which
+        # policy will precede this dispatch, including after durable recovery.
+        # Apply this run's accepted scope on every turn instead of inheriting
+        # the previous turn's sandbox or a submission-time restoration flag.
+        turn_params["sandboxPolicy"] = policy.sandbox_policy
+        if self.supports_plan_mode:
+            turn_params["collaborationMode"] = {
+                "mode": run.collaboration_mode,
+                "settings": {
+                    "model": run.model,
+                    "reasoning_effort": run.effort,
+                    # Null selects Codex's built-in instructions for this mode.
+                    "developer_instructions": None,
+                },
+            }
         turn_result = self.app_server.request(
             "turn/start",
-            {
-                "threadId": codex_thread_id,
-                "input": inputs,
-                "clientUserMessageId": run.client_request_id,
-                "cwd": str(workspace),
-                "model": run.model,
-                "effort": run.effort,
-                "approvalPolicy": policy.approval_policy,
-                "approvalsReviewer": "user",
-            },
+            turn_params,
             timeout_seconds=turn_request_timeout,
         )
         turn_id, turn_status, turn = validate_turn_result(turn_result)
@@ -2977,7 +3299,10 @@ class RuntimeBroker:
                     Literal["accept", "decline", "cancel", "answer"]
                 ] = ["answer"]
             else:
-                if run.mode in {RunMode.FULL_AUTO, RunMode.HAOS_FULL_ACCESS}:
+                if (
+                    run.collaboration_mode == "plan"
+                    or run.mode in {RunMode.FULL_AUTO, RunMode.HAOS_FULL_ACCESS}
+                ):
                     return _automatic_denial(request.method, params)
                 projected = approval_display(
                     request.method,
@@ -3138,7 +3463,9 @@ class RuntimeBroker:
     def cancel_host_runs(self) -> None:
         with self._lock:
             targets = [run.thread_id for run in self._state.runs.values()
-                       if run.mode is RunMode.HAOS_FULL_ACCESS and run.status not in _TERMINAL_RUN_STATES]
+                       if run.mode is RunMode.HAOS_FULL_ACCESS
+                       and run.collaboration_mode != "plan"
+                       and run.status not in _TERMINAL_RUN_STATES]
         for thread_id in targets:
             try:
                 self.cancel_run(thread_id)
@@ -3161,6 +3488,7 @@ class RuntimeBroker:
             if (
                 run is None or authority is None or run.status != "running"
                 or run.mode is not RunMode.HAOS_FULL_ACCESS
+                or run.collaboration_mode == "plan"
                 or authority[0].generation != request.generation
                 or authority[0].codex_thread_id != codex_thread_id
                 or authority[0].turn_id != turn_id
@@ -3227,6 +3555,10 @@ class RuntimeBroker:
                 or authority.turn_id != turn_id
                 or run.status != "running"
                 or run.unattended
+                or (
+                    run.collaboration_mode == "plan"
+                    and tool not in _PLAN_BROWSER_READ_TOOLS
+                )
                 or not self._browser_tools_ready()
             ):
                 return _browser_tool_rejection()
@@ -3425,6 +3757,15 @@ class RuntimeBroker:
         self._expire_all_interactions_locked(reason=reason)
         for run in interrupted:
             was_queued = run.status == "queued"
+            if (
+                was_queued
+                and run.follow_up_mode == "queue"
+                and not run.turn_start_dispatched
+                and run.prompt is not None
+            ):
+                # The broker persists queued prompts before dispatch. They are
+                # safe to resume because Codex has never received their input.
+                continue
             if run.status not in _TERMINAL_RUN_STATES:
                 preceding_events = (
                     (
@@ -3711,6 +4052,7 @@ class RuntimeBroker:
         if record.codex_thread_id != run.codex_thread_id:
             record.context_usage = None
         record.codex_thread_id = run.codex_thread_id
+        record.collaboration_mode = run.collaboration_mode
         record.active_turn_id = (
             run.codex_turn_id if run.status not in _TERMINAL_RUN_STATES else None
         )
@@ -4952,7 +5294,12 @@ def _raw_chunks(value: object, *, max_bytes: int = 64 * 1024) -> tuple[str, ...]
 
 
 def _run_record(run: RuntimeRunState) -> RunRecord:
-    return RunRecord(run_id=run.run_id, thread_id=run.thread_id, status=run.status)
+    return RunRecord(
+        run_id=run.run_id,
+        thread_id=run.thread_id,
+        status=run.status,
+        collaboration_mode=run.collaboration_mode,
+    )
 
 
 def _outcome_record(outcome: RuntimeRequestOutcome) -> RunRecord:
@@ -4960,6 +5307,7 @@ def _outcome_record(outcome: RuntimeRequestOutcome) -> RunRecord:
         run_id=outcome.run_id,
         thread_id=outcome.thread_id,
         status=outcome.run_status,
+        collaboration_mode=outcome.collaboration_mode,
     )
 
 

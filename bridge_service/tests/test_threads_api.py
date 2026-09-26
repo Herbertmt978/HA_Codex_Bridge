@@ -1395,6 +1395,7 @@ def test_thread_listing_update_prompt_replay_and_artifact_download_routes(
         "run_id": "run_fake123",
         "thread_id": thread_id,
         "status": "running",
+        "collaboration_mode": "default",
     }
 
     replay_response = client.get(

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import stat
 from contextlib import ExitStack, closing, contextmanager
@@ -20,6 +21,17 @@ _VALID_SCOPES = frozenset({"auth", "runtime", "thread"})
 _METADATA_RETENTION_BYTES_PER_ROW = 16 * 1024
 _TOMBSTONE_RETENTION_BYTES_PER_ROW = 1024
 _SQLITE_VALUE_BATCH_SIZE = 500
+_TRANSCRIPT_COMPLETE = 1
+_TRANSCRIPT_CREDENTIAL_PATTERN = re.compile(
+    r"(?i)(?:\bsk-[a-z0-9_-]{16,}\b|\bgh[pousr]_[a-z0-9_]{16,}\b|"
+    r"\bgithub_pat_[a-z0-9_]{16,}\b|\bbearer\s+[a-z0-9._~+/-]{24,}|"
+    r"\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|secret)"
+    r"\s*[:=]\s*\S{12,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)"
+)
+
+
+def _indexable_transcript_text(value: object) -> bool:
+    return isinstance(value, str) and not _TRANSCRIPT_CREDENTIAL_PATTERN.search(value)
 
 
 class EventStoreError(RuntimeError):
@@ -36,6 +48,10 @@ class EventPayloadTooLargeError(EventStoreError):
 
 class EventStoreCapacityError(EventStoreError):
     pass
+
+
+class TranscriptCapacityError(EventStoreCapacityError):
+    """The bounded searchable transcript has no room for another message."""
 
 
 class EventStoreAdmissionError(EventStoreCapacityError):
@@ -225,6 +241,8 @@ class BridgeEventStore:
         self.max_events_per_non_thread_scope = max_events_per_non_thread_scope
         self.max_non_thread_event_bytes = max_non_thread_event_bytes
         self.max_journal_bytes = max_journal_bytes
+        self.max_transcript_bytes = max(64 * 1024, max_journal_bytes // 4)
+        self.max_transcript_messages = max(32, max_journal_bytes // 4096)
         self.max_orphaned_metadata_rows = max_orphaned_metadata_rows
         self.max_operation_tombstones = max_operation_tombstones
         self.max_concurrent_waiters = max_concurrent_waiters
@@ -277,6 +295,24 @@ class BridgeEventStore:
                     timestamp TEXT NOT NULL,
                     UNIQUE(scope, scope_id, scope_sequence)
                 );
+
+                CREATE TABLE IF NOT EXISTS transcript_messages (
+                    cursor INTEGER PRIMARY KEY,
+                    thread_id TEXT NOT NULL,
+                    scope_sequence INTEGER NOT NULL,
+                    role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+                    text TEXT NOT NULL,
+                    timestamp TEXT NOT NULL,
+                    UNIQUE(thread_id, scope_sequence)
+                );
+                CREATE TABLE IF NOT EXISTS transcript_state (
+                    singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+                    used_bytes INTEGER NOT NULL DEFAULT 0,
+                    complete INTEGER NOT NULL DEFAULT 1,
+                    migration_done INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX IF NOT EXISTS idx_transcript_thread_sequence
+                    ON transcript_messages(thread_id, scope_sequence);
 
                 CREATE TABLE IF NOT EXISTS operation_ledger (
                     operation_key TEXT PRIMARY KEY,
@@ -355,6 +391,78 @@ class BridgeEventStore:
                 connection.execute(
                     "ALTER TABLE outbox_operations ADD COLUMN "
                     "has_events INTEGER NOT NULL DEFAULT 1"
+                )
+            # Keep only the visible user/assistant transcript outside the
+            # compactable activity journal. This migrates retained older
+            # messages; payloads already removed by an earlier compaction
+            # cannot be reconstructed.
+            connection.execute(
+                "INSERT OR IGNORE INTO transcript_state(singleton) VALUES(1)"
+            )
+            migration_state = connection.execute(
+                "SELECT migration_done FROM transcript_state WHERE singleton = 1"
+            ).fetchone()
+            if migration_state is not None and not migration_state["migration_done"]:
+                used_bytes = 0
+                complete = True
+                if connection.execute(
+                    "SELECT 1 FROM scope_state WHERE scope = 'thread' "
+                    "AND minimum_cursor > 0 LIMIT 1"
+                ).fetchone() is not None:
+                    # Earlier compaction may already have removed messages.
+                    complete = False
+                seen: set[tuple[str, int]] = set()
+                indexed_count = 0
+                retained_messages = connection.execute(
+                    "SELECT cursor, thread_id, scope_sequence, event_type, "
+                    "payload_json, timestamp FROM events WHERE scope = 'thread' "
+                    "AND event_type IN ('message.created', 'message.completed', "
+                    "'message.updated', 'message.removed') "
+                    "AND thread_id IS NOT NULL ORDER BY cursor DESC LIMIT 100001"
+                ).fetchall()
+                if len(retained_messages) > 100_000:
+                    complete = False
+                    retained_messages = retained_messages[:100_000]
+                for message in retained_messages:
+                    try:
+                        payload = json.loads(message["payload_json"])
+                    except (TypeError, json.JSONDecodeError):
+                        continue
+                    if not isinstance(payload, dict):
+                        continue
+                    sequence = payload.get("message_sequence", message["scope_sequence"])
+                    role = payload.get("role")
+                    text = payload.get("text")
+                    key = (message["thread_id"], sequence)
+                    if type(sequence) is not int or sequence < 1 or key in seen:
+                        continue
+                    seen.add(key)
+                    if message["event_type"] == "message.removed":
+                        continue
+                    if role not in {"user", "assistant"} or not _indexable_transcript_text(text):
+                        continue
+                    text_bytes = len(text.encode("utf-8"))
+                    if (
+                        used_bytes + text_bytes > self.max_transcript_bytes
+                        or indexed_count >= self.max_transcript_messages
+                    ):
+                        complete = False
+                        continue
+                    connection.execute(
+                        "INSERT OR IGNORE INTO transcript_messages "
+                        "(cursor, thread_id, scope_sequence, role, text, timestamp) "
+                        "VALUES(?, ?, ?, ?, ?, ?)",
+                        (
+                            message["cursor"], message["thread_id"], sequence,
+                            role, text, message["timestamp"],
+                        ),
+                    )
+                    used_bytes += text_bytes
+                    indexed_count += 1
+                connection.execute(
+                    "UPDATE transcript_state SET used_bytes = ?, complete = ?, "
+                    "migration_done = 1 WHERE singleton = 1",
+                    (used_bytes, int(complete)),
                 )
             connection.execute("BEGIN IMMEDIATE")
             try:
@@ -555,6 +663,16 @@ class BridgeEventStore:
                     actual_timestamp,
                 ),
             )
+            if normalized_scope == "thread" and normalized_thread_id is not None:
+                self._project_transcript_message(
+                    database,
+                    thread_id=normalized_thread_id,
+                    sequence=actual_sequence,
+                    cursor=int(cursor),
+                    timestamp=actual_timestamp,
+                    event_type=event_type,
+                    payload=normalized_payload,
+                )
             database.execute(
                 "UPDATE scope_state SET retained_count = retained_count + 1, "
                 "retained_bytes = retained_bytes + ? "
@@ -1098,6 +1216,183 @@ class BridgeEventStore:
                 return answer if isinstance(answer, str) else None
         return None
 
+    def search_transcript_messages(
+        self,
+        *,
+        query: str,
+        thread_ids: tuple[str, ...],
+        before_cursor: int | None,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        """Search retained visible transcript records in stable newest-first order."""
+        self._require_open()
+        if not thread_ids:
+            return []
+        with closing(self._connect()) as connection:
+            connection.create_function(
+                "unicode_casefold", 1,
+                lambda value: value.casefold() if isinstance(value, str) else "",
+                deterministic=True,
+            )
+            placeholders = ",".join("?" for _ in thread_ids)
+            rows = connection.execute(
+                "SELECT thread_id, scope_sequence, role, text, timestamp "
+                ", cursor "
+                "FROM transcript_messages WHERE thread_id IN ("
+                + placeholders
+                + ") AND instr(unicode_casefold(text), ?) > 0 "
+                + ("AND cursor < ? " if before_cursor is not None else "")
+                + "ORDER BY cursor DESC LIMIT ?",
+                (
+                    (*thread_ids, query.casefold(), before_cursor, limit)
+                    if before_cursor is not None
+                    else (*thread_ids, query.casefold(), limit)
+                ),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def transcript_index_status(self) -> dict[str, Any]:
+        """Return honest coverage metadata for the bounded derived transcript."""
+        self._require_open()
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT complete, migration_done FROM transcript_state "
+                "WHERE singleton = 1"
+            ).fetchone()
+            oldest = connection.execute(
+                "SELECT MIN(cursor) AS cursor FROM transcript_messages"
+            ).fetchone()
+        return {
+            "complete": bool(row["complete"] and row["migration_done"]),
+            "oldest_indexed_cursor": oldest["cursor"],
+            "maximum_text_bytes": self.max_transcript_bytes,
+            "maximum_messages": self.max_transcript_messages,
+        }
+
+    def _project_transcript_message(
+        self,
+        connection: sqlite3.Connection,
+        *,
+        thread_id: str,
+        sequence: int,
+        cursor: int,
+        timestamp: str,
+        event_type: str,
+        payload: Mapping[str, Any],
+    ) -> None:
+        if event_type not in {
+            "message.created", "message.completed", "message.updated", "message.removed"
+        }:
+            return
+        if event_type in {"message.updated", "message.removed"}:
+            target = payload.get("message_sequence")
+            if type(target) is not int or target < 1:
+                return
+            sequence = target
+        if event_type == "message.removed":
+            existing = connection.execute(
+                "SELECT length(CAST(text AS BLOB)) AS bytes FROM transcript_messages "
+                "WHERE thread_id = ? AND scope_sequence = ?",
+                (thread_id, sequence),
+            ).fetchone()
+            if existing is not None:
+                connection.execute(
+                    "DELETE FROM transcript_messages "
+                    "WHERE thread_id = ? AND scope_sequence = ?",
+                    (thread_id, sequence),
+                )
+                connection.execute(
+                    "UPDATE transcript_state SET used_bytes = max(0, used_bytes - ?) "
+                    "WHERE singleton = 1", (int(existing["bytes"]),)
+                )
+            return
+        role = payload.get("role")
+        text = payload.get("text")
+        existing = connection.execute(
+            "SELECT length(CAST(text AS BLOB)) AS bytes FROM transcript_messages "
+            "WHERE thread_id = ? AND scope_sequence = ?",
+            (thread_id, sequence),
+        ).fetchone()
+        prior_bytes = int(existing["bytes"]) if existing is not None else 0
+        state = connection.execute(
+            "SELECT used_bytes, complete FROM transcript_state WHERE singleton = 1"
+        ).fetchone()
+        used = max(0, int(state["used_bytes"]) - prior_bytes)
+        if role not in {"user", "assistant"} or not _indexable_transcript_text(text):
+            connection.execute(
+                "DELETE FROM transcript_messages WHERE thread_id = ? AND scope_sequence = ?",
+                (thread_id, sequence),
+            )
+            connection.execute(
+                "UPDATE transcript_state SET used_bytes = ? WHERE singleton = 1",
+                (used,),
+            )
+            return
+        text_bytes = len(text.encode("utf-8"))
+        complete = bool(state["complete"])
+        if text_bytes > self.max_transcript_bytes:
+            connection.execute(
+                "DELETE FROM transcript_messages WHERE thread_id = ? AND scope_sequence = ?",
+                (thread_id, sequence),
+            )
+            connection.execute(
+                "UPDATE transcript_state SET used_bytes = ?, complete = 0 "
+                "WHERE singleton = 1",
+                (used,),
+            )
+            return
+        # This is a derived search index, not authoritative history. Retain the
+        # newest visible text within its independent quota and mark omissions.
+        row_count = int(connection.execute(
+            "SELECT COUNT(*) FROM transcript_messages"
+        ).fetchone()[0])
+        while (
+            used + text_bytes > self.max_transcript_bytes
+            or row_count + (0 if existing is not None else 1)
+            > self.max_transcript_messages
+        ):
+            oldest = connection.execute(
+                "SELECT thread_id, scope_sequence, length(CAST(text AS BLOB)) AS bytes "
+                "FROM transcript_messages WHERE NOT(thread_id = ? AND scope_sequence = ?) "
+                "ORDER BY cursor ASC LIMIT 1",
+                (thread_id, sequence),
+            ).fetchone()
+            if oldest is None:
+                break
+            connection.execute(
+                "DELETE FROM transcript_messages WHERE thread_id = ? AND scope_sequence = ?",
+                (oldest["thread_id"], oldest["scope_sequence"]),
+            )
+            used = max(0, used - int(oldest["bytes"]))
+            row_count -= 1
+            complete = False
+        connection.execute(
+            "INSERT INTO transcript_messages "
+            "(cursor, thread_id, scope_sequence, role, text, timestamp) "
+            "VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(thread_id, scope_sequence) "
+            "DO UPDATE SET cursor = excluded.cursor, role = excluded.role, "
+            "text = excluded.text, timestamp = excluded.timestamp",
+            (cursor, thread_id, sequence, role, text, timestamp),
+        )
+        connection.execute(
+            "UPDATE transcript_state SET used_bytes = ?, complete = ? "
+            "WHERE singleton = 1",
+            (used + text_bytes, int(complete)),
+        )
+
+    def get_transcript_message(
+        self, thread_id: str, sequence: int
+    ) -> dict[str, Any] | None:
+        """Read one authorised public transcript message by its stable event anchor."""
+        self._require_open()
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT thread_id, scope_sequence, role, text, timestamp "
+                "FROM transcript_messages WHERE thread_id = ? AND scope_sequence = ?",
+                (thread_id, sequence),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
     def purge_thread(self, thread_id: str) -> CompactionResult:
         """Remove one deleted chat's replayable payloads, retaining cursor guidance."""
 
@@ -1122,10 +1417,21 @@ class BridgeEventStore:
             )
             through_cursor = max(current_minimum, int(removed["cursor"]))
             snapshot_cursor = max(current_snapshot, through_cursor)
+            transcript_bytes = connection.execute(
+                "SELECT COALESCE(SUM(length(CAST(text AS BLOB))), 0) AS bytes "
+                "FROM transcript_messages WHERE thread_id = ?", (thread_id,)
+            ).fetchone()["bytes"]
             deleted = connection.execute(
                 "DELETE FROM events WHERE scope = 'thread' AND scope_id = ?",
                 (scope_id,),
             ).rowcount
+            connection.execute(
+                "DELETE FROM transcript_messages WHERE thread_id = ?", (thread_id,)
+            )
+            connection.execute(
+                "UPDATE transcript_state SET used_bytes = max(0, used_bytes - ?) "
+                "WHERE singleton = 1", (int(transcript_bytes),)
+            )
             connection.execute(
                 "INSERT INTO scope_state("
                 "scope, scope_id, next_sequence, minimum_cursor, snapshot_cursor, "
@@ -1555,6 +1861,15 @@ _PUBLIC_EVENT_FIELDS: dict[str, frozenset[str]] = {
     # Keep only routing metadata so private cwd/auth/prompt fields cannot enter
     # either the canonical v1 replay or its list-shaped v0 adapter.
     "codex.event": frozenset({"run_id", "provider_event_type"}),
+    "message.created": frozenset(
+        {"run_id", "role", "text", "client_request_id", "queued"}
+    ),
+    "message.completed": frozenset({"run_id", "role", "text"}),
+    "message.updated": frozenset(
+        {"run_id", "message_sequence", "role", "text"}
+    ),
+    "message.removed": frozenset({"run_id", "message_sequence"}),
+    "run.queue_item_updated": frozenset({"run_id", "prompt", "revision"}),
     "legacy.event": frozenset({"legacy_event_type"}),
 }
 

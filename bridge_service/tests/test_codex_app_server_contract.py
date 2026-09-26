@@ -178,6 +178,7 @@ def test_default_client_rejects_methods_absent_from_locked_schema(tmp_path: Path
     codex_home = tmp_path / "codex-home"
     codex_home.mkdir()
     client = CodexAppServerClient(codex_home=codex_home)
+    assert client.supports_collaboration_mode is False
 
     client.register_notification_handler("account/updated", lambda _message: None)
     client.register_request_handler(
@@ -190,6 +191,19 @@ def test_default_client_rejects_methods_absent_from_locked_schema(tmp_path: Path
         client.register_request_handler("invented/request", lambda _message: {})
     with pytest.raises(AppServerProtocolError):
         client.request("invented/clientMethod")
+
+
+def test_native_plan_capability_requires_experimental_client_and_schema(
+    tmp_path: Path,
+) -> None:
+    codex_home = tmp_path / "codex-home"
+    codex_home.mkdir()
+    client = CodexAppServerClient(
+        codex_home=codex_home,
+        enable_experimental_api=True,
+    )
+
+    assert client.supports_collaboration_mode is True
 
 
 def test_runtime_validator_rejects_invalid_locked_payloads_and_results() -> None:

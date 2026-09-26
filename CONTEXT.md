@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.9.2`, Integration and panel `1.9.2`, Bridge `0.16.1` and
+- This release pairs App `1.10.0`, Integration and panel `1.10.0`, Bridge `0.17.0` and
   Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -96,6 +96,15 @@ to the App or Bridge.
   previous-image rollback require their own target acceptance evidence.
 
 ## Product language
+
+- Capability-gated conversation enhancements are described in
+  [Conversation and Git review enhancements](docs/selected-enhancements.md).
+  Assistant Markdown stays sanitised, transcript search covers retained public
+  messages, and explicit Queue/Steer controls retain durable queued identities.
+  Native Plan uses read-only execution independently of the selected permission
+  mode; implementing a reviewed plan requires a deliberate new default-mode turn.
+  Git review presents authentic bounded scoped patches from confined metadata,
+  with raw-byte semantics and explicit unavailable states.
 
 - Conversation navigation uses a slim rail of content-sized turn markers on
   desktop and touch screens. Scroll position owns the current marker; previews

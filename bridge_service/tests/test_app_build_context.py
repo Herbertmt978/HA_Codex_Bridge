@@ -265,6 +265,12 @@ def test_dockerfile_uses_an_explicit_pinned_home_assistant_base() -> None:
     assert f'io.hass.version="{_canonical_app_version()}"' in text
 
 
+def test_app_image_declares_and_checks_the_git_review_dependency() -> None:
+    text = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert re.search(r"apk add --no-cache[^;\n]*\bgit\b", text)
+    assert "git --version >/dev/null" in text
+
+
 def test_dockerfile_never_copies_from_parent_or_repository_source() -> None:
     dockerfile = APP_ROOT / "Dockerfile"
     assert dockerfile.is_file(), "Task 20 Dockerfile is missing"

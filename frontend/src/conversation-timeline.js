@@ -34,12 +34,25 @@ function snippet(value) {
 }
 
 /** Project retained transcript events into safe, user-visible turn previews. */
+export function projectTranscriptMessages(events = []) {
+  const edits = new Map();
+  const removed = new Set();
+  for (const event of events) {
+    if (event?.event_type === "message.removed" && Number.isSafeInteger(event.payload?.message_sequence)) removed.add(event.payload.message_sequence);
+    if (event?.event_type === "message.updated" && Number.isSafeInteger(event.payload?.message_sequence) && typeof event.payload?.text === "string") {
+      edits.set(event.payload.message_sequence, event.payload.text);
+    }
+  }
+  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence)
+    ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
+}
+
 export function projectConversationTurns(events = []) {
   const turns = [];
   const byRun = new Map();
   let lastUserTurn = null;
 
-  for (const event of Array.isArray(events) ? events : []) {
+  for (const event of projectTranscriptMessages(Array.isArray(events) ? events : [])) {
     const type = event?.event_type;
     if (!Number.isSafeInteger(event?.sequence) || event.sequence <= 0) continue;
 

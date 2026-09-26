@@ -1574,7 +1574,7 @@ test("keeps a populated plugin catalogue stable through frequent HA refreshes", 
   await expect(panel.locator("#prompt-input")).toBeVisible();
 });
 
-test("keeps chat prose plain and completion singular across themes and widths", async ({ page }, testInfo) => {
+test("keeps chat prose readable and completion singular across themes and widths", async ({ page }, testInfo) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
   await page.evaluate(() => {
@@ -1602,7 +1602,7 @@ test("keeps chat prose plain and completion singular across themes and widths", 
       }
       await expect(panel.locator(".message .avatar, .message-head")).toHaveCount(0);
       await expect(panel.getByRole("article", { name: "Your message" })).toHaveText("Say hello");
-      const prose = panel.locator(".message.assistant .bubble-text");
+      const prose = panel.locator(".message.assistant .assistant-markdown-paragraph").first();
       await expect(prose).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       const appearance = await prose.evaluate((node) => {
         const style = getComputedStyle(node);
@@ -3168,7 +3168,7 @@ test("keeps the mobile composer focused and folds diagnostics behind an accessib
   await selectHarnessThread(page);
   const panel = page.locator("codex-bridge-panel");
   const settings = panel.locator("#composer-diagnostics");
-  const summary = settings.locator("summary");
+  const summary = settings.locator(":scope > summary");
   const toolbar = panel.locator("#compact-toolbar");
   const composer = panel.locator(".composer-shell");
 
@@ -4624,5 +4624,68 @@ for (const width of [390, 1280]) {
     await expect(notice).toBeHidden();
     await expect(panel.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
     await expect(panel.locator("#message-list")).toContainText("Say only hello");
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`selected enhancements stay usable and safe at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._config.capabilities = [...(panel._config.capabilities || []), "transcript_search_v1", "git_review_v1", "prompt_queue_v1", "plan_mode_v1"];
+      const original = panel._callWS.bind(panel);
+      panel._enhancementCalls = [];
+      panel._callWS = async (action, payload) => {
+        panel._enhancementCalls.push({ action, payload });
+        if (action === "search_transcript") {
+          if (typeof payload.query !== "string" || "q" in payload) throw new Error("Invalid HA search request");
+          return { results: [{ thread_id: panel._selectedThreadId, title: "Earlier response", sequence: 30000, excerpt: "Phrase only in assistant history" }], has_more: false };
+        }
+        if (action === "get_transcript_message") return { sequence: 30000, role: "assistant", text: "# Found earlier response\n\nPhrase only in assistant history" };
+        if (action === "git_review") return { state_token: "fixture-state", files: [{ path: "src/long-file.js", status: "M", patch: payload.path ? `+${"x".repeat(1200)}\n` : null, patch_truncated: Boolean(payload.path) }], files_truncated: false };
+        if (action === "prompt_queue") return [{ run_id: "queued-fixture", prompt: "Review the tests", revision: 1 }];
+        if (action === "send_prompt") return { run_id: "accepted-fixture", status: "queued" };
+        return original(action, payload);
+      };
+      panel._events = [{ event_type: "message.completed", sequence: 25000, payload: { role: "assistant", text: "# Review summary\n\n- First item\n- Second item\n\n| File | Result |\n| --- | --- |\n| example.js | Ready |\n\n[Unsafe](javascript:alert(1))\n\n<script>window.__enhancementUnsafe=true</script>" } }];
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator(".message.assistant h1")).toHaveText("Review summary");
+    await expect(panel.locator(".message.assistant li")).toHaveCount(2);
+    await expect(panel.locator(".message.assistant table")).toHaveCount(1);
+    await expect(panel.locator('.message.assistant a[href^="javascript:"]')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__enhancementUnsafe)).toBeUndefined();
+    if (width === 390) await panel.locator("#composer-diagnostics > summary").click();
+    await panel.getByRole("button", { name: "Review changes", exact: true }).click();
+    await panel.locator("#git-review summary").click();
+    await panel.getByRole("button", { name: "Load file diff" }).click();
+    await expect(panel.locator("#git-review .git-diff")).toContainText("xxx");
+    await expect(panel.locator("#git-review-results")).toContainText("Diff truncated");
+    expect(await panel.locator(".git-diff").evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      if (panel._bottomPanelOpen) panel._toggleBottomPanel();
+      panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "active-fixture", collaboration_mode: "plan" };
+      panel._refreshActiveThread = async () => true;
+      panel._renderComposerState(panel._activeThread);
+    });
+    await panel.locator("#follow-up-mode").selectOption("queue");
+    await panel.locator("#prompt-input").fill("Follow up after the response");
+    await panel.locator("#send-button").click();
+    const sent = await page.evaluate(() => document.querySelector("codex-bridge-panel")._enhancementCalls.filter((item) => item.action === "send_prompt").at(-1));
+    expect(sent.payload.follow_up_mode).toBe("queue");
+    expect(sent.payload.collaboration_mode).toBe("plan");
+    expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    if (width === 390) await panel.locator("#mobile-nav-toggle").click();
+    await panel.locator("#search-input").fill("assistant history");
+    await expect(panel.locator("#transcript-search-results")).toContainText("Phrase only in assistant history");
+    const searched = await panel.evaluate((node) => node._enhancementCalls.filter((item) => item.action === "search_transcript").at(-1));
+    expect(searched.payload).toEqual({ query: "assistant history", include_archived: false, limit: 50 });
+    await panel.locator('[data-action="open-search-result"]').click();
+    await expect(panel.locator('#message-list [data-sequence="30000"] h1')).toHaveText("Found earlier response");
   });
 }

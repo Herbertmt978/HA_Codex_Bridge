@@ -2,6 +2,25 @@
 
 All notable App changes are recorded here.
 
+## 1.10.0
+
+- Renders assistant Markdown safely, including headings, lists, tables and exact
+  fenced-code copying; user messages remain plain text.
+- Adds administrator-only transcript search, matching excerpts, archived-chat
+  inclusion and retained-message jumps. The bounded index survives activity
+  compaction, reports incomplete coverage and follows queue edits and deletion.
+- Adds explicit Queue/Steer choices, revision-checked queue editing and removal,
+  durable request identity and recovery of safely unclaimed explicit queues.
+- Uses native Plan with read-only execution, blocking clarification and review.
+  Plan cannot grant write, command-expansion or Host Access authority; deliberate
+  implementation restores the saved execution policy, workspace and model.
+- Adds real per-file Git review for unstaged, staged, commit and branch scopes,
+  using confined private metadata, raw bytes and bounded lazy patches. Git is
+  included in the App. Binary, oversized and unsupported states are labelled.
+- Pairs App, Integration and panel `1.10.0` with Bridge `0.17.0` and unchanged
+  Codex `0.157.1`. New controls use negotiated capabilities; existing clients
+  retain omitted-field behaviour and unsupported explicit requests are refused.
+
 ## 1.9.2
 
 - Attaches the existing Assist conversation entity to the Codex Bridge device,

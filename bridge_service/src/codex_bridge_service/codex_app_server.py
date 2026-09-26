@@ -452,6 +452,15 @@ class CodexAppServerClient:
         )
 
     @property
+    def supports_collaboration_mode(self) -> bool:
+        validator = self._protocol_validator
+        return (
+            self.enable_experimental_api is True
+            and validator is not None
+            and validator.supports_collaboration_mode
+        )
+
+    @property
     def ready(self) -> bool:
         return self._ready.is_set()
 

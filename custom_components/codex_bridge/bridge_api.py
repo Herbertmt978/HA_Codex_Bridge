@@ -48,6 +48,14 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(
     sock_connect=BRIDGE_TIMEOUT_CONNECT_SECONDS,
     sock_read=BRIDGE_TIMEOUT_READ_SECONDS,
 )
+# Git review permits a longer response read so the Bridge's bounded 20-second
+# snapshot/diff operation has time to return and clean up before HA times out.
+GIT_REVIEW_REQUEST_TIMEOUT = aiohttp.ClientTimeout(
+    total=BRIDGE_TIMEOUT_TOTAL_SECONDS,
+    connect=BRIDGE_TIMEOUT_POOL_SECONDS,
+    sock_connect=BRIDGE_TIMEOUT_CONNECT_SECONDS,
+    sock_read=25,
+)
 # A cold Codex plugin catalogue can take roughly 36 seconds to produce. The App
 # bounds its own request at 60 seconds, so leave response headroom while keeping
 # this Integration-only policy finite and scoped to catalogue GET requests.
@@ -762,6 +770,66 @@ class BridgeApiClient:
             await self._async_json("GET", f"/threads/{_path_segment(thread_id)}")
         )
 
+    async def async_search_transcript(
+        self,
+        query: str,
+        *,
+        include_archived: bool = False,
+        limit: int = 50,
+        before_cursor: int | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("transcript_search_v1")
+        params_dict: dict[str, str | int] = {
+            "q": query,
+            "include_archived": str(include_archived).lower(),
+            "limit": limit,
+        }
+        if before_cursor is not None:
+            params_dict["before_cursor"] = before_cursor
+        params = urlencode(params_dict)
+        payload = await self._async_json("GET", f"/search/transcript?{params}")
+        if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
+            raise BridgeApiEndpointError("transcript_search_payload_invalid")
+        return payload
+
+    async def async_get_transcript_message(
+        self, thread_id: str, sequence: int
+    ) -> dict[str, Any]:
+        self.require_capability("transcript_search_v1")
+        return await self._async_json(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/transcript/{sequence}",
+        )
+
+    async def async_git_review(
+        self,
+        thread_id: str,
+        *,
+        scope: str,
+        base_ref: str | None = None,
+        commit_ref: str | None = None,
+        path: str | None = None,
+        expected_state_token: str | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("git_review_v1")
+        params: dict[str, str] = {"scope": scope}
+        for key, value in (
+            ("base_ref", base_ref),
+            ("commit_ref", commit_ref),
+            ("path", path),
+            ("expected_state_token", expected_state_token),
+        ):
+            if value is not None:
+                params[key] = value
+        payload = await self._async_json(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/git-review?{urlencode(params)}",
+            request_timeout=GIT_REVIEW_REQUEST_TIMEOUT,
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
+            raise BridgeApiEndpointError("git_review_payload_invalid")
+        return payload
+
     async def async_create_thread(
         self,
         title: str,
@@ -885,17 +953,68 @@ class BridgeApiClient:
         *,
         client_request_id: str | None = None,
         web_search: str | None = None,
+        follow_up_mode: str | None = None,
+        collaboration_mode: str | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"prompt": prompt}
         if client_request_id is not None:
             payload["client_request_id"] = _client_request_id(client_request_id)
         if web_search is not None and "web_search_v1" in self._capabilities:
             payload["web_search"] = _web_search_mode(web_search)
+        if follow_up_mode is not None:
+            if follow_up_mode not in {"queue", "steer"}:
+                raise BridgeApiError("bad_request")
+            self.require_capability("prompt_queue_v1")
+            payload["follow_up_mode"] = follow_up_mode
+        if collaboration_mode is not None:
+            if collaboration_mode not in {"default", "plan"}:
+                raise BridgeApiError("bad_request")
+            self.require_capability("plan_mode_v1")
+            payload["collaboration_mode"] = collaboration_mode
         return await self._async_json(
             "POST",
             f"/threads/{_path_segment(thread_id)}/prompts",
             json_body=payload,
             expected_status={202},
+        )
+
+    async def async_get_prompt_queue(self, thread_id: str) -> list[dict[str, Any]]:
+        self.require_capability("prompt_queue_v1")
+        payload = await self._async_json(
+            "GET", f"/threads/{_path_segment(thread_id)}/queue"
+        )
+        if not isinstance(payload, list) or len(payload) > 256:
+            raise BridgeApiError("bridge_problem")
+        if any(not isinstance(item, dict) for item in payload):
+            raise BridgeApiError("bridge_problem")
+        return payload
+
+    async def async_update_queued_prompt(
+        self,
+        thread_id: str,
+        run_id: str,
+        prompt: str,
+        expected_revision: int,
+    ) -> dict[str, Any]:
+        self.require_capability("prompt_queue_v1")
+        return await self._async_json(
+            "PATCH",
+            f"/threads/{_path_segment(thread_id)}/queue/{_path_segment(run_id)}",
+            json_body={
+                "prompt": prompt,
+                "expected_revision": expected_revision,
+            },
+        )
+
+    async def async_cancel_queued_prompt(
+        self,
+        thread_id: str,
+        run_id: str,
+    ) -> dict[str, Any]:
+        self.require_capability("prompt_queue_v1")
+        return await self._async_json(
+            "DELETE",
+            f"/threads/{_path_segment(thread_id)}/queue/{_path_segment(run_id)}",
         )
 
     async def async_cancel_run(self, thread_id: str) -> dict[str, Any]:

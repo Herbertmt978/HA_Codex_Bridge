@@ -289,6 +289,36 @@ class AppServerProtocolValidator:
         except SchemaError:
             raise ProtocolContractError("runtime protocol schema is invalid") from None
 
+    @property
+    def supports_collaboration_mode(self) -> bool:
+        """Whether the locked v2 turn request has the experimental native mode field."""
+        params = self._v2_definitions.get("TurnStartParams")
+        mode = self._v2_definitions.get("ModeKind")
+        collaboration = self._v2_definitions.get("CollaborationMode")
+        settings = self._v2_definitions.get("Settings")
+        if not all(isinstance(value, dict) for value in (params, mode, collaboration, settings)):
+            return False
+        field = params.get("properties", {}).get("collaborationMode")
+        if not isinstance(field, dict):
+            return False
+        references = {
+            option.get("$ref")
+            for option in field.get("anyOf", [])
+            if isinstance(option, dict)
+        }
+        if "#/definitions/CollaborationMode" not in references:
+            return False
+        if set(mode.get("enum", ())) != {"plan", "default"}:
+            return False
+        if not {"mode", "settings"}.issubset(collaboration.get("required", ())):
+            return False
+        setting_properties = settings.get("properties", {})
+        return (
+            "model" in setting_properties
+            and "developer_instructions" in setting_properties
+            and "reasoning_effort" in setting_properties
+        )
+
     def validate_client_request(self, message: object) -> None:
         self._validate_method_message(self._client_requests, message)
 

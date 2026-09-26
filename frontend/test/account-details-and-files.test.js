@@ -128,10 +128,12 @@ describe("account details and file messages", () => {
     const path = "/config/workspaces/example/hello.docx";
     const message = { event_type: "message.completed", sequence: 2,
       payload: { text: `[Download the Word document](<${path}>).` } };
-    expect(element._renderEvent(message)?.textContent).toContain("[Download the Word document]");
+    const unindexed = element._renderEvent(message);
+    expect(unindexed?.textContent).toContain("Download the Word document");
+    expect(unindexed?.querySelector("a")).toBeNull();
     element._artifacts = [{ artifact_id: "document", filename: "hello.docx" }];
     expect(element._renderEvent(message)).toBeNull();
     expect(element._renderEvent({ ...message, payload: { text: `See [Download the Word document](<${path}>).` } })?.textContent)
-      .toContain("See [Download");
+      .toContain("See Download");
   });
 });

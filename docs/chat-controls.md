@@ -1,9 +1,16 @@
 # Chat controls
 
-The composer shows **Stop** while Codex is working. Start typing to change the
-main button to **Steer**; a separate Stop button remains available beside it.
+The composer shows **Stop** while Codex is working. With the negotiated prompt
+queue capability, choose **Queue after response** or **Steer active response** in
+Chat settings and limits before sending a follow-up. Queued messages are visible,
+editable and removable until claimed. Older Apps retain their existing **Steer**
+behaviour. A separate Stop button remains available beside a drafted follow-up.
 Stopping does not discard your draft. Enter sends your draft, while Shift+Enter
 adds a new line. Pressing Enter in an empty composer does not stop the run.
+
+Native **Plan** collaboration and **Review changes** are separate from permission
+mode. Their capabilities and limits, along with message search and rich responses,
+are described in [Conversation and Git review enhancements](selected-enhancements.md).
 
 **Add** beside the composer opens file and folder uploads. When the connected
 App supports them, it also offers **Schedule this message** and **Plugins**.

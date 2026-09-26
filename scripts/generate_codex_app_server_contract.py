@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -43,6 +44,7 @@ def main() -> int:
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--codex-home")
     parser.add_argument("--schema-dir", type=Path)
+    parser.add_argument("--experimental-schema-dir", type=Path)
     parser.add_argument("--codex-version")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(
@@ -61,13 +63,14 @@ def main() -> int:
 
     try:
         if args.schema_dir is not None:
-            contract = extract_protocol_contract(
-                args.schema_dir.resolve(),
-                codex_version=args.codex_version,
-            )
-            stable_schema, v2_schema = extract_runtime_schema_documents(
-                args.schema_dir.resolve()
-            )
+            with tempfile.TemporaryDirectory(prefix="codex-plan-schema-") as raw:
+                schema_root = Path(raw) / "schema"
+                extract_runtime_schema_documents(args.schema_dir.resolve())
+                shutil.copytree(args.schema_dir.resolve(), schema_root, symlinks=True)
+                if args.experimental_schema_dir is not None:
+                    _project_plan_schema(schema_root, args.experimental_schema_dir.resolve())
+                contract = extract_protocol_contract(schema_root, codex_version=args.codex_version)
+                stable_schema, v2_schema = extract_runtime_schema_documents(schema_root)
         else:
             codex_command = _resolve_command(args.codex_command)
             codex_home = resolve_codex_home(args.codex_home, codex_command)
@@ -92,6 +95,19 @@ def main() -> int:
                 )
                 if completed.returncode != 0:
                     raise ProtocolContractError("Codex schema generation failed")
+                experimental_root = schema_root.parent / (schema_root.name + "-experimental")
+                try:
+                    completed = subprocess.run(
+                        [*codex_command_prefix(codex_command), "app-server", "generate-json-schema", "--experimental", "--out", str(experimental_root)],
+                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL, env=environment, check=False, timeout=60,
+                    )
+                    if completed.returncode != 0:
+                        raise ProtocolContractError("Codex experimental schema generation failed")
+                    _project_plan_schema(schema_root, experimental_root)
+                finally:
+                    if experimental_root.is_dir():
+                        shutil.rmtree(experimental_root)
                 contract = extract_protocol_contract(
                     schema_root,
                     codex_version=version,
@@ -124,6 +140,35 @@ def main() -> int:
         return 0
     except (ProtocolContractError, OSError, subprocess.TimeoutExpired) as error:
         return _fail(str(error))
+
+
+def _project_plan_schema(stable_root: Path, experimental_root: Path) -> None:
+    """Include only the verified native turn/start planning field.
+
+    Keep all stable method envelopes and unrelated experimental fields unchanged.
+    The native initialise handshake already opts into experimentalApi.
+    """
+    extract_runtime_schema_documents(experimental_root)
+    for filename, definition in (
+        ("codex_app_server_protocol.schemas.json", "v2/TurnStartParams"),
+        ("codex_app_server_protocol.v2.schemas.json", "TurnStartParams"),
+    ):
+        stable_path = stable_root / filename
+        stable = json.loads(stable_path.read_text(encoding="utf-8"))
+        experimental = json.loads((experimental_root / filename).read_text(encoding="utf-8"))
+        stable_definitions = stable["definitions"].get("v2", stable["definitions"])
+        experimental_definitions = experimental["definitions"].get("v2", experimental["definitions"])
+        name = definition.rsplit("/", 1)[-1]
+        field = experimental_definitions[name]["properties"].get("collaborationMode")
+        if not isinstance(field, dict):
+            raise ProtocolContractError("native collaboration mode schema is unavailable")
+        # Dependencies already exist in the stable schema. Reject changed dependencies
+        # rather than importing a broader experimental contract accidentally.
+        for dependency in ("CollaborationMode", "ModeKind", "Settings", "ReasoningEffort"):
+            if stable_definitions.get(dependency) != experimental_definitions.get(dependency):
+                raise ProtocolContractError("native collaboration schema dependencies changed")
+        stable_definitions[name]["properties"]["collaborationMode"] = field
+        stable_path.write_text(json.dumps(stable, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def _read_codex_version(command: str, environment: dict[str, str]) -> str:

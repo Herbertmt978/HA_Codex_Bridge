@@ -1,0 +1,4 @@
+{
+  "initial": {"query": "newer", "include_archived": true, "limit": 50},
+  "pagination": {"query": "needle", "include_archived": false, "limit": 50, "before_cursor": 700}
+}
