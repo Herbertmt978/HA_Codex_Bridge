@@ -4465,12 +4465,13 @@ for (const width of [390, 1440]) {
   });
 }
 
-test("corrupt image containers show a retry state rather than a broken image", async ({ page }) => {
+test("corrupt image containers show a retry state and download unchanged original bytes", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`); await prepareStaticHarnessThread(page);
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel"); panel._stopPolling();
     const bytes = new Uint8Array(32); bytes.set([137, 80, 78, 71, 13, 10, 26, 10]); bytes.set([73, 72, 68, 82], 12);
     const view = new DataView(bytes.buffer); view.setUint32(16, 2); view.setUint32(20, 3);
+    window.__corruptImageBytes = [...bytes];
     const original = window.fetch;
     window.fetch = async (url, init) => String(url).endsWith("/attachments/att_corrupt") ? new Response(bytes) : original(url, init);
     panel._inlineImages().fetchImpl = window.fetch;
@@ -4484,4 +4485,17 @@ test("corrupt image containers show a retry state rather than a broken image", a
   const card = page.locator("codex-bridge-panel .uploaded-image-message .inline-image-card");
   await card.scrollIntoViewIfNeeded(); await expect(card.locator(".inline-image-status")).toContainText("Preview unavailable");
   await expect(card.locator("img")).toHaveCount(0);
+  await card.click({ button: "right" });
+  const menu = page.locator("codex-bridge-panel").getByRole("menu", { name: "Image actions" });
+  const downloadReady = page.waitForEvent("download");
+  await menu.getByRole("menuitem", { name: "Download image", exact: true }).click();
+  const download = await downloadReady;
+  expect(download.suggestedFilename()).toBe("corrupt.png");
+  expect([...await readFile(await download.path())]).toEqual(await page.evaluate(() => window.__corruptImageBytes));
+  await expect(card.locator("img")).toHaveCount(0);
+  await expect(card.locator(".inline-image-status")).toHaveText("Download started.");
+  await page.evaluate(() => { document.querySelector("codex-bridge-panel")._inlineImages().fetchImpl = async () => new Response(null, { status: 503 }); });
+  await card.click({ button: "right" });
+  await menu.getByRole("menuitem", { name: "Download image", exact: true }).click();
+  await expect(card.locator(".inline-image-status")).toContainText("could not be downloaded");
 });
