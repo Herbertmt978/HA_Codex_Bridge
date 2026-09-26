@@ -8,6 +8,8 @@ root-created boot proof are both required before a worker can be returned.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -25,6 +27,7 @@ ATTESTATION_PATH = Path("/run/codex-bridge/stdio-worker-attestation.json")
 SANDBOX_HELPER = Path("/usr/local/libexec/codex-bridge/stdio_sandbox.py")
 PYTHON = "/usr/local/bin/python3.14"
 PACKAGE_ROOT = Path("/opt/codex-stdio/packages")
+ADMISSION_HELPER = Path("/usr/local/libexec/codex-bridge/worker_admission.py")
 PROTOCOL = "stdio-worker-v2"
 MAX_PROOF_BYTES = 8192
 STARTUP_SECONDS = 12
@@ -85,16 +88,35 @@ def _close_pidfd(descriptor: int) -> None:
     os.close(descriptor)
 
 
-def _acquire_lease() -> int:
-    from worker_admission import acquire_worker_lease
+@lru_cache(maxsize=1)
+def _admission_module() -> object:
+    """Load the fixed sibling without depending on the caller's import path."""
+    parent = ADMISSION_HELPER.parent.lstat()
+    metadata = ADMISSION_HELPER.lstat()
+    if (
+        not stat.S_ISDIR(parent.st_mode)
+        or parent.st_uid != 0
+        or parent.st_mode & 0o022
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_uid != 0
+        or metadata.st_mode & 0o022
+    ):
+        raise WorkerUnavailable("stdio worker admission helper is unavailable")
+    spec = importlib.util.spec_from_file_location("codex_bridge_worker_admission", ADMISSION_HELPER)
+    if spec is None or spec.loader is None:
+        raise WorkerUnavailable("stdio worker admission helper is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
-    return acquire_worker_lease()
+
+def _acquire_lease() -> int:
+    return _admission_module().acquire_worker_lease()
 
 
 def _release_lease(descriptor: int) -> None:
-    from worker_admission import release_worker_lease
-
-    release_worker_lease(descriptor)
+    _admission_module().release_worker_lease(descriptor)
 
 
 @dataclass

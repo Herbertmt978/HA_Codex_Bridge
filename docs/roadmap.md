@@ -21,13 +21,13 @@ MCP-01 introduces the reviewed, opt-in local relay exception. MCP-02 extends tha
 relay with write-only credentials under its own revised security contract.
 It requires App and Integration 1.3.0; the 1.2.0 configuration flow is unchanged.
 MCP-03 uses a separate accepted worker and transport design. Its first package
-is bundled in the 1.8.1 source and remains opt-in.
+is bundled in the 1.8.2 source and remains opt-in.
 
 | Plan | Outcome | Dependencies | Issue |
 | --- | --- | --- | --- |
 | [MCP-01: Local MCP connections](planned-releases/mcp-01-local-connections.md) | Implemented for 1.2.0: connect to HA-MCP and other servers on the LAN or HA App network. | Explicit network permission and destination controls | [#97](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/97) |
 | [MCP-02: Token and API-key authentication](planned-releases/mcp-02-authentication.md) | Implemented for 1.3.0: connect servers that require a bearer token or authentication header. | Private credential storage; MCP-01 for local endpoints | [#98](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/98) |
-| [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Included in 1.8.1 source: run the verified Bridge Time package with bounded access. | Accepted worker isolation and private adapter | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
+| [MCP-03: Isolated stdio servers](planned-releases/mcp-03-stdio.md) | Included in 1.8.2 source: run the verified Bridge Time package with bounded access. | Accepted worker isolation and private adapter | [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99) |
 | [MCP-04: Interactive MCP requests](planned-releases/mcp-04-interactive-requests.md) | Included in 1.6.4 source: answer supported MCP forms and authorisation requests in an active chat. | Turn-bound interaction lifecycle | [#100](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/100) |
 | [MCP-05: Connection management](planned-releases/mcp-05-management.md) | Implemented for 1.4.0: edit, pause, resume and diagnose a server without deleting it. | Runtime reload and compatibility negotiation | [#101](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/101) |
 | [MCP-06: Tool permissions](planned-releases/mcp-06-tool-permissions.md) | Released in 1.6.4; native allow/block, restart and changed-catalogue checks passed on DEV. | MCP-05; runtime tool filtering | [#102](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/102) |

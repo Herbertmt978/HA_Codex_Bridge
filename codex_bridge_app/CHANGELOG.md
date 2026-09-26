@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.8.2
+
+- Fixes isolated stdio worker startup when the Bridge loads its fixed launcher
+  as a module. The worker-admission helper is now loaded from its verified,
+  root-owned path, so approved packages can be discovered and called.
+- Pairs App, Integration and panel `1.8.2` with Bridge `0.14.2` and the
+  unchanged verified Codex runtime `0.157.0`.
+
 ## 1.8.1
 
 - Fixes readiness validation when isolated stdio MCP is enabled. The Bridge now
