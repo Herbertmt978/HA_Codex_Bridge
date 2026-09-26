@@ -810,6 +810,7 @@ def create_app(
                 "task_actions_v1",
                 "assist_conversation_v1",
                 "automation_proposals_v1",
+                "automation_text_edits_v1",
                 "reset_credits_v1",
                 "skills_v1",
                 "plugins_v1",

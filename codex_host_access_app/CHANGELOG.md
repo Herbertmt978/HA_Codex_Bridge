@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.6
+
+- Keeps the optional Host Access App aligned with Codex Bridge `1.8.6`.
+  Its separate host-access grants and permissions are unchanged.
+
 ## 1.8.5
 
 - Keeps the optional Host Access App version aligned with Codex Bridge `1.8.5`.

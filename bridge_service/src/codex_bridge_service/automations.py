@@ -310,6 +310,10 @@ class AutomationStore:
                 created_at=record["created_at"],
                 enabled=record["enabled"],
             )
+            if "schedule" not in changes:
+                # Text and settings edits must leave the pending occurrence
+                # available for HA to claim, including an overdue occurrence.
+                normalized["next_run_at"] = record["next_run_at"]
             normalized["notifications_revision"] = (
                 record["notifications_revision"]
                 if normalized["notifications"] == record["notifications"]

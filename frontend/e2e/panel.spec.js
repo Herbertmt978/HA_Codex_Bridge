@@ -386,6 +386,42 @@ test("scheduled runtime selections and grouped skills remain readable", async ({
 
 test.describe("schedule run outcomes", () => {
   test.use({ timezoneId: "America/Los_Angeles" });
+  for (const width of [390, 900, 1200, 1440]) {
+    test(`keeps a completed status word intact at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+      await selectHarnessThread(page);
+      await page.evaluate(async () => {
+        const panel = document.querySelector("codex-bridge-panel");
+        panel.hass = { ...panel.hass, config: { time_zone: "Europe/London" } };
+        await panel._selectDesktopDestination("scheduled");
+        panel._desktopFeatures.scheduled.data.runs = [{
+          status: "completed",
+          due_at: "2026-09-26T05:31:00Z",
+          started_at: "2026-09-26T05:31:01Z",
+          completed_at: "2026-09-26T05:31:30Z",
+        }];
+        panel._render(true);
+      });
+      const panel = page.locator("codex-bridge-panel");
+      const table = panel.locator(".schedule-run-history");
+      const status = table.locator('td[data-label="Status"]');
+      await expect(status).toHaveText("Completed");
+      const lines = await status.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return range.getClientRects().length;
+      });
+      expect(lines).toBe(1);
+      const bounds = await table.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return { right: box.right, width: element.scrollWidth, client: element.clientWidth };
+      });
+      expect(bounds.right).toBeLessThanOrEqual(width);
+      expect(bounds.width).toBeLessThanOrEqual(bounds.client + 1);
+      await panel.locator("#desktop-feature-surface").screenshot({ path: test.info().outputPath(`completed-status-${width}.png`) });
+    });
+  }
   for (const [name, timezone] of [["missing", undefined], ["empty", ""], ["configured UTC", "UTC"]]) {
     test(`the actual panel distinguishes ${name} HA time zone from fallback`, async ({ page }) => {
       await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
@@ -448,6 +484,62 @@ test.describe("schedule run outcomes", () => {
     });
   }
 });
+
+for (const width of [390, 1440]) {
+  test(`reviews a described change to only the selected task at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1100 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    await page.evaluate(async () => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_proposals_v1", "automation_text_edits_v1"] };
+      const definition = {
+        prompt: "Original instructions", target: { kind: "standalone", project_id: "prj_vba" },
+        schedule: { kind: "interval", seconds: 300, anchor_at: "2026-01-01T00:00:37Z" },
+        mode: "observe", model: "saved-model", thinking: "high",
+        notifications: { policy: "off", mobile_targets: [] },
+      };
+      await panel._callWS("create_automation", { ...definition, name: "Selected task" });
+      await panel._callWS("create_automation", { ...definition, name: "Another task" });
+      panel._selectDesktopDestination("scheduled");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    const selected = panel.getByRole("row").filter({ hasText: "Selected task" });
+    await selected.getByRole("button", { name: "Describe change", exact: true }).click();
+    const form = panel.locator('[data-desktop-form="automation-edit-description"]');
+    const request = form.getByRole("textbox", { name: "Change request", exact: true });
+    await expect(request).toBeFocused();
+    await request.fill("Rename to Morning heating check");
+    const stable = await page.evaluate(async () => {
+      const panel = document.querySelector("codex-bridge-panel");
+      const field = panel.shadowRoot.querySelector('[name="edit_description"]');
+      panel.hass = { ...panel.hass, states: { ...panel.hass.states } };
+      panel._renderDesktopSurface();
+      await new Promise(requestAnimationFrame);
+      return panel.shadowRoot.querySelector('[name="edit_description"]') === field;
+    });
+    expect(stable).toBe(true);
+    await form.getByRole("button", { name: "Review changes", exact: true }).click();
+    await expect(form.getByRole("heading", { name: "Describe a change", exact: true })).toBeFocused();
+    await expect(form.getByText("Current", { exact: true })).toBeVisible();
+    await expect(form.getByText("Proposed", { exact: true })).toBeVisible();
+    await expect(form.getByText("Morning heating check", { exact: true })).toBeVisible();
+    expect(await websocketCalls(page, "codex_bridge/update_automation")).toHaveLength(0);
+    const bounds = await form.evaluate(element => ({ width: element.scrollWidth, client: element.clientWidth, right: element.getBoundingClientRect().right }));
+    expect(bounds.width).toBeLessThanOrEqual(bounds.client + 1);
+    expect(bounds.right).toBeLessThanOrEqual(width);
+    await form.screenshot({ path: test.info().outputPath(`described-schedule-edit-${width}.png`) });
+    const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
+    expect(accessibility.violations).toEqual([]);
+    await form.getByRole("button", { name: "Save changes", exact: true }).press("Enter");
+    await expect(form).toHaveCount(0);
+    await expect(panel.getByRole("cell", { name: /Morning heating check/u })).toBeVisible();
+    await expect(panel.getByRole("cell", { name: /Another task/u })).toBeVisible();
+    const calls = await websocketCalls(page, "codex_bridge/update_automation");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].payload).toEqual({ type: "codex_bridge/update_automation", automation_id: "automation_1", expected_revision: 1, name: "Morning heating check" });
+  });
+}
 
 test("creates and edits a scheduled task using the reference form", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1100 });

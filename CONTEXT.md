@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.8.5`, Integration and panel `1.8.5`, Bridge `0.14.3` and
+- This release pairs App `1.8.6`, Integration and panel `1.8.6`, Bridge `0.14.4` and
   Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -43,8 +43,10 @@ to the App or Bridge.
   once/interval/RRULE API. Revisions and target IDs are internal details.
 - Scheduled run history shows readable outcomes and fixed explanations in HA's
   configured time zone, with a labelled UTC fallback when it is unavailable.
-  This presentation change preserves scheduler behaviour; conversational edits,
-  pause and cancellation remain part of the open TASK-01 roadmap.
+  Selected-task title and instruction descriptions require a current/proposed
+  review and revision-bound partial update. Unrelated edits preserve pending
+  occurrences. Conversational timing edits, pause and cancellation remain open
+  in TASK-01.
 - Home Assistant owns automation timing. The Bridge owns durable definitions,
   claims, run history, admission and unattended execution. Preserve exact saved
   timing when editing unrelated fields. Do not add a browser-owned timer.

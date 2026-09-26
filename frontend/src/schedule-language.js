@@ -3,6 +3,7 @@ import { buildSchedule, scheduleFormValues, scheduleInstantCandidates } from "./
 const DAYS = { monday: "MO", tuesday: "TU", wednesday: "WE", thursday: "TH", friday: "FR", saturday: "SA", sunday: "SU" };
 const MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
 const TIME = "(?<hour>\\d{1,2})(?::(?<minute>[0-5]\\d))?\\s*(?<meridiem>am|pm)?";
+const MAX_AUTOMATION_TITLE_LENGTH = 160;
 
 function localDate(now, timezone) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
@@ -90,4 +91,36 @@ export function proposeScheduleDescription(description, { timezone = "UTC", now 
   try { buildSchedule(values, { timezone, now }); }
   catch (error) { throw new Error(error.message, { cause: error }); }
   return values;
+}
+
+/** Parse one explicit title or instruction edit without consulting saved task content. */
+export function proposeAutomationEditDescription(description) {
+  const input = String(description ?? "");
+  if (input.length > 4000) {
+    throw new Error("Keep the change request to 4,000 characters or fewer.");
+  }
+
+  const patterns = [
+    ["name", /^(?:please\s+)?rename(?:\s+this task)?\s+to\s*([\s\S]*)$/iu],
+    ["name", /^(?:please\s+)?set\s+(?:the\s+)?title\s+to\s*([\s\S]*)$/iu],
+    ["prompt", /^(?:please\s+)?set\s+(?:the\s+)?instructions\s+to\s*([\s\S]*)$/iu],
+    ["prompt", /^(?:please\s+)?change\s+(?:the\s+)?instructions\s+to\s*([\s\S]*)$/iu],
+  ];
+  const request = input.trim();
+  for (const [field, pattern] of patterns) {
+    const match = pattern.exec(request);
+    if (!match) continue;
+    const value = match[1].trim();
+    if (!value) {
+      throw new Error(field === "name"
+        ? "Add the new title after ‘to’."
+        : "Add the new instructions after ‘to’.");
+    }
+    if (field === "name" && value.length > MAX_AUTOMATION_TITLE_LENGTH) {
+      throw new Error("Keep the title to 160 characters or fewer.");
+    }
+    return field === "name" ? { name: value } : { prompt: value };
+  }
+
+  throw new Error("Describe one change: ‘Rename this task to …’ or ‘Set the instructions to …’. You can change the title or instructions only.");
 }

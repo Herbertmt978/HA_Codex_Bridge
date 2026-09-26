@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { proposeScheduleDescription } from "../src/schedule-language.js";
+import { proposeAutomationEditDescription, proposeScheduleDescription } from "../src/schedule-language.js";
 import { buildAutomationPayload } from "../src/scheduled-tasks.js";
 
 const now = Date.parse("2026-09-19T12:00:00Z");
@@ -43,5 +43,45 @@ describe("conversational schedule proposal", () => {
     ["Tomorrow at 9 am, ", /what Codex should do/],
   ])("asks for clarification rather than creating %s", (description, message) => {
     expect(() => proposeScheduleDescription(description, { ...options, now: Date.parse("2026-01-01T00:00:00Z") })).toThrow(message);
+  });
+});
+
+describe("conversational automation edit proposal", () => {
+  it.each([
+    ["Rename this task to Morning report", { name: "Morning report" }],
+    ["please rename to Morning report", { name: "Morning report" }],
+    ["Set the title to Weekly check", { name: "Weekly check" }],
+    ["Please set title to Weekly check", { name: "Weekly check" }],
+    ["Set instructions to Check the new files", { prompt: "Check the new files" }],
+    ["please change the instructions to Review the latest report", { prompt: "Review the latest report" }],
+  ])("parses %s into exactly the requested field", (description, expected) => {
+    expect(proposeAutomationEditDescription(description)).toEqual(expected);
+  });
+
+  it("preserves multiline instruction text apart from surrounding whitespace", () => {
+    expect(proposeAutomationEditDescription("Set instructions to  Summarise the report.\nThen list actions.  "))
+      .toEqual({ prompt: "Summarise the report.\nThen list actions." });
+  });
+
+  it("returns hostile instruction content as inert prompt data only", () => {
+    const result = proposeAutomationEditDescription("Set instructions to <script>alert('x')</script>");
+    expect(result).toEqual({ prompt: "<script>alert('x')</script>" });
+    expect(Object.keys(result)).toEqual(["prompt"]);
+  });
+
+  it.each([
+    ["", /Rename this task/],
+    ["Pause this task", /Rename this task/],
+    ["Rename this task to", /new title/],
+    ["Set the instructions to   ", /new instructions/],
+    [`Set the title to ${"a".repeat(161)}`, /160 characters/],
+    [`Set the instructions to ${"a".repeat(4000)}`, /4,000 characters/],
+  ])("rejects ambiguous, unsupported or invalid request %s", (description, message) => {
+    expect(() => proposeAutomationEditDescription(description)).toThrow(message);
+  });
+
+  it("accepts a title at the Bridge's 160-character limit", () => {
+    expect(proposeAutomationEditDescription(`Set the title to ${"a".repeat(160)}`))
+      .toEqual({ name: "a".repeat(160) });
   });
 });
