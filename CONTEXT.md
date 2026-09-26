@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.8.10`, Integration and panel `1.8.10`, Bridge `0.15.0` and
+- This release pairs App `1.8.11`, Integration and panel `1.8.11`, Bridge `0.15.0` and
   Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
@@ -122,6 +122,11 @@ to the App or Bridge.
   managed minimal-read profile, disabled network, runtime/config lease and quota
   reservation. No host-access grant broadens this terminal. Output stays out of
   durable chat history; an idle lease and process deadline clean up disconnections.
+- Assist-managed conversations are grouped under **HA Assistant Chats** in the
+  sidebar. This is a presentation group; workspace and project membership remain
+  unchanged, and ordinary chat submission stays blocked by the Assist policy.
+  Assist-only project controls also live in this group, with archived project
+  restore/delete controls inside its Archived disclosure.
 - Share currently copies an authenticated Home Assistant chat link. Public
   snapshots remain planned and need a separate publication/privacy design.
 

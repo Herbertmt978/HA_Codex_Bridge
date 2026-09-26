@@ -819,10 +819,10 @@ test("centres feature loading and blends nested project actions into the selecte
   await more.click();
   const menu = panel.locator("#project-secondary-actions-prj_vba");
   await expect(menu).toBeVisible();
-  expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await expect(menu).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await panel.screenshot({ path: testInfo.outputPath("project-actions-light.png") });
   await panel.evaluate((element) => element.setAttribute("data-panel-theme", "dark"));
-  expect(await menu.evaluate((element) => getComputedStyle(element).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+  await expect(menu).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await panel.screenshot({ path: testInfo.outputPath("project-actions-dark.png") });
 });
 
@@ -3970,6 +3970,257 @@ test("sidebar menu labels follow refreshed triggers and every close path", async
   await expect(header).toHaveAccessibleName("Chat actions");
   await expect(header).toHaveAttribute("aria-expanded", "false");
 });
+
+for (const width of [390, 1440]) {
+  test(`HA Assistant Chats stay separate with working search, archives and menus at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 390 ? 900 : 1200 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const panel = page.locator("codex-bridge-panel");
+    await panel.evaluate((element) => {
+      element._stopPolling();
+      element._config = { ...element._config, capabilities: [...(element._config.capabilities || []), "chat_operations_v1"] };
+      for (const [id, patch] of [
+        ["thr_direct", { schedule_eligible: false, pinned: true, unread: true, title: "Assist direct conversation" }],
+        ["thr_vba_1", { schedule_eligible: false, section_id: "assistant_section", title: "Assist mixed conversation" }],
+        ["thr_ytdlp", { schedule_eligible: false, title: "Assist project conversation" }],
+      ]) window.__codexHarness.updateThread(id, patch);
+      const original = element._callWS.bind(element);
+      const sections = [{ section_id: "assistant_section", name: "Assist custom section", revision: 1 }];
+      const records = new Map(element._threads.map((item) => [item.thread_id, { ...item, navigation_revision: 1 }]));
+      for (const id of ["thr_direct", "thr_vba_1", "thr_ytdlp"]) records.set(id, { ...records.get(id), ...window.__codexHarness.updateThread(id, {}), navigation_revision: 1 });
+      window.__assistantMenuCalls = [];
+      element._callWS = async (operation, payload = {}) => {
+        window.__assistantMenuCalls.push({ operation, payload: structuredClone(payload) });
+        if (operation === "list_chat_sections") return { sections: structuredClone(sections) };
+        if (operation === "list_threads") return structuredClone([...records.values()]);
+        if (operation === "get_thread") return structuredClone(records.get(payload.thread_id));
+        if (["update_thread", "archive_thread", "restore_thread"].includes(operation)) {
+          const record = records.get(payload.thread_id);
+          if (operation === "update_thread") Object.assign(record, payload, { navigation_revision: record.navigation_revision + 1 });
+          else record.archived_at = operation === "archive_thread" ? "2026-09-26T12:00:00Z" : null;
+          return structuredClone(record);
+        }
+        return original(operation, payload);
+      };
+      element._threads = structuredClone([...records.values()]);
+      element._activeThread = records.get("thr_vba_1");
+      element._chatContextMenu.sections = sections;
+      element._chatContextMenu.sectionsAttempted = true;
+      element._chatContextMenu.sectionsLoaded = true;
+      element._renderedNavigationKey = null;
+      element._render();
+    });
+    if (width < 880) await panel.locator("#mobile-nav-toggle").click();
+    const group = panel.locator("#assistant-section");
+    await expect(group.locator(".section-name").first()).toHaveText("HA Assistant Chats");
+    await expect(group.locator(".section-count").first()).toHaveText("3");
+    await expect(group.locator(".chat-row")).toHaveCount(3);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    await expect(panel.locator('#project-section [data-chat-thread-id="thr_vba_2"]')).toHaveCount(1);
+    await panel.locator('#project-section [data-action="select-project"][data-project-id="prj_vba"]').click();
+    await expect.poll(() => panel.evaluate((element) => element._selectedThreadId)).toBe("thr_vba_2");
+    if (width < 880) await panel.locator("#mobile-nav-toggle").click();
+    await expect(panel.locator("#chat-navigation-sections .chat-row")).toHaveCount(0);
+    for (const id of ["thr_direct", "thr_vba_1", "thr_ytdlp"]) await expect(panel.locator(`[data-chat-thread-id="${id}"]`)).toHaveCount(1);
+    expect(await group.locator(".section-name").first().evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`ha-assistant-group-${width}.png`) });
+
+    const toggle = group.locator('[data-section="assistant"]');
+    await toggle.focus();
+    await page.keyboard.press("Enter");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(group.locator("#assistant-chat-list")).toBeHidden();
+    await panel.locator("#search-input").fill("Assist project conversation");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(group.locator(".chat-row")).toHaveCount(1);
+    await expect(panel.locator("#rail-search-empty")).toBeHidden();
+    await panel.locator("#search-input").fill("missing conversation");
+    await expect(group.locator(".chat-row")).toHaveCount(0);
+    await expect(panel.locator("#rail-search-empty")).toBeVisible();
+    await panel.locator("#search-input").fill("");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await toggle.click();
+    const source = group.locator('[data-chat-thread-id="thr_direct"]');
+    await source.click({ button: "right" });
+    const menu = panel.locator("#chat-context-menu");
+    await expect(menu).toBeVisible();
+    await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.sectionsLoaded)).toBe(true);
+    expect(await panel.evaluate((element) => element._selectedThreadId)).toBe("thr_vba_2");
+    await expect(source.locator(".thread-actions-toggle")).toHaveAttribute("aria-label", "Hide actions for Assist direct conversation");
+    const menuControl = source.locator(".thread-actions-toggle");
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+    await menuControl.click();
+    await expect(menu).toBeVisible();
+    await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.trigger === element.shadowRoot.querySelector('[data-chat-thread-id="thr_direct"] .thread-actions-toggle'))).toBe(true);
+    if (width === 390) { await menuControl.focus(); await page.keyboard.press("Enter"); }
+    else await menuControl.click();
+    await expect(menu).toBeHidden();
+    await expect(menuControl).toHaveAttribute("aria-expanded", "false");
+    await menuControl.click();
+    await menu.locator('[data-chat-action="pin"]').click();
+    await expect(menu).toBeHidden();
+    await expect(group.locator(".chat-row")).toHaveCount(3);
+    await expect(panel.locator("#chat-navigation-sections .chat-row")).toHaveCount(0);
+
+    await menuControl.click();
+    await menu.locator('[data-chat-action="archive"]').click();
+    const archived = group.locator("#assistant-archived-chat-list");
+    await expect(archived).toBeHidden();
+    await expect(panel.locator('#archived-section [data-chat-thread-id="thr_direct"]')).toHaveCount(0);
+    await group.locator('[data-section="assistantArchived"]').click();
+    await expect(archived.locator('[data-chat-thread-id="thr_direct"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`ha-assistant-archive-${width}.png`) });
+    await panel.locator("#search-input").fill("Assist direct conversation");
+    await expect(archived.locator(".chat-row")).toHaveCount(1);
+    await expect(panel.locator("#rail-search-empty")).toBeHidden();
+    await archived.locator(".thread-actions-toggle").click();
+    await menu.locator('[data-chat-action="archive"]').click();
+    await expect(archived).toHaveCount(0);
+    await panel.locator("#search-input").fill("");
+    await expect(group.locator(".chat-row")).toHaveCount(3);
+    const calls = await page.evaluate(() => window.__assistantMenuCalls);
+    expect(calls.filter((call) => call.operation === "archive_thread")).toHaveLength(1);
+    expect(calls.filter((call) => call.operation === "restore_thread")).toHaveLength(1);
+    expect(calls.find((call) => call.operation === "update_thread")?.payload).toMatchObject({ thread_id: "thr_direct", pinned: false, navigation_revision: 1 });
+    expect(calls.some((call) => call.operation === "move_thread_project" || call.operation === "fork_thread")).toBe(false);
+  });
+}
+
+for (const width of [390, 1440]) {
+  test(`Assist-only projects retain their canonical active and archived controls at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    const panel = page.locator("codex-bridge-panel");
+    await expect.poll(() => panel.evaluate((element) => Boolean(element._config) && !element._isLoading)).toBe(true);
+    await selectHarnessThread(page);
+    await panel.evaluate((element) => {
+      element._stopPolling();
+      window.__codexHarness.updateThread("thr_ytdlp", { schedule_eligible: false, title: "Managed Assist conversation", status: "idle", active_run_id: null });
+      const records = new Map(element._threads.map((item) => [item.thread_id, { ...item }]));
+      records.set("thr_ytdlp", window.__codexHarness.updateThread("thr_ytdlp", {}));
+      const projects = new Map(element._projects.map((item) => [item.project_id, { ...item }]));
+      const original = element._callWS.bind(element);
+      window.__assistantProjectCalls = [];
+      element._callWS = async (operation, payload = {}) => {
+        window.__assistantProjectCalls.push({ operation, payload: structuredClone(payload) });
+        if (operation === "list_threads") return structuredClone([...records.values()]);
+        if (operation === "list_projects") return structuredClone([...projects.values()]);
+        if (operation === "get_thread") return structuredClone(records.get(payload.thread_id));
+        if (operation === "create_thread") { const created = await original(operation, payload); records.set(created.thread_id, created); return created; }
+        if (operation === "delete_thread") { records.delete(payload.thread_id); return original(operation, payload); }
+        if (["update_project", "archive_project", "restore_project"].includes(operation)) {
+          const record = projects.get(payload.project_id);
+          if (operation === "update_project") Object.assign(record, payload);
+          else record.archived_at = operation === "archive_project" ? "2026-09-26T12:00:00Z" : null;
+          return structuredClone(record);
+        }
+        if (operation === "delete_project") {
+          projects.delete(payload.project_id);
+          for (const [id, thread] of records) if (thread.project_id === payload.project_id) records.delete(id);
+          return {};
+        }
+        return original(operation, payload);
+      };
+      element._threads = structuredClone([...records.values()]);
+      element._renderedNavigationKey = null;
+      element._render();
+    });
+    const openDrawer = async () => {
+      if (width < 880 && await panel.locator("#mobile-nav-toggle").getAttribute("aria-expanded") !== "true") await panel.locator("#mobile-nav-toggle").click();
+    };
+    await openDrawer();
+    const group = panel.locator("#assistant-section");
+    const shell = group.locator(".project-shell");
+    const header = shell.locator('[data-action="select-project"]');
+    const actions = shell.locator(".project-secondary-actions");
+    const more = shell.locator('[data-action="toggle-project-actions"]');
+    await expect(shell).toHaveCount(1);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    await header.click();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Managed Assist conversation");
+    await expect(panel.locator("#prompt-input")).toBeDisabled();
+    await openDrawer();
+    const collapse = shell.locator('[data-action="toggle-project-collapse"]');
+    await collapse.click();
+    await expect(collapse).toHaveAttribute("aria-expanded", "false");
+    await expect(shell.locator(".chat-list")).toBeHidden();
+    await panel.locator("#search-input").fill("Youtube DL");
+    await expect(collapse).toHaveAttribute("aria-expanded", "true");
+    await expect(shell.locator('[data-chat-thread-id="thr_ytdlp"]')).toBeVisible();
+    await header.click();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Managed Assist conversation");
+    await openDrawer();
+    await panel.locator("#search-input").fill("");
+    await collapse.click();
+    await more.click();
+    await expect(actions.locator('[data-action="new-chat"]')).toBeVisible();
+    await expect(actions.locator('[data-action="edit-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="archive-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="delete-project"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`assistant-project-controls-${width}.png`) });
+    await actions.locator('[data-action="edit-project"]').click();
+    await panel.locator("#project-name-input").fill("Assistant workspace renamed");
+    await panel.locator('[data-action="save-project"]').click();
+    await expect(header).toContainText("Assistant workspace renamed");
+    await more.click();
+    await actions.locator('[data-action="new-chat"]').click();
+    await expect(panel.locator("#thread-form-panel")).toContainText("Assistant workspace renamed");
+    await panel.locator("#thread-title-input").fill("Ordinary chat in the same workspace");
+    await panel.locator('#thread-form-panel [data-action="save-thread"]').click();
+    await expect(panel.locator("#thread-title-label")).toHaveText("Ordinary chat in the same workspace");
+    await expect(group.locator(".project-shell")).toHaveCount(0);
+    await expect(group.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(1);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"][data-action="select-project"]')).toHaveCount(1);
+    if (width < 880) await panel.locator("#mobile-drawer-scrim").click({ position: { x: 380, y: 5 } });
+    await panel.locator("#chat-menu-button").click();
+    await panel.locator('#chat-context-menu [data-chat-action="delete"]').click();
+    await panel.locator("#confirm-delete-button").click();
+    await openDrawer();
+    await expect(shell).toHaveCount(1);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    await more.click();
+    await actions.locator('[data-action="archive-project"]').click();
+    const archived = group.locator("#assistant-archived-chat-list");
+    await expect(archived).toBeHidden();
+    await group.locator('[data-section="assistantArchived"]').click();
+    await expect(archived.locator(".project-shell")).toHaveCount(1);
+    await expect(archived.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(1);
+    await more.click();
+    await expect(actions.locator('[data-action="restore-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="delete-project"]')).toBeVisible();
+    await expect(actions.locator('[data-action="new-chat"]')).toHaveCount(0);
+    await expect(actions.locator('[data-action="edit-project"]')).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath(`assistant-archived-project-controls-${width}.png`) });
+    await actions.locator('[data-action="restore-project"]').click();
+    await expect(archived).toHaveCount(0);
+    await expect(shell.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(1);
+    await openDrawer();
+    await more.click();
+    await actions.locator('[data-action="archive-project"]').click();
+    await more.click();
+    await actions.locator('[data-action="delete-project"]').click();
+    await expect(panel.locator("#confirmation-dialog")).toBeVisible();
+    let calls = await page.evaluate(() => window.__assistantProjectCalls);
+    expect(calls.some((call) => call.operation === "delete_project")).toBe(false);
+    await panel.locator("#cancel-delete-button").click();
+    if (await more.getAttribute("aria-expanded") !== "true") await more.click();
+    await actions.locator('[data-action="delete-project"]').click();
+    await panel.locator("#confirm-delete-button").click();
+    await expect(group.locator('[data-chat-thread-id="thr_ytdlp"]')).toHaveCount(0);
+    await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
+    const ids = await panel.evaluate((element) => [...element.shadowRoot.querySelectorAll("[id]")].map((node) => node.id));
+    expect(new Set(ids).size).toBe(ids.length);
+    calls = await page.evaluate(() => window.__assistantProjectCalls);
+    expect(calls.filter((call) => call.operation === "archive_project")).toHaveLength(2);
+    expect(calls.filter((call) => call.operation === "restore_project")).toHaveLength(1);
+    expect(calls.filter((call) => call.operation === "delete_project")).toHaveLength(1);
+    expect(calls.find((call) => call.operation === "create_thread")?.payload.project_id).toBe("prj_ytdlp");
+    expect(calls.find((call) => call.operation === "update_project")?.payload).toMatchObject({ project_id: "prj_ytdlp", name: "Assistant workspace renamed", root_path: "projects/media-tools" });
+  });
+}
 
 test("expanded conversation navigation stays below alerts in a short chat pane", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1000, height: 734 });

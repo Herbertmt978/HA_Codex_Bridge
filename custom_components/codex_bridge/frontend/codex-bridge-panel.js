@@ -35675,7 +35675,7 @@ var ChatContextMenu = class {
     }
   }
   isGrouped(thread) {
-    return this.supported && !thread.archived_at && (thread.pinned || thread.section_id && this.sections.some((section2) => section2.section_id === thread.section_id));
+    return this.supported && !this.panel._isAssistantThread(thread) && !thread.archived_at && (thread.pinned || thread.section_id && this.sections.some((section2) => section2.section_id === thread.section_id));
   }
   renderNavigation() {
     let container = this.panel.shadowRoot.getElementById("chat-navigation-sections");
@@ -35691,7 +35691,7 @@ var ChatContextMenu = class {
     });
     const groups = [{ section_id: "pinned", name: "Pinned", pinned: true }, ...this.sections];
     for (const group of groups) {
-      const threads = this.panel._threads.filter((thread) => this.panel._threadIsPrimaryActive(thread) && this.panel._threadMatchesQuery(thread) && (group.pinned ? thread.pinned : !thread.pinned && thread.section_id === group.section_id));
+      const threads = this.panel._threads.filter((thread) => !this.panel._isAssistantThread(thread) && this.panel._threadIsPrimaryActive(thread) && this.panel._threadMatchesQuery(thread) && (group.pinned ? thread.pinned : !thread.pinned && thread.section_id === group.section_id));
       if (!threads.length && (group.pinned || this.panel._searchQuery.trim())) continue;
       const details = document.createElement("details");
       details.className = "chat-navigation-group";
@@ -35715,7 +35715,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.10";
+var PANEL_VERSION = "1.8.11";
 var ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -41458,6 +41458,7 @@ template.innerHTML = `
       <div class="section-scroll">
         <div class="rail-sections">
           <section class="rail-section" id="direct-section"></section>
+          <section class="rail-section" id="assistant-section"></section>
           <section class="rail-section flat" id="project-section"></section>
           <section class="rail-section" id="archived-section"></section>
           <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
@@ -41847,6 +41848,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._expandedProjectActions = {};
     this._collapsedSections = {
       direct: false,
+      assistant: false,
+      assistantArchived: true,
       archived: true
     };
     this._mobileDrawer = null;
@@ -42429,7 +42432,8 @@ var CodexBridgePanel = class extends HTMLElement {
         break;
       case "select-project":
         this._closeMobileDrawer({ restoreFocus: false });
-        this._selectProject(actionTarget.dataset.projectId || null);
+        if (actionTarget.dataset.assistantProject === "true") this._selectProject(actionTarget.dataset.projectId || null, { assistant: true });
+        else this._selectProject(actionTarget.dataset.projectId || null);
         break;
       case "edit-project":
         this._openProjectFormForEdit(actionTarget.dataset.projectId || "");
@@ -45345,8 +45349,10 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderedNavigationKey = key;
     this._chatContextMenu.renderNavigation();
     this._renderDirectSection();
+    this._renderAssistantSection();
     this._renderProjectList();
     this._renderArchivedSection();
+    if (!this._chatContextMenu.menu.hidden) this._chatContextMenu.syncTrigger();
   }
   _refreshNavigationTimes() {
     const threads = new Map(this._threads.map((thread) => [String(thread.thread_id), thread]));
@@ -45401,9 +45407,69 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     section2.append(chatList);
   }
+  _renderAssistantSection() {
+    const section2 = this.shadowRoot.getElementById("assistant-section");
+    const threads = this._assistantThreads();
+    section2.replaceChildren();
+    if (!threads.length) return;
+    const searchActive = Boolean(this._searchQuery.trim());
+    const collapsed = Boolean(this._collapsedSections.assistant) && !searchActive;
+    const head = document.createElement("div");
+    head.className = `section-head${collapsed ? " compact" : ""}`;
+    const toggle = this._actionButton("section-head-button", "toggle-section", `${collapsed ? "Expand" : "Collapse"} HA Assistant Chats`);
+    toggle.dataset.section = "assistant";
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.setAttribute("aria-controls", "assistant-chat-list");
+    const title = this._sectionTitleLine(collapsed ? icons.chevronRight : icons.chevronDown, icons.folder, "HA Assistant Chats");
+    title.append(this._textElement("span", "section-count", ` ${threads.length} `));
+    toggle.append(title);
+    head.append(toggle);
+    section2.append(head);
+    const list = document.createElement("div");
+    list.id = "assistant-chat-list";
+    list.className = "chat-list direct-chat-list";
+    list.hidden = collapsed;
+    const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
+    const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
+    for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
+    for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
+    const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
+    if (archived.length) {
+      const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
+      const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
+      archiveToggle.dataset.section = "assistantArchived";
+      archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
+      archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
+      const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
+      archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
+      archiveToggle.append(archiveTitle);
+      list.append(archiveToggle);
+      const archiveList = document.createElement("div");
+      archiveList.id = "assistant-archived-chat-list";
+      archiveList.className = "chat-list";
+      archiveList.hidden = archiveCollapsed;
+      const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
+      const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
+      for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
+      const restoredProjectActions = /* @__PURE__ */ new Set();
+      for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
+        archiveList.append(this._threadRow(thread, { archived: true }));
+        const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
+        if (project && !restoredProjectActions.has(project.project_id)) {
+          restoredProjectActions.add(project.project_id);
+          const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
+          restore.dataset.projectId = String(project.project_id);
+          this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
+          archiveList.append(restore);
+        }
+      }
+      list.append(archiveList);
+    }
+    section2.append(list);
+  }
   _renderProjectList() {
     const section2 = this.shadowRoot.getElementById("project-section");
-    const projects = this._projects.filter((project) => project.kind !== "direct" && !project.archived_at);
+    const projects = this._projects.filter((project) => project.kind !== "direct" && !project.archived_at && !this._projectHasOnlyAssistantChats(project));
     const visibleProjects = projects.filter((project) => this._projectIsVisible(project));
     section2.replaceChildren();
     const sectionHead = document.createElement("div");
@@ -45433,8 +45499,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     section2.append(projectList);
   }
-  _projectSection(project, { archived = false, includeArchivedThreads = false } = {}) {
-    const threads = this._projectThreads(project.project_id, includeArchivedThreads);
+  _projectSection(project, { archived = false, includeArchivedThreads = false, assistant = false } = {}) {
+    const threads = assistant ? this._assistantThreads().filter((thread) => thread.project_id === project.project_id && (includeArchivedThreads || !thread.archived_at)) : this._projectThreads(project.project_id, includeArchivedThreads);
     const searchActive = Boolean(this._searchQuery.trim());
     const collapsed = Boolean(this._collapsedProjects[project.project_id]) && !searchActive;
     const active = this._selectedProjectId === project.project_id || this._activeThread?.project_id === project.project_id;
@@ -45459,6 +45525,7 @@ var CodexBridgePanel = class extends HTMLElement {
       `Select ${project.name || "project"}, ${chatCount}`
     );
     projectButton.dataset.projectId = String(project.project_id || "");
+    if (assistant) projectButton.dataset.assistantProject = "true";
     this._setTooltipTarget(projectButton, `${project.name || "Untitled project"} · ${chatCount}`);
     const titleLine = document.createElement("span");
     titleLine.className = "section-title-line";
@@ -45510,10 +45577,10 @@ var CodexBridgePanel = class extends HTMLElement {
     chatList.hidden = collapsed;
     if (threads.length) {
       for (const thread of threads) {
-        chatList.append(this._threadRow(thread, { archived: Boolean(thread.archived_at) }));
+        chatList.append(this._threadRow(thread, { archived: Boolean(thread.archived_at) || assistant && archived }));
       }
     } else {
-      chatList.append(this._textElement("div", "empty-note", "No chats yet."));
+      chatList.append(this._textElement("div", "empty-note", assistant ? "No active chats." : "No chats yet."));
     }
     shell.append(chatList);
     return shell;
@@ -45523,7 +45590,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const archivedProjects = this._projects.filter((project) => Boolean(project.archived_at) && this._projectMatchesQuery(project));
     const archivedProjectIds = new Set(archivedProjects.map((project) => project.project_id));
     const archivedThreads = this._threads.filter(
-      (thread) => Boolean(thread.archived_at) && !archivedProjectIds.has(thread.project_id) && this._threadMatchesQuery(thread)
+      (thread) => Boolean(thread.archived_at) && !this._isAssistantThread(thread) && !archivedProjectIds.has(thread.project_id) && this._threadMatchesQuery(thread)
     );
     const searchActive = Boolean(this._searchQuery.trim());
     const collapsed = Boolean(this._collapsedSections.archived) && !searchActive;
@@ -45581,10 +45648,10 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     const archivedProjectIds = new Set(archivedProjects.map((project) => project.project_id));
     const archivedThreads = this._threads.filter(
-      (thread) => Boolean(thread.archived_at) && !archivedProjectIds.has(thread.project_id) && this._threadMatchesQuery(thread)
+      (thread) => Boolean(thread.archived_at) && !this._isAssistantThread(thread) && !archivedProjectIds.has(thread.project_id) && this._threadMatchesQuery(thread)
     );
     const hasMatch = Boolean(
-      this._directThreads(false).length || activeProjects.length || archivedProjects.length || archivedThreads.length
+      this._directThreads(false).length || this._assistantThreads().length || activeProjects.length || archivedProjects.length || archivedThreads.length
     );
     empty.hidden = hasMatch;
     empty.textContent = hasMatch ? "" : `No chats or projects match “${query}”.`;
@@ -48212,11 +48279,11 @@ var CodexBridgePanel = class extends HTMLElement {
       this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
     }
   }
-  _selectProject(projectId) {
+  _selectProject(projectId, { assistant = false } = {}) {
     this._selectedProjectId = projectId;
     const project = this._projects.find((item) => item.project_id === projectId) || null;
-    const visibleThread = this._threads.find(
-      (thread) => thread.project_id === projectId && this._threadMatchesQuery(thread) && (project?.archived_at ? true : !thread.archived_at)
+    const visibleThread = (assistant ? this._assistantThreads() : this._threads).find(
+      (thread) => thread.project_id === projectId && this._isAssistantThread(thread) === assistant && (assistant || this._threadMatchesQuery(thread)) && (project?.archived_at ? true : !thread.archived_at)
     );
     if (visibleThread && visibleThread.thread_id !== this._selectedThreadId) {
       this._selectThread(visibleThread.thread_id);
@@ -50143,14 +50210,30 @@ var CodexBridgePanel = class extends HTMLElement {
     const project = this._projects.find((item) => item.project_id === thread.project_id) || null;
     return !project?.archived_at;
   }
+  _isAssistantThread(thread) {
+    return thread?.schedule_eligible === false;
+  }
+  _assistantThreads() {
+    const query = this._searchQuery.trim().toLowerCase();
+    return this._threads.filter((thread) => {
+      if (!this._isAssistantThread(thread)) return false;
+      if (this._threadMatchesQuery(thread)) return true;
+      const project = this._projects.find((item) => item.project_id === thread.project_id);
+      return Boolean(query && project && `${project.name} ${project.root_path}`.toLowerCase().includes(query));
+    });
+  }
+  _projectHasOnlyAssistantChats(project) {
+    const threads = this._threads.filter((thread) => thread.project_id === project.project_id);
+    return threads.length > 0 && threads.every((thread) => this._isAssistantThread(thread));
+  }
   _directThreads(includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_kind === "direct" && (includeArchived || !thread.archived_at) && (includeArchived || !this._chatContextMenu.isGrouped(thread)) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_kind === "direct" && !this._isAssistantThread(thread) && (includeArchived || !thread.archived_at) && (includeArchived || !this._chatContextMenu.isGrouped(thread)) && this._threadMatchesQuery(thread)
     );
   }
   _projectThreads(projectId, includeArchived) {
     return this._threads.filter(
-      (thread) => thread.project_id === projectId && (includeArchived || !thread.archived_at) && (includeArchived || !this._chatContextMenu.isGrouped(thread)) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_id === projectId && !this._isAssistantThread(thread) && (includeArchived || !thread.archived_at) && (includeArchived || !this._chatContextMenu.isGrouped(thread)) && this._threadMatchesQuery(thread)
     );
   }
   _projectIsVisible(project) {
@@ -50163,6 +50246,7 @@ var CodexBridgePanel = class extends HTMLElement {
     return this._projectMatchesQuery(project);
   }
   _projectMatchesQuery(project) {
+    if (this._projectHasOnlyAssistantChats(project)) return false;
     const query = this._searchQuery.trim().toLowerCase();
     if (!query) {
       return true;
@@ -50173,7 +50257,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const includeArchivedThreads = Boolean(project.archived_at);
     return this._threads.some(
-      (thread) => thread.project_id === project.project_id && (includeArchivedThreads || !thread.archived_at) && this._threadMatchesQuery(thread)
+      (thread) => thread.project_id === project.project_id && !this._isAssistantThread(thread) && (includeArchivedThreads || !thread.archived_at) && this._threadMatchesQuery(thread)
     );
   }
   _clearSelectionForProject(projectId, { preferProjectId = null } = {}) {
