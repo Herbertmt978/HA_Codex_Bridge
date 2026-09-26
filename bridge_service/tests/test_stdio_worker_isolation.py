@@ -29,6 +29,63 @@ def worker_modules(monkeypatch):
     return importlib.import_module("stdio_worker"), importlib.import_module("stdio_sandbox")
 
 
+def test_worker_admission_helper_loads_without_libexec_on_python_path(
+    worker_modules, monkeypatch, tmp_path,
+):
+    worker, _ = worker_modules
+    helper = tmp_path / "worker_admission.py"
+    helper.write_text(
+        "def acquire_worker_lease():\n    return 42\n"
+        "def release_worker_lease(descriptor):\n    assert descriptor == 42\n",
+        encoding="utf-8",
+    )
+    original_lstat = Path.lstat
+
+    def root_owned_lstat(path):
+        details = original_lstat(path)
+        if path in (tmp_path, helper):
+            return SimpleNamespace(
+                st_mode=details.st_mode & ~0o022,
+                st_uid=0,
+                st_nlink=1,
+            )
+        return details
+
+    monkeypatch.setattr(Path, "lstat", root_owned_lstat)
+    monkeypatch.setattr(worker, "ADMISSION_HELPER", helper)
+    monkeypatch.setattr(sys, "path", [path for path in sys.path if path != str(LIBEXEC)])
+    worker._admission_module.cache_clear()
+    try:
+        assert worker._acquire_lease() == 42
+        worker._release_lease(42)
+    finally:
+        worker._admission_module.cache_clear()
+
+
+def test_worker_admission_helper_rejects_writable_file(worker_modules, monkeypatch, tmp_path):
+    worker, _ = worker_modules
+    helper = tmp_path / "worker_admission.py"
+    helper.write_text("raise RuntimeError('untrusted helper ran')\n", encoding="utf-8")
+    original_lstat = Path.lstat
+
+    def unsafe_lstat(path):
+        details = original_lstat(path)
+        if path == tmp_path:
+            return SimpleNamespace(st_mode=0o40755, st_uid=0)
+        if path == helper:
+            return SimpleNamespace(st_mode=0o100666, st_uid=0, st_nlink=1)
+        return details
+
+    monkeypatch.setattr(Path, "lstat", unsafe_lstat)
+    monkeypatch.setattr(worker, "ADMISSION_HELPER", helper)
+    worker._admission_module.cache_clear()
+    try:
+        with pytest.raises(worker.WorkerUnavailable, match="admission helper is unavailable"):
+            worker._admission_module()
+    finally:
+        worker._admission_module.cache_clear()
+
+
 def test_worker_accepts_only_a_verified_fixed_python_module(worker_modules, monkeypatch):
     worker, sandbox = worker_modules
     import codex_bridge_service.stdio_package_catalogue as catalogue

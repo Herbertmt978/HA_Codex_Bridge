@@ -1,7 +1,8 @@
 # MCP-03: Isolated stdio servers
 
-Status: Released in App and Integration 1.8.0, with a readiness correction in
-1.8.1. Native managed acceptance remains a release check.
+Status: Released in App and Integration 1.8.0, with readiness and worker
+startup corrections in 1.8.1 and 1.8.2. Native managed acceptance remains a
+release check.
 
 Tracking issue: [#99](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/99).
 
