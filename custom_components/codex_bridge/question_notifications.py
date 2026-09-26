@@ -727,90 +727,108 @@ class QuestionNotificationCoordinator:
             if not await self._persist():
                 entry["attempted"] = False
                 return
-            if self._closed:
-                return
-            # The pending API and the durable claim both await external work.
-            # Revalidate every authority proof after those waits and immediately
-            # before handing the answer to the broker.
+            dispatch_started = False
             try:
-                latest_response = await self._runtime.client.async_list_pending_interactions(
-                    thread_id=entry["thread_id"]
+                if self._closed:
+                    return
+                # The pending API and durable claim both await external work.
+                # Revalidate after those waits, immediately before dispatch.
+                try:
+                    latest_response = await self._runtime.client.async_list_pending_interactions(
+                        thread_id=entry["thread_id"]
+                    )
+                except Exception:
+                    return
+                if not isinstance(latest_response, Mapping) or not isinstance(latest_response.get("items"), list):
+                    return
+                latest = next(
+                    (
+                        item for item in latest_response["items"]
+                        if isinstance(item, Mapping)
+                        and item.get("interaction_id") == entry["interaction_id"]
+                    ),
+                    None,
                 )
-            except Exception:
-                return
-            if not isinstance(latest_response, Mapping) or not isinstance(latest_response.get("items"), list):
-                return
-            latest = next(
-                (
-                    item for item in latest_response["items"]
-                    if isinstance(item, Mapping)
-                    and item.get("interaction_id") == entry["interaction_id"]
-                ),
-                None,
-            )
-            deadline = _expiry(latest.get("expires_at")) if isinstance(latest, Mapping) else None
-            if (
-                latest is None
-                or not _valid_interaction(latest)
-                or not self._same_question(entry, latest)
-                or deadline is None
-                or deadline <= dt_util.utcnow()
-            ):
-                return
-            settings = getattr(self._runtime, "question_notification_settings", None)
-            mobile_targets = settings.get("mobile_targets", []) if isinstance(settings, Mapping) else None
-            if (
-                not isinstance(settings, Mapping)
-                or settings.get("enabled") is not True
-                or not isinstance(mobile_targets, list)
-                or destination["registration_id"] not in mobile_targets
-                or not self._runtime.supports_capability("interactions_v2")
-                or event.context.user_id != destination.get("user_id")
-                or _expiry(entry["expires_at"]) is None
-                or _expiry(entry["expires_at"]) <= dt_util.utcnow()
-            ):
-                return
-            try:
-                latest_recipients = await async_resolve_question_recipients(
-                    self._hass, [destination["registration_id"]]
+                deadline = _expiry(latest.get("expires_at")) if isinstance(latest, Mapping) else None
+                if (
+                    latest is None
+                    or not _valid_interaction(latest)
+                    or not self._same_question(entry, latest)
+                    or deadline is None
+                    or deadline <= dt_util.utcnow()
+                ):
+                    return
+                settings = getattr(self._runtime, "question_notification_settings", None)
+                mobile_targets = settings.get("mobile_targets", []) if isinstance(settings, Mapping) else None
+                if (
+                    not isinstance(settings, Mapping)
+                    or settings.get("enabled") is not True
+                    or not isinstance(mobile_targets, list)
+                    or destination["registration_id"] not in mobile_targets
+                    or not self._runtime.supports_capability("interactions_v2")
+                    or event.context.user_id != destination.get("user_id")
+                    or _expiry(entry["expires_at"]) is None
+                    or _expiry(entry["expires_at"]) <= dt_util.utcnow()
+                ):
+                    return
+                try:
+                    latest_recipients = await async_resolve_question_recipients(
+                        self._hass, [destination["registration_id"]]
+                    )
+                except Exception:
+                    return
+                latest_recipient = next(
+                    (r for r in latest_recipients if r.registration_id == destination["registration_id"]),
+                    None,
                 )
-            except Exception:
-                return
-            latest_recipient = next(
-                (r for r in latest_recipients if r.registration_id == destination["registration_id"]),
-                None,
-            )
-            final_settings = getattr(self._runtime, "question_notification_settings", None)
-            final_targets = (
-                final_settings.get("mobile_targets", [])
-                if isinstance(final_settings, Mapping)
-                else None
-            )
-            if (
-                latest_recipient is None
-                or not self._recipient_matches(destination, latest_recipient)
-                or latest_recipient.user_id != event.context.user_id
-                or not isinstance(final_settings, Mapping)
-                or final_settings.get("enabled") is not True
-                or not isinstance(final_targets, list)
-                or not self._runtime.supports_capability("interactions_v2")
-                or destination["registration_id"] not in final_targets
-                or deadline <= dt_util.utcnow()
-                or _expiry(entry["expires_at"]) is None
-                or _expiry(entry["expires_at"]) <= dt_util.utcnow()
-            ):
-                return
-            try:
-                await self._runtime.client.async_answer_interaction(
-                    entry["interaction_id"], thread_id=entry["thread_id"], answers=answers,
-                    client_request_id=request_id,
+                final_settings = getattr(self._runtime, "question_notification_settings", None)
+                final_targets = (
+                    final_settings.get("mobile_targets", [])
+                    if isinstance(final_settings, Mapping)
+                    else None
                 )
-            except Exception:
-                _LOGGER.warning("Question reply outcome is being reconciled")
-                return
-            await self._clear_entry(entry)
-            self._entries.pop(entry["interaction_id"], None)
-            await self._persist()
+                if (
+                    latest_recipient is None
+                    or not self._recipient_matches(destination, latest_recipient)
+                    or latest_recipient.user_id != event.context.user_id
+                    or not isinstance(final_settings, Mapping)
+                    or final_settings.get("enabled") is not True
+                    or not isinstance(final_targets, list)
+                    or not self._runtime.supports_capability("interactions_v2")
+                    or destination["registration_id"] not in final_targets
+                    or deadline <= dt_util.utcnow()
+                    or _expiry(entry["expires_at"]) is None
+                    or _expiry(entry["expires_at"]) <= dt_util.utcnow()
+                ):
+                    return
+                dispatch_started = True
+                try:
+                    await self._runtime.client.async_answer_interaction(
+                        entry["interaction_id"], thread_id=entry["thread_id"], answers=answers,
+                        client_request_id=request_id,
+                    )
+                except Exception:
+                    _LOGGER.warning("Question reply outcome is being reconciled")
+                    return
+                await self._clear_entry(entry)
+                self._entries.pop(entry["interaction_id"], None)
+                await self._persist()
+            finally:
+                if not dispatch_started:
+                    await self._release_answer_claim(entry)
+
+    async def _release_answer_claim(self, entry: dict) -> None:
+        """Reopen only a claim for which no answer API attempt began."""
+        entry["attempted"] = False
+        try:
+            persisted = await self._persist()
+        except BaseException:
+            # Keep concurrent events sealed even if cancellation interrupts save.
+            entry["attempted"] = True
+            raise
+        if not persisted:
+            # A failed release must remain sealed in memory.
+            entry["attempted"] = True
 
     @staticmethod
     def _answers(action: Mapping, question: Mapping, data: Mapping) -> list[dict] | None:

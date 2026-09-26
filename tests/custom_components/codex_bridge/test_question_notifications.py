@@ -280,15 +280,77 @@ async def test_unknown_answer_outcome_is_not_replayed_and_resolved_clears_all(mo
     await coordinator.async_start()
     _mobile, tokens = _tokens(services)
     client.async_answer_interaction.side_effect = RuntimeError("unknown")
-    await coordinator._on_action(_event(tokens[0]))
+    await coordinator._on_action(_event(tokens[0], reply_text="Source only"))
     assert client.async_answer_interaction.await_count == 1
-    await coordinator._on_action(_event(tokens[0]))
+    await coordinator._on_action(_event(tokens[0], reply_text="Source only"))
     assert client.async_answer_interaction.await_count == 1
     client.async_answer_interaction.side_effect = None
     client.async_list_pending_interactions.return_value = {"items": []}
     await coordinator.async_refresh()
     assert any(call[:2] == ("persistent_notification", "dismiss") for call in services.calls)
     assert any(call[:2] == ("notify", "mobile_app_phone") and call[2].get("message") == "clear_notification" for call in services.calls)
+    await coordinator.async_close()
+
+
+async def test_pre_dispatch_lookup_failure_releases_claim_for_valid_replay(monkeypatch):
+    store = _Store()
+    coordinator, _runtime, client, services = _fixture(monkeypatch, store=store)
+    await coordinator.async_start()
+    _mobile, tokens = _tokens(services)
+    token = tokens[0]
+    calls = 0
+    pending = {"items": [_interaction()]}
+
+    async def list_pending(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("temporary final-read failure")
+        return pending
+
+    client.async_list_pending_interactions.side_effect = list_pending
+    await coordinator._on_action(_event(token, reply_text="Source only"))
+    assert coordinator._entries["question-1"]["attempted"] is False
+    assert store.value["interactions"][0]["attempted"] is False
+    client.async_answer_interaction.assert_not_awaited()
+    await coordinator._on_action(_event(token, reply_text="Source only"))
+    client.async_answer_interaction.assert_awaited_once()
+    await coordinator.async_close()
+
+
+async def test_failed_pre_dispatch_claim_release_stays_sealed(monkeypatch):
+    store = _Store()
+    coordinator, _runtime, client, services = _fixture(monkeypatch, store=store)
+    await coordinator.async_start()
+    _mobile, tokens = _tokens(services)
+    token = tokens[0]
+    original_save = store.async_save
+    save_calls = 0
+
+    async def fail_release_save(value):
+        nonlocal save_calls
+        save_calls += 1
+        if save_calls == 2:
+            raise RuntimeError("release save failed")
+        await original_save(value)
+
+    store.async_save = fail_release_save
+    calls = 0
+
+    async def list_pending(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("temporary final-read failure")
+        return {"items": [_interaction()]}
+
+    client.async_list_pending_interactions.side_effect = list_pending
+    await coordinator._on_action(_event(token, reply_text="Source only"))
+    assert coordinator._entries["question-1"]["attempted"] is True
+    assert store.value["interactions"][0]["attempted"] is True
+    await coordinator._on_action(_event(token, reply_text="Source only"))
+    client.async_answer_interaction.assert_not_awaited()
+    assert coordinator._entries["question-1"]["attempted"] is True
     await coordinator.async_close()
 
 
