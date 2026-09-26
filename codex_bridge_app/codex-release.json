@@ -2,70 +2,70 @@
   "assets": {
     "aarch64": {
       "bwrap": {
-        "decompressed_sha256": "c6949b5053988498976467bd9972c5d3695ecaac64a5f2de09af20f579fb7e31",
+        "decompressed_sha256": "c547cbdc762a70ed216789ffaa4c6c0e7d2beabe32245a498f8e365a9fc8dab4",
         "decompressed_size": 529168,
         "name": "bwrap-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "656e53acffef0a54be6b93e6c16f891c979dce62b1307212bc14c1d7d5c16546",
+        "sha256": "d267f3bc23e14c612caf38864b05d9c6f94bce4cfea3b71e51017a3bff3bb7ef",
         "sigstore": {
           "format": "cosign-legacy",
-          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
-          "integrated_time": 1790301423,
+          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
+          "integrated_time": 1790381013,
           "issuer": "https://token.actions.githubusercontent.com",
           "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
-          "log_index": 2947899747,
+          "log_index": 2963194689,
           "name": "bwrap-aarch64-unknown-linux-musl.sigstore",
-          "sha256": "cf547a0be82b04b07b181b1c75a03efe48a0fef536958f40b7a8e0a04e214872",
-          "signed_sha256": "c6949b5053988498976467bd9972c5d3695ecaac64a5f2de09af20f579fb7e31",
-          "size": 8565,
-          "transparency_log": "rekor.sigstore.dev",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/bwrap-aarch64-unknown-linux-musl.sigstore"
-        },
-        "size": 254889,
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/bwrap-aarch64-unknown-linux-musl.tar.gz"
-      },
-      "codex": {
-        "decompressed_sha256": "2e43362b5064a4d40e6a8f9fe00d6438c5447c20f41ed1659cc2e71258efd21f",
-        "decompressed_size": 246724968,
-        "name": "codex-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "e6fbe2798e941b833f7e3bc34010f7443240ac4a149ce1876f32cbfa0ba7d25f",
-        "sigstore": {
-          "format": "cosign-legacy",
-          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
-          "integrated_time": 1790301417,
-          "issuer": "https://token.actions.githubusercontent.com",
-          "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
-          "log_index": 2947897369,
-          "name": "codex-aarch64-unknown-linux-musl.sigstore",
-          "sha256": "3d12a3c87819fd633c0516e5fde7f59b26a5f946164d5cae742daeaa9ad39de6",
-          "signed_sha256": "2e43362b5064a4d40e6a8f9fe00d6438c5447c20f41ed1659cc2e71258efd21f",
+          "sha256": "8558538872e43a25db98c4aeb297a9387821e60ae9bbf940db85fc0fba7bdfce",
+          "signed_sha256": "c547cbdc762a70ed216789ffaa4c6c0e7d2beabe32245a498f8e365a9fc8dab4",
           "size": 8585,
           "transparency_log": "rekor.sigstore.dev",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-aarch64-unknown-linux-musl.sigstore"
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/bwrap-aarch64-unknown-linux-musl.sigstore"
         },
-        "size": 100259284,
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-aarch64-unknown-linux-musl.tar.gz"
+        "size": 254885,
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/bwrap-aarch64-unknown-linux-musl.tar.gz"
       },
-      "codex-code-mode-host": {
-        "decompressed_sha256": "26b7859408482fe16000f9fd1161c975ccf21f79a2b4aba786e8dfbed2053309",
-        "decompressed_size": 66855936,
-        "name": "codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
-        "sha256": "3b31358135e16bf8090efcb0404c44807c512a4fd82387de03a52a51ed05c910",
+      "codex": {
+        "decompressed_sha256": "9cbc3cdcc18ca336523ffa7d64207a1ae1f5991f823081d0a37bcb3a748de093",
+        "decompressed_size": 246724968,
+        "name": "codex-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "4c6b1c17c1c5fd0d4fb2951b7481867b95ea732b1feab269c98588b15db16253",
         "sigstore": {
           "format": "cosign-legacy",
-          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
-          "integrated_time": 1790301418,
+          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
+          "integrated_time": 1790381010,
           "issuer": "https://token.actions.githubusercontent.com",
           "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
-          "log_index": 2947897909,
-          "name": "codex-code-mode-host-aarch64-unknown-linux-musl.sigstore",
-          "sha256": "39deb944c9d3b49a28c2323842ce59df2418eda1435833d8ab112bd8f6d3a444",
-          "signed_sha256": "26b7859408482fe16000f9fd1161c975ccf21f79a2b4aba786e8dfbed2053309",
-          "size": 8565,
+          "log_index": 2963193882,
+          "name": "codex-aarch64-unknown-linux-musl.sigstore",
+          "sha256": "481f191be5a479e7a0a0584d1cd6007000884389a69d7f9a3d920fbdba074da3",
+          "signed_sha256": "9cbc3cdcc18ca336523ffa7d64207a1ae1f5991f823081d0a37bcb3a748de093",
+          "size": 8585,
           "transparency_log": "rekor.sigstore.dev",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-code-mode-host-aarch64-unknown-linux-musl.sigstore"
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-aarch64-unknown-linux-musl.sigstore"
         },
-        "size": 25988279,
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz"
+        "size": 100264936,
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-aarch64-unknown-linux-musl.tar.gz"
+      },
+      "codex-code-mode-host": {
+        "decompressed_sha256": "86ad54f94a0473cac795d02bd461904c4d7dad7603c7cfc4f9d6a19c2fd1256d",
+        "decompressed_size": 66855936,
+        "name": "codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "e83742806da98e9a77ad24309ebd1629e8227755a341ad0b428f885c97bb318e",
+        "sigstore": {
+          "format": "cosign-legacy",
+          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
+          "integrated_time": 1790381011,
+          "issuer": "https://token.actions.githubusercontent.com",
+          "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
+          "log_index": 2963194224,
+          "name": "codex-code-mode-host-aarch64-unknown-linux-musl.sigstore",
+          "sha256": "439b0952956f544f1ce69f7656add02d4af7f209fd33ac5ea1ef2015204af88e",
+          "signed_sha256": "86ad54f94a0473cac795d02bd461904c4d7dad7603c7cfc4f9d6a19c2fd1256d",
+          "size": 8585,
+          "transparency_log": "rekor.sigstore.dev",
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-code-mode-host-aarch64-unknown-linux-musl.sigstore"
+        },
+        "size": 25988177,
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz"
       }
     },
     "amd64": {
@@ -73,83 +73,83 @@
         "decompressed_sha256": "77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c",
         "decompressed_size": 529776,
         "name": "bwrap-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "c42034dc39b5ae1807bf81f59d268ac8534e48e23761206ba9e2a39e57daaa1b",
+        "sha256": "c76d3257527319e17dd8a8521d554c48d4b1d3e14b26d4266a6e8ac257cefbaf",
         "sigstore": {
           "format": "cosign-legacy",
-          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
-          "integrated_time": 1790300925,
+          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
+          "integrated_time": 1790380856,
           "issuer": "https://token.actions.githubusercontent.com",
           "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
-          "log_index": 2947716636,
+          "log_index": 2963160927,
           "name": "bwrap-x86_64-unknown-linux-musl.sigstore",
-          "sha256": "a2f7392664ac9d3a3f81b5abc61e7002b797a2253ed3e79cc0cbf87b2d010518",
+          "sha256": "5b5d014b8201924cafc23c1905ed02d9bd13b3b565b05c26a20f445d30955a4c",
           "signed_sha256": "77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c",
           "size": 8585,
           "transparency_log": "rekor.sigstore.dev",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/bwrap-x86_64-unknown-linux-musl.sigstore"
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/bwrap-x86_64-unknown-linux-musl.sigstore"
         },
-        "size": 261563,
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/bwrap-x86_64-unknown-linux-musl.tar.gz"
+        "size": 261562,
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/bwrap-x86_64-unknown-linux-musl.tar.gz"
       },
       "codex": {
-        "decompressed_sha256": "1a822376d4634ac32dddc030e5117c63359f7f8cd4b1b64382c68190287d0258",
+        "decompressed_sha256": "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
         "decompressed_size": 285340072,
         "name": "codex-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "db3fe3adaa35c50edfb68a988a117782fe3492960fb63d7003eb6748ccc0657b",
+        "sha256": "e98c1e8e028e8137fa2d2415c82ec58e7b3701a627e3554aace5b3ca31454af2",
         "sigstore": {
           "format": "cosign-legacy",
-          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
-          "integrated_time": 1790300919,
+          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
+          "integrated_time": 1790380853,
           "issuer": "https://token.actions.githubusercontent.com",
           "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
-          "log_index": 2947714464,
+          "log_index": 2963160537,
           "name": "codex-x86_64-unknown-linux-musl.sigstore",
-          "sha256": "7901d7988c64ba3aa6b7db571f2a9294c0944ce4aba599ed3978bcc48ab88c80",
-          "signed_sha256": "1a822376d4634ac32dddc030e5117c63359f7f8cd4b1b64382c68190287d0258",
+          "sha256": "33bb60d9d9b3e285eacde812c9046aa05400e6d9d027bdbae770bafdafcc2d8b",
+          "signed_sha256": "3e2584f3f3829a43a0495011a1cecb2facbe64a2403e2b682351fd9c2983f970",
           "size": 8585,
           "transparency_log": "rekor.sigstore.dev",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-x86_64-unknown-linux-musl.sigstore"
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-x86_64-unknown-linux-musl.sigstore"
         },
-        "size": 107842066,
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-x86_64-unknown-linux-musl.tar.gz"
+        "size": 107868387,
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-x86_64-unknown-linux-musl.tar.gz"
       },
       "codex-code-mode-host": {
-        "decompressed_sha256": "ae34226adad3fe8acb361a78618e81b5a17638861bb7a689fcccaf8c3ef32aa8",
-        "decompressed_size": 73999248,
+        "decompressed_sha256": "67b86142bac5cead11b8420cf32d3a2bf88c8868d71733f351ed7c5d95a953e0",
+        "decompressed_size": 73962384,
         "name": "codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz",
-        "sha256": "47d32419e895c9cddbb664a2890bfb250ef0e3fded3da70e5f2bc61479f1989c",
+        "sha256": "3516f9b8bbe6bc06ee7bdb92b293a17eab194b3f10b9b9ea10c5b839e972d7fc",
         "sigstore": {
           "format": "cosign-legacy",
-          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
-          "integrated_time": 1790300921,
+          "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
+          "integrated_time": 1790380854,
           "issuer": "https://token.actions.githubusercontent.com",
           "log_id": "c0d23d6ad406973f9559f3ba2d1ca01f84147d8ffc5b8445c224f98b9591801d",
-          "log_index": 2947715117,
+          "log_index": 2963160679,
           "name": "codex-code-mode-host-x86_64-unknown-linux-musl.sigstore",
-          "sha256": "a5f60c0c9c3b0f2a16ba2dd4698a14620a7ba88987ff07776aec37112e8b2b26",
-          "signed_sha256": "ae34226adad3fe8acb361a78618e81b5a17638861bb7a689fcccaf8c3ef32aa8",
-          "size": 8585,
+          "sha256": "6b97d1406872c4d5c17385d1f929e529f3daf720526f56c171087ff57ade0f57",
+          "signed_sha256": "67b86142bac5cead11b8420cf32d3a2bf88c8868d71733f351ed7c5d95a953e0",
+          "size": 8565,
           "transparency_log": "rekor.sigstore.dev",
-          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-code-mode-host-x86_64-unknown-linux-musl.sigstore"
+          "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-code-mode-host-x86_64-unknown-linux-musl.sigstore"
         },
-        "size": 27482110,
-        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.0/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz"
+        "size": 27470020,
+        "url": "https://github.com/openai/codex/releases/download/rust-v0.157.1/codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz"
       }
     }
   },
   "release": {
     "channel": "stable",
-    "commit": "00c972ed5d6ff6499317fd41b7f23605b8e6850d",
-    "id": 396234532,
-    "published_at": "2026-09-25T02:31:06Z",
-    "tag": "rust-v0.157.0",
-    "url": "https://github.com/openai/codex/releases/tag/rust-v0.157.0",
-    "version": "0.157.0"
+    "commit": "36650394c5b38c2990ccf2a3457165ca3e9d9726",
+    "id": 397006677,
+    "published_at": "2026-09-26T01:02:31Z",
+    "tag": "rust-v0.157.1",
+    "url": "https://github.com/openai/codex/releases/tag/rust-v0.157.1",
+    "version": "0.157.1"
   },
   "repository": "openai/codex",
   "schema_version": 1,
   "sigstore": {
-    "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.0",
+    "identity": "https://github.com/openai/codex/.github/workflows/rust-release.yml@refs/tags/rust-v0.157.1",
     "issuer": "https://token.actions.githubusercontent.com",
     "transparency_log": "rekor.sigstore.dev"
   }
