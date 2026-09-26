@@ -35,10 +35,10 @@ import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-st
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
 import { readMcpCredential, clearMcpSecrets, validStdioPackage } from "./mcp-setup.js";
-import { proposeScheduleDescription } from "./schedule-language.js";
+import { proposeAutomationEditDescription, proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 
-const PANEL_VERSION = "1.8.5";
+const PANEL_VERSION = "1.8.6";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -3206,6 +3206,7 @@ template.innerHTML = `
     .schedule-run-history td[data-label="Details"] { color: var(--muted-color); }
     .schedule-run-history td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 56%, var(--text-color) 44%); }
     .schedule-run-history td.is-negative { color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%); }
+    .schedule-edit-value { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
 
     .desktop-table td button {
       margin: 4px 8px 4px 0;
@@ -7592,6 +7593,8 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _clearDesktopFormDraft(state) {
+    if (state.automationEditPending) state.loading = false;
+    state.automationEditPending = null;
     state.formDraft = {};
     state.formError = "";
     state.hostAccessGrant = null;
@@ -7599,6 +7602,8 @@ class CodexBridgePanel extends HTMLElement {
     state.nextRuns = [];
     state.previewGeneration = (state.previewGeneration || 0) + 1;
     state.createRequestId = null;
+    state.automationEditProposal = null;
+    state.automationEditRefreshRequired = false;
   }
 
   _scheduleContext(editing = null) {
@@ -7729,8 +7734,42 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
-    if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (["open-schedule-description", "review-schedule-description", "describe-automation-edit", "refresh-automation-edit", "review-automation-edit", "revise-automation-edit", "save-automation-edit"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    let automationEditOpened = false;
     if (action === "open-schedule-description") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.form = "schedule-description"; }
+    else if (["describe-automation-edit", "refresh-automation-edit"].includes(action)) {
+      if (state.loading) return;
+      const request = {};
+      const generation = state.previewGeneration;
+      const sourceForm = state.form;
+      state.automationEditPending = request;
+      const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && state.form === sourceForm && this._activeDestination === "scheduled";
+      try {
+        state.loading = true; this._renderDesktopSurface();
+        const automation = await this._callWS("get_automation", { automation_id: dataset.id });
+        if (!ownsRequest()) return;
+        if (automation?.automation_id !== dataset.id || !Number.isSafeInteger(automation.revision) || automation.revision < 1) throw new Error("Could not verify this scheduled task. Refresh the task list before trying again.");
+        const description = action === "refresh-automation-edit" && state.editingAutomation?.automation_id === dataset.id ? state.formDraft.edit_description : "";
+        this._clearDesktopFormDraft(state);
+        state.formDraft = { edit_description: description || "" };
+        state.editingAutomation = automation;
+        state.form = "automation-edit-description";
+        automationEditOpened = true;
+      } catch (error) { if (ownsRequest()) state.error = normalizeDesktopError(error); }
+      finally { if (state.automationEditPending === request) { state.automationEditPending = null; state.loading = false; } }
+    }
+    else if (action === "review-automation-edit") {
+      const form = target?.closest("form");
+      if (state.form !== "automation-edit-description" || state.loading || state.automationEditRefreshRequired || !form?.reportValidity()) return;
+      try {
+        const description = form.querySelector('[name="edit_description"]')?.value || "";
+        state.automationEditProposal = proposeAutomationEditDescription(description);
+        state.formDraft = { edit_description: description };
+        state.formError = "";
+      } catch (error) { state.formError = normalizeDesktopError(error); }
+    }
+    else if (action === "revise-automation-edit") { state.automationEditProposal = null; state.formError = ""; }
+    else if (action === "save-automation-edit") await this._saveDescribedAutomationEdit(state);
     else if (action === "review-schedule-description") {
       const form = target?.closest("form");
       if (!form?.reportValidity()) return;
@@ -7970,6 +8009,50 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (action === "open-mcp-form") this.shadowRoot.querySelector('[data-desktop-action="choose-ha-mcp"]')?.focus();
     if (["choose-ha-mcp", "choose-custom-mcp"].includes(action)) this.shadowRoot.querySelector('[data-desktop-field="name"]')?.focus();
+    if (state.form === "automation-edit-description" && this._activeDestination === "scheduled") {
+      if (automationEditOpened || action === "revise-automation-edit" || (action === "review-automation-edit" && !state.automationEditProposal)) this.shadowRoot.querySelector('[name="edit_description"]')?.focus();
+      if (action === "review-automation-edit" && state.automationEditProposal) this.shadowRoot.querySelector('[data-desktop-form="automation-edit-description"] h3')?.focus();
+      if (action === "save-automation-edit" && state.automationEditRefreshRequired) this.shadowRoot.querySelector('[data-desktop-action="refresh-automation-edit"]')?.focus();
+    }
+  }
+
+  async _saveDescribedAutomationEdit(state) {
+    if (state.form !== "automation-edit-description" || state.loading || state.automationEditRefreshRequired) return;
+    const editing = state.editingAutomation;
+    const fields = Object.entries(state.automationEditProposal || {});
+    if (!editing || fields.length !== 1 || !["name", "prompt"].includes(fields[0][0]) || typeof fields[0][1] !== "string") return;
+    const request = {};
+    const generation = state.previewGeneration;
+    state.automationEditPending = request;
+    const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && this._activeDestination === "scheduled" && state.form === "automation-edit-description";
+    try {
+      state.loading = true; state.formError = ""; this._renderDesktopSurface();
+      const current = await this._callWS("get_automation", { automation_id: editing.automation_id });
+      if (!ownsRequest()) return;
+      if (current?.automation_id !== editing.automation_id || current.revision !== editing.revision) throw new Error("This task changed. Refresh task to review your request against its current details.");
+      const [field, value] = fields[0];
+      if (current[field] === value) {
+        this._clearDesktopFormDraft(state); state.form = null; state.editingAutomation = null;
+        state.notice = "This value is already saved."; state.loaded = false;
+        await this._loadDesktopDestination("scheduled", { force: true });
+        return;
+      }
+      // Omitted fields retain their exact saved timing, target and grants.
+      await this._callWS("update_automation", {
+        automation_id: editing.automation_id, expected_revision: editing.revision, [field]: value,
+      });
+      state.loaded = false;
+      if (!ownsRequest()) return;
+      this._clearDesktopFormDraft(state); state.form = null; state.editingAutomation = null;
+      state.notice = "Saved.";
+      await this._loadDesktopDestination("scheduled", { force: true });
+    } catch (error) {
+      if (ownsRequest()) {
+        state.automationEditRefreshRequired = true;
+        state.formError = `Could not confirm this save. Refresh task before reviewing the change again. ${normalizeDesktopError(error)}`;
+        state.error = "";
+      }
+    } finally { if (state.automationEditPending === request) { state.automationEditPending = null; state.loading = false; } }
   }
 
   async _desktopMutation(action, payload, state, { clearFormDraft = false } = {}) {

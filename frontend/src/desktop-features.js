@@ -251,6 +251,45 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     section.append(renderScheduleForm(documentRef, state, defaultTimezone, { ...state.scheduleContext, proposalsSupported }));
     return section;
   }
+  if (state.form === "automation-edit-description") {
+    const form = documentRef.createElement("form");
+    form.className = "schedule-description";
+    form.dataset.desktopForm = "automation-edit-description";
+    const heading = text(documentRef, "h3", "Describe a change");
+    heading.tabIndex = -1;
+    form.append(heading);
+    form.append(text(documentRef, "p", state.editingAutomation?.name || "Scheduled task", "desktop-note"));
+    if (state.automationEditProposal) {
+      const [field, value] = Object.entries(state.automationEditProposal)[0];
+      form.append(text(documentRef, "h4", field === "name" ? "Title" : "Instructions"));
+      form.append(text(documentRef, "p", "Current", "desktop-section-label"));
+      const current = text(documentRef, "p", state.editingAutomation?.[field], "schedule-edit-value");
+      if (field === "prompt") current.tabIndex = 0;
+      form.append(current);
+      form.append(text(documentRef, "p", "Proposed", "desktop-section-label"));
+      const proposed = text(documentRef, "p", value, "schedule-edit-value");
+      if (field === "prompt") proposed.tabIndex = 0;
+      form.append(proposed);
+    } else {
+      form.append(text(documentRef, "p", "Describe a title or instruction change, then review it before saving.", "desktop-note"));
+      const description = input(documentRef, "Change request", "edit_description", formValue(state, "edit_description"), "textarea");
+      const control = description.querySelector("textarea");
+      control.placeholder = "Rename to Morning heating check";
+      control.maxLength = 4000;
+      control.required = true;
+      form.append(description);
+      form.append(text(documentRef, "p", "Examples: Rename to Morning heating check; Set instructions to Summarise yesterday's events.", "desktop-note"));
+    }
+    const error = text(documentRef, "p", state.formError || "", "schedule-error");
+    error.setAttribute("role", "alert"); form.append(error);
+    const actions = documentRef.createElement("div"); actions.className = "schedule-actions";
+    actions.append(button(documentRef, "Cancel", "close-form"));
+    if (state.automationEditRefreshRequired) actions.append(button(documentRef, "Refresh task", "refresh-automation-edit", { id: state.editingAutomation?.automation_id }));
+    else if (state.automationEditProposal) actions.append(button(documentRef, "Back", "revise-automation-edit"), button(documentRef, "Save changes", "save-automation-edit"));
+    else actions.append(button(documentRef, "Review changes", "review-automation-edit"));
+    form.append(actions); section.append(form);
+    return section;
+  }
   if (state.form === "schedule-description") {
     const form = documentRef.createElement("form");
     form.className = "schedule-description";
@@ -275,6 +314,7 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
+    if (proposalsSupported) td.append(button(documentRef, "Describe change", "describe-automation-edit", common));
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {

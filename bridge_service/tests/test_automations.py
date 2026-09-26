@@ -452,6 +452,130 @@ def test_scheduler_snapshot_preserves_an_overdue_occurrence_until_claimed(tmp_pa
     assert restored.scheduler_snapshot(now=NOW + timedelta(hours=2)) == []
 
 
+@pytest.mark.parametrize("field", ["name", "prompt"])
+@pytest.mark.parametrize(
+    ("schedule", "expected_next"),
+    [
+        ({"kind": "once", "at": "2026-07-15T10:00:00Z"}, None),
+        (
+            {"kind": "interval", "seconds": 3600, "anchor_at": "2026-07-15T10:00:00Z"},
+            "2026-07-15T11:00:00Z",
+        ),
+        (
+            {
+                "kind": "rrule",
+                "rule": "RRULE:FREQ=DAILY;BYHOUR=10;BYMINUTE=0",
+                "start_at": "2026-07-15T10:00:00Z",
+                "timezone": "UTC",
+            },
+            "2026-07-16T10:00:00Z",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    ("misfire_grace", "expected_status"), [(300, "queued"), (0, "skipped_misfire")]
+)
+def test_text_edit_preserves_overdue_occurrence_for_new_revision_claim(
+    tmp_path, field, schedule, expected_next, misfire_grace, expected_status
+):
+    store = AutomationStore(tmp_path, misfire_grace_seconds=misfire_grace)
+    automation = store.create(_payload(schedule=schedule), now=NOW)
+    automation_id = automation["automation_id"]
+    edit_time = NOW + timedelta(hours=1, seconds=30)
+
+    updated = store.update(
+        automation_id, {field: "Updated task text"}, expected_revision=1, now=edit_time
+    )
+    restored = AutomationStore(tmp_path, misfire_grace_seconds=misfire_grace)
+
+    assert updated[field] == "Updated task text"
+    assert updated["schedule"] == automation["schedule"]
+    assert updated["next_run_at"] == automation["next_run_at"]
+    assert restored.scheduler_snapshot(now=edit_time) == [
+        {"automation_id": automation_id, "revision": 2, "next_run_at": automation["next_run_at"]}
+    ]
+    with pytest.raises(AutomationConflictError, match="revision"):
+        restored.claim(
+            automation_id,
+            due_at=automation["next_run_at"],
+            idempotency_key="schedule:before-text-edit",
+            expected_revision=1,
+            now=edit_time,
+        )
+    claimed = restored.claim(
+        automation_id,
+        due_at=automation["next_run_at"],
+        idempotency_key="schedule:after-text-edit",
+        expected_revision=2,
+        now=edit_time,
+    )
+
+    assert claimed["status"] == expected_status
+    assert claimed["due_at"] == automation["next_run_at"]
+    assert restored.get(automation_id)["next_run_at"] == expected_next
+
+
+@pytest.mark.parametrize("field", ["name", "prompt"])
+@pytest.mark.parametrize("state", ["completed", "paused"])
+def test_text_edit_preserves_completed_and_paused_task_state(tmp_path, field, state):
+    store = AutomationStore(tmp_path)
+    automation = store.create(
+        _payload(schedule={"kind": "once", "at": "2026-07-15T10:00:00Z"}), now=NOW
+    )
+    automation_id = automation["automation_id"]
+    if state == "completed":
+        run = store.claim(
+            automation_id,
+            due_at=automation["next_run_at"],
+            idempotency_key="schedule:completed-before-edit",
+            expected_revision=1,
+            now=NOW + timedelta(hours=1),
+        )
+        store.complete(
+            run["automation_run_id"], status="completed", now=NOW + timedelta(hours=1, seconds=1)
+        )
+    else:
+        store.pause(automation_id, expected_revision=1, now=NOW)
+    before = store.get(automation_id)
+
+    updated = store.update(
+        automation_id,
+        {field: "Updated task text"},
+        expected_revision=before["revision"],
+        now=NOW + timedelta(hours=1, seconds=30),
+    )
+
+    assert updated["next_run_at"] is None
+    for key in ("enabled", "last_run_at", "last_status", "schedule"):
+        assert updated[key] == before[key]
+    assert store.scheduler_snapshot(now=NOW + timedelta(hours=2)) == []
+
+
+@pytest.mark.parametrize(
+    ("new_at", "expected_next"),
+    [
+        ("2026-07-15T11:00:00Z", "2026-07-15T11:00:00Z"),
+        ("2026-07-15T10:00:00Z", None),
+    ],
+)
+def test_explicit_schedule_edit_recalculates_pending_occurrence(tmp_path, new_at, expected_next):
+    store = AutomationStore(tmp_path)
+    automation = store.create(
+        _payload(schedule={"kind": "once", "at": "2026-07-15T10:00:00Z"}), now=NOW
+    )
+    schedule = {"kind": "once", "at": new_at}
+
+    updated = store.update(
+        automation["automation_id"],
+        {"schedule": schedule},
+        expected_revision=1,
+        now=NOW + timedelta(hours=1, seconds=30),
+    )
+
+    assert updated["schedule"] == schedule
+    assert updated["next_run_at"] == expected_next
+
+
 @pytest.mark.parametrize(
     ("schedule", "expected_next"),
     [

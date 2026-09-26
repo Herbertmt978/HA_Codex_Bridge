@@ -2,6 +2,20 @@
 
 All notable App changes are recorded here.
 
+## 1.8.6
+
+- Adds reviewed title and instruction descriptions for a selected scheduled task.
+  Saving changes only that field and retains timing, target, permissions and
+  other saved settings.
+- Preserves pending scheduled occurrences when updating unrelated fields,
+  including overdue one-off and recurring tasks.
+- Requires refresh and another review after conflicts or uncertain save responses.
+  Late replies preserve newer drafts, and keyboard focus follows edit transitions.
+- Keeps desktop scheduled-run status words intact at narrower panel widths.
+- Pairs App, Integration and panel `1.8.6` with Bridge `0.14.4` and the unchanged
+  verified Codex runtime `0.157.1`. Conversational timing, pause and cancellation
+  remain open in TASK-01.
+
 ## 1.8.5
 
 - Explains scheduled run outcomes, including overlap and missed-window skips,

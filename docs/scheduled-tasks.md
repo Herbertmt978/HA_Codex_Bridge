@@ -52,6 +52,24 @@ information in this project's files and highlight anything needing attention**,
 repeat **Weekdays**, time **09:00**. Describe only work the App can actually
 access; it cannot read your PC or Home Assistant configuration by default.
 
+## Describe a change
+
+On the Scheduled page, choose **Describe change** beside the intended task.
+Use **Rename to Morning heating check** or **Set instructions to Summarise
+yesterday's events**. This flow supports one title or instruction change at a
+time. It does not interpret task text as a permission grant.
+
+Select **Review changes** to compare the current and proposed text. **Back**
+lets you revise the request; **Cancel** leaves the task unchanged. **Save
+changes** updates only the reviewed field. Timing, pending runs, destination,
+model, reasoning, notifications and permissions stay as saved.
+
+If the task changes elsewhere, or a save response cannot be confirmed, choose
+**Refresh task** and review it again. The flow checks whether the reviewed
+value is already saved before issuing another update. Use the normal editor
+for timing or other settings. Older Apps without schedule proposals keep the
+normal editor and hide this action.
+
 ## Frequency and time zone
 
 - **Daily:** every day at the chosen time.

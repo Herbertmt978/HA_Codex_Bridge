@@ -6,7 +6,7 @@ ARG BUILD_ARCH=amd64
 LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
-    io.hass.version="1.8.5"
+    io.hass.version="1.8.6"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -68,8 +68,8 @@ EXPOSE 8766
 
 ENTRYPOINT ["/usr/local/bin/codex-app-entrypoint"]
 
-ENV CODEX_BRIDGE_APP_VERSION="1.8.5" \
-    CODEX_BRIDGE_VERSION="0.14.3" \
+ENV CODEX_BRIDGE_APP_VERSION="1.8.6" \
+    CODEX_BRIDGE_VERSION="0.14.4" \
     CODEX_BRIDGE_CODEX_VERSION="0.157.1" \
     CODEX_BRIDGE_ARCH="${BUILD_ARCH}" \
     CODEX_BRIDGE_RELEASE_LOCK_DIGEST="f2908f4f5e478bb3fa50dc5b128bc33116675f901683fd5f7d595283650cd6ec" \
