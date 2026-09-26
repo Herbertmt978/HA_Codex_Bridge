@@ -3386,6 +3386,14 @@ class BridgeStorage:
                 )
                 return detached
 
+    def codex_account_owner_marker(self) -> str | None:
+        """Return the private, one-way marker for the currently bound account."""
+
+        # The binding is atomically replaced only after account detachment, so
+        # this read can safely avoid taking the thread-mutation lock. Runtime
+        # admission may call it while holding the broker lock.
+        return self._load_codex_account_binding_locked()
+
     def _load_codex_account_binding_locked(self) -> str | None:
         target = self.root / _ACCOUNT_BINDING_FILENAME
         try:

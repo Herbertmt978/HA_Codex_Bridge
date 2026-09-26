@@ -4828,3 +4828,99 @@ for (const width of [1440, 390]) {
     await expect(panel.locator('#message-list [data-sequence="30000"] h1')).toHaveText("Found earlier response");
   });
 }
+
+for (const width of [1440, 390]) {
+  test(`native Plan and queue transcript remain coherent at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      const event = (sequence, event_type, payload) => ({ sequence, event_type, payload, thread_id: panel._selectedThreadId });
+      panel._pendingInteractions = [];
+      panel._activeThread = { ...panel._activeThread, attachments: [], status: "running", active_run_id: "native-plan", collaboration_mode: "plan" };
+      panel._events = Array.from({ length: 25 }, (_, index) => [
+        event(10 + index * 2, "message.created", { run_id: `earlier-${index}`, text: `Earlier request ${index}` }),
+        event(11 + index * 2, "message.completed", { run_id: `earlier-${index}`, text: `Earlier answer ${index}` }),
+      ]).flat();
+      panel._events.push(
+        event(101, "message.created", { run_id: "native-plan", text: "Prepare the release plan" }),
+        event(102, "run.started", { run_id: "native-plan" }),
+        event(103, "item.started", { run_id: "native-plan", item_id: "plan-item", item_type: "plan" }),
+        event(104, "plan.delta", { run_id: "native-plan", item_id: "plan-item", delta: "# Release plan\n\n", byte_offset: 0, chunk_index: 0 }),
+        event(105, "plan.delta", { run_id: "native-plan", item_id: "plan-item", delta: "- Check the configuration\n- Verify the release\n\n<script>window.__planUnsafe=true</script>", byte_offset: 0, chunk_index: 0 }),
+      );
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator('[data-streaming-message="true"] h1')).toHaveText("Release plan");
+    await expect(panel.locator('[data-streaming-message="true"] .message-state')).toHaveText("Plan");
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._events = [...panel._events,
+        { sequence: 106, event_type: "item.completed", payload: { run_id: "native-plan", item_id: "plan-item", item_type: "plan" } },
+        { sequence: 107, event_type: "run.completed", payload: { run_id: "native-plan" } },
+      ];
+      panel._activeThread = { ...panel._activeThread, status: "idle", active_run_id: null };
+      panel._render(true);
+    });
+    await expect(panel.locator('[data-streaming-message="true"]')).toHaveCount(0);
+    await expect(panel.locator('.message.assistant[data-sequence="106"] h1')).toHaveText("Release plan");
+    await expect(panel.locator('.message.assistant[data-sequence="106"] li')).toHaveCount(2);
+    await expect(panel.locator('.message.assistant[data-sequence="106"] script')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__planUnsafe)).toBeUndefined();
+    expect(await panel.evaluate((element) => element._conversationTurns.at(-1).response)).toContain("Release plan");
+    expect(await panel.evaluate((element) => element._conversationTurns.at(-1).outcomeLabel)).toBe("");
+    await settleConversationRender(page);
+    await expect(panel.locator('.message.assistant[data-sequence="106"] h1')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`native-plan-completed-${width}.png`), animations: "disabled" });
+
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._events = [...panel._events,
+        { sequence: 201, event_type: "message.created", payload: { run_id: "active-plan", text: "Plan still waiting" } },
+        { sequence: 202, event_type: "run.started", payload: { run_id: "active-plan" } },
+        { sequence: 204, event_type: "message.created", payload: { run_id: "keep-draft", queued: true, text: "Original queued draft" } },
+        { sequence: 205, event_type: "message.created", payload: { run_id: "remove-draft", queued: true, text: "Remove this queued draft" } },
+      ];
+      panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "active-plan" };
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    await settleConversationRender(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel.shadowRoot.getElementById("conversation-scroll").scrollTop = 120;
+      panel._events = [...panel._events,
+        { sequence: 206, event_type: "message.updated", payload: { run_id: "keep-draft", message_sequence: 4, text: "Edited queued draft" } },
+        { sequence: 207, event_type: "message.removed", payload: { run_id: "remove-draft", message_sequence: 5 } },
+        { sequence: 208, event_type: "run.cancelled", payload: { run_id: "remove-draft" } },
+      ];
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    await expect(panel.locator("#message-list")).toContainText("Edited queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Original queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Remove this queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Run cancelled");
+    expect(await panel.evaluate((element) => element._events.some((event) => event.event_type === "run.cancelled" && event.payload.run_id === "remove-draft"))).toBe(true);
+    expect(await panel.evaluate((element) => element._runActivityForThread().runId)).toBe("active-plan");
+    expect(await panel.evaluate((element) => element._runActivityForThread().busy)).toBe(true);
+    expect(await panel.locator("#conversation-scroll").evaluate((element) => element.scrollTop)).toBe(120);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      // Replay the persisted public event stream as on a fresh page load.
+      panel._events = structuredClone(panel._events);
+      panel._renderedThreadId = null;
+      panel._render(true);
+    });
+    await expect(panel.locator("#message-list")).toContainText("Edited queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Remove this queued draft");
+    await expect(panel.locator('.message.assistant[data-sequence="106"] h1')).toHaveText("Release plan");
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await settleConversationRender(page);
+    await expect(panel.locator('.message.user[data-sequence="204"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`native-queue-replayed-${width}.png`), animations: "disabled" });
+  });
+}

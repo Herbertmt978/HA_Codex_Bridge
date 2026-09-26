@@ -57,6 +57,7 @@ from .runtime_gate import (
     RuntimeLease,
     RuntimeLeaseCancelledError,
     RuntimeLeaseTimeoutError,
+    RuntimeMutationConflictError,
 )
 from .runtime_policy import (
     RuntimeProtocolMismatchError,
@@ -538,6 +539,7 @@ class RuntimeBroker:
         browser_dynamic_tools_enabled: bool = False,
         host_access: HostAccessManager | None = None,
         provider_admission_check: Callable[[], bool] | None = None,
+        provider_account_owner_marker: Callable[[], str | None] | None = None,
         auth_failure_listener: Callable[[int], None] | None = None,
         mcp_manager: McpManager | None = None,
     ) -> None:
@@ -597,6 +599,9 @@ class RuntimeBroker:
         # app-server generation.
         self._browser_dynamic_tools_enabled = browser_dynamic_tools_enabled
         self._provider_admission_check = provider_admission_check
+        self._provider_account_owner_marker = provider_account_owner_marker
+        self._deferred_recovered_queue_ids: set[str] = set()
+        self._recovering_queue_ids: set[str] = set()
         self._browser_pending_thread_authorities: dict[
             str, _BrowserThreadAuthority
         ] = {}
@@ -648,7 +653,9 @@ class RuntimeBroker:
             and callable(getattr(self._assist_mcp_manager, "assist_thread_config", None))
         )
 
-    def start(self) -> None:
+    def start(self, *, defer_recovered_queued_runs: bool = False) -> None:
+        if type(defer_recovered_queued_runs) is not bool:
+            raise ValueError("deferred queue recovery state must be a boolean")
         with self._lock:
             if self._closed:
                 raise RuntimeUnavailableError()
@@ -669,12 +676,206 @@ class RuntimeBroker:
                 key=lambda run: (run.created_at, run.run_id),
             )
             for run in queued:
+                if defer_recovered_queued_runs:
+                    self._deferred_recovered_queue_ids.add(run.run_id)
+                    continue
                 lease = self.gate.reserve_prompt(
                     client_request_id=run.client_request_id
                 )
                 self._leases[run.run_id] = lease
                 self._completion_events[run.run_id] = Event()
                 self._spawn_worker_locked(run.run_id)
+
+    def resume_recovered_queued_runs(self) -> None:
+        """Claim restart-safe queued prompts after account binding settles."""
+
+        with self._lock:
+            self._require_started_locked()
+            run_ids = sorted(
+                self._deferred_recovered_queue_ids,
+                key=lambda run_id: (
+                    self._state.runs[run_id].created_at,
+                    run_id,
+                ) if run_id in self._state.runs else ("", run_id),
+            )
+        for run_id in run_ids:
+            with self._lock:
+                if self._closed or run_id in self._recovering_queue_ids:
+                    continue
+                run = self._state.runs.get(run_id)
+                if (
+                    run is None
+                    or run.status != "queued"
+                    or run.follow_up_mode != "queue"
+                    or run.turn_start_dispatched
+                    or run.prompt is None
+                ):
+                    self._deferred_recovered_queue_ids.discard(run_id)
+                    continue
+                try:
+                    self._remaining_total_budget_locked(run)
+                except (RuntimeStateError, _RuntimeTotalDeadlineExceeded):
+                    self._terminalize_locked(
+                        run, "cancelled", "The queued prompt expired."
+                    )
+                    self._deferred_recovered_queue_ids.discard(run_id)
+                    continue
+                self._recovering_queue_ids.add(run_id)
+                worker = Thread(
+                    target=self._recover_deferred_queued_run,
+                    args=(run_id,),
+                    name=f"CodexQueueRecovery-{run_id}",
+                    daemon=True,
+                )
+                self._workers.add(worker)
+                worker.start()
+
+    def _recover_deferred_queued_run(self, run_id: str) -> None:
+        """Wait lease-free for auth readiness, then claim one queued turn."""
+
+        try:
+            while True:
+                with self._lock:
+                    run = self._state.runs.get(run_id)
+                    if (
+                        self._closed
+                        or run is None
+                        or run.status != "queued"
+                        or run.follow_up_mode != "queue"
+                        or run.turn_start_dispatched
+                        or run.prompt is None
+                    ):
+                        return
+                    try:
+                        remaining = self._remaining_total_budget_locked(run)
+                    except (RuntimeStateError, _RuntimeTotalDeadlineExceeded):
+                        self._terminalize_locked(
+                            run, "cancelled", "The queued prompt expired."
+                        )
+                        return
+                    expected_owner_marker = run.account_owner_marker
+
+                owner_marker = self._current_provider_account_owner_marker()
+                if (
+                    owner_marker is None
+                    or expected_owner_marker is None
+                    or owner_marker != expected_owner_marker
+                ):
+                    self._cancel_deferred_recovered_queue(
+                        run_id,
+                        "The queued prompt’s ChatGPT account could not be verified. Send it again after signing in.",
+                    )
+                    return
+
+                if not self._provider_admission_allowed():
+                    sleep(min(0.05, remaining))
+                    continue
+
+                with self._lock:
+                    run = self._state.runs.get(run_id)
+                    if (
+                        self._closed
+                        or run is None
+                        or run.status != "queued"
+                        or run.follow_up_mode != "queue"
+                        or run.turn_start_dispatched
+                        or run.prompt is None
+                    ):
+                        return
+                    try:
+                        remaining = self._remaining_total_budget_locked(run)
+                    except (RuntimeStateError, _RuntimeTotalDeadlineExceeded):
+                        self._terminalize_locked(
+                            run, "cancelled", "The queued prompt expired."
+                        )
+                        return
+                    try:
+                        lease = self.gate.reserve_prompt(
+                            client_request_id=run.client_request_id
+                        )
+                    except RuntimeMutationConflictError:
+                        lease = None
+
+                if lease is None:
+                    # Auth reconciliation can briefly own the gate during the
+                    # same-account startup read. Recheck the owner before
+                    # waiting again; a real owner change is cancelled above.
+                    sleep(min(0.05, remaining))
+                    continue
+
+                current_owner_marker = self._current_provider_account_owner_marker()
+                admission_ready = self._provider_admission_allowed()
+                with self._lock:
+                    run = self._state.runs.get(run_id)
+                    if (
+                        self._closed
+                        or run is None
+                        or run.status != "queued"
+                        or run.follow_up_mode != "queue"
+                        or run.turn_start_dispatched
+                        or run.prompt is None
+                    ):
+                        lease.release()
+                        return
+                    if (
+                        current_owner_marker is None
+                        or run.account_owner_marker is None
+                        or current_owner_marker != run.account_owner_marker
+                    ):
+                        lease.release()
+                        self._terminalize_locked(
+                            run,
+                            "cancelled",
+                            "The queued prompt’s ChatGPT account could not be verified. Send it again after signing in.",
+                        )
+                        return
+                    try:
+                        self._remaining_total_budget_locked(run)
+                    except (RuntimeStateError, _RuntimeTotalDeadlineExceeded):
+                        lease.release()
+                        self._terminalize_locked(
+                            run, "cancelled", "The queued prompt expired."
+                        )
+                        return
+                    if not admission_ready:
+                        lease.release()
+                        continue
+                    self._leases[run.run_id] = lease
+                    self._completion_events[run.run_id] = Event()
+                    self._deferred_recovered_queue_ids.discard(run_id)
+                    self._spawn_worker_locked(run.run_id)
+                    return
+        finally:
+            with self._lock:
+                self._recovering_queue_ids.discard(run_id)
+                self._deferred_recovered_queue_ids.discard(run_id)
+                self._workers.discard(current_thread())
+
+    def _cancel_deferred_recovered_queue(
+        self,
+        run_id: str,
+        message: str,
+    ) -> None:
+        with self._lock:
+            run = self._state.runs.get(run_id)
+            if run is not None and run.status == "queued":
+                self._terminalize_locked(run, "cancelled", message)
+            self._deferred_recovered_queue_ids.discard(run_id)
+
+    def _current_provider_account_owner_marker(self) -> str | None:
+        if self._provider_account_owner_marker is None:
+            return None
+        try:
+            marker = self._provider_account_owner_marker()
+        except Exception:
+            return None
+        if (
+            not isinstance(marker, str)
+            or len(marker) != 64
+            or any(character not in "0123456789abcdef" for character in marker)
+        ):
+            return None
+        return marker
 
     @property
     def supports_plan_mode(self) -> bool:
@@ -1235,6 +1436,18 @@ class RuntimeBroker:
                     self.storage.resolve_workspace_path(thread.workspace_path)
                     accepted_at = datetime.now(UTC)
                     now = accepted_at.isoformat()
+                    account_owner_marker = (
+                        self._current_provider_account_owner_marker()
+                        if lease.state == "queued"
+                        and self._provider_account_owner_marker is not None
+                        else None
+                    )
+                    if (
+                        lease.state == "queued"
+                        and self._provider_account_owner_marker is not None
+                        and account_owner_marker is None
+                    ):
+                        raise RuntimeAuthenticationRequiredError()
                     run = RuntimeRunState(
                         run_id=f"run_{uuid4().hex[:16]}",
                         client_request_id=request_id,
@@ -1245,6 +1458,7 @@ class RuntimeBroker:
                         collaboration_mode=selected_collaboration_mode,
                         prompt=prompt,
                         prompt_fingerprint=_fingerprint(prompt),
+                        account_owner_marker=account_owner_marker,
                         mode=thread.mode,
                         host_access_grant=thread.host_access_grant,
                         model=thread.effective_model,
@@ -2046,6 +2260,8 @@ class RuntimeBroker:
             if not self._provider_admission_allowed():
                 with self._lock:
                     run = self._state.runs.get(run_id)
+                    if self._preserve_queued_prompt_during_shutdown_locked(run):
+                        return
                     if run is not None and run.status not in _TERMINAL_RUN_STATES:
                         self._terminalize_locked(
                             run,
@@ -2058,7 +2274,7 @@ class RuntimeBroker:
         except (RuntimeLeaseCancelledError, RuntimeLeaseTimeoutError):
             with self._lock:
                 run = self._state.runs.get(run_id)
-                if self._closed and run is not None and run.status == "queued":
+                if self._preserve_queued_prompt_during_shutdown_locked(run):
                     return
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
                     self._terminalize_locked(
@@ -2068,6 +2284,8 @@ class RuntimeBroker:
             generation_to_abort: int | None = None
             with self._lock:
                 expired = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(expired):
+                    return
                 if (
                     expired is not None
                     and expired.status not in _TERMINAL_RUN_STATES
@@ -2080,6 +2298,8 @@ class RuntimeBroker:
                 if generation_to_abort is not None:
                     self._clear_queued_locked("app-server generation aborted")
                 run = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(run):
+                    return
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
                     queued = run.status == "queued"
                     cancelling = run.status == "cancelling"
@@ -2098,6 +2318,8 @@ class RuntimeBroker:
             generation_to_abort: int | None = None
             with self._lock:
                 failed = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(failed):
+                    return
                 if (
                     failed is not None
                     and failed.status not in _TERMINAL_RUN_STATES
@@ -2112,6 +2334,8 @@ class RuntimeBroker:
                         "turn start outcome was unknown; app-server generation aborted"
                     )
                 run = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(run):
+                    return
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
                     # Aborting a start/resume request can wake this worker
                     # before cancel_run reacquires the lock. Preserve the
@@ -2131,6 +2355,18 @@ class RuntimeBroker:
         finally:
             with self._lock:
                 self._workers.discard(current_thread())
+
+    def _preserve_queued_prompt_during_shutdown_locked(
+        self,
+        run: RuntimeRunState | None,
+    ) -> bool:
+        return (
+            self._closed
+            and run is not None
+            and run.status == "queued"
+            and run.follow_up_mode == "queue"
+            and not run.turn_start_dispatched
+        )
 
     def _provider_admission_allowed(self) -> bool:
         if self._provider_admission_check is None:
@@ -2340,15 +2576,6 @@ class RuntimeBroker:
             thread_config.update(manager.assist_thread_config(
                 workspace, thread.assist_mcp_servers, execution_cwd=native_cwd,
             ))
-            if run.codex_thread_id:
-                # A subscribed native thread ignores config overrides on
-                # resume. Detach this sole private client before resuming so
-                # Codex cold-loads the current MCP and tool permissions.
-                self._unload_assist_thread(
-                    run.codex_thread_id, generation,
-                    timeout_seconds=thread_request_timeout,
-                    starting_run=run,
-                )
         host_lease = None
         if (
             run.mode is RunMode.HAOS_FULL_ACCESS
@@ -2373,6 +2600,30 @@ class RuntimeBroker:
                     return
                 self._assist_loading_runs.add(run.run_id)
         if run.codex_thread_id:
+            # Codex 0.157.1 ignores resume settings while the thread is loaded.
+            # Detach our idle provider thread and confirm it has unloaded before
+            # cold-resuming the same history with this accepted run's settings.
+            # Other subscribers keep it loaded, so uncertain teardown cannot
+            # reach turn/start or bypass the strict returned-policy checks.
+            with self._lock:
+                if generation != self.app_server.generation or run.status != "starting":
+                    raise RuntimeUnavailableError()
+                thread_request_timeout = min(
+                    self.control_request_timeout_seconds,
+                    self._remaining_total_budget_locked(run),
+                )
+            self._unload_provider_thread(
+                run.codex_thread_id, generation,
+                timeout_seconds=thread_request_timeout,
+                starting_run=run,
+            )
+            with self._lock:
+                if generation != self.app_server.generation or run.status != "starting":
+                    raise RuntimeUnavailableError()
+                thread_request_timeout = min(
+                    self.control_request_timeout_seconds,
+                    self._remaining_total_budget_locked(run),
+                )
             thread_params["threadId"] = run.codex_thread_id
             thread_result = self.app_server.request(
                 "thread/resume",
@@ -3856,7 +4107,7 @@ class RuntimeBroker:
             failure = _safe_failure(classification)
             self._terminalize_locked(run, "failed", failure.message, failure=failure)
 
-    def _unload_assist_thread(
+    def _unload_provider_thread(
         self, thread_id: str, generation: int, *, timeout_seconds: float,
         starting_run: RuntimeRunState | None = None,
     ) -> None:
@@ -3865,18 +4116,27 @@ class RuntimeBroker:
             remaining = deadline - monotonic()
             if remaining <= 0 or generation != self.app_server.generation:
                 raise RuntimeUnavailableError()
-            detached = self.app_server.request(
-                "thread/unsubscribe", {"threadId": thread_id}, timeout_seconds=remaining,
-            )
-            if not isinstance(detached, Mapping) or detached.get("status") not in {
-                "unsubscribed", "notSubscribed", "notLoaded",
-            }:
-                raise RuntimeUnavailableError()
-            if detached["status"] == "notLoaded":
-                return
             with self._lock:
                 if starting_run is not None and starting_run.status != "starting":
                     raise RuntimeUnavailableError()
+            detached = self.app_server.request(
+                "thread/unsubscribe", {"threadId": thread_id}, timeout_seconds=remaining,
+            )
+            with self._lock:
+                if generation != self.app_server.generation:
+                    raise RuntimeUnavailableError()
+                if starting_run is not None and starting_run.status != "starting":
+                    raise RuntimeUnavailableError()
+            status = detached.get("status") if isinstance(detached, Mapping) else None
+            if (
+                not isinstance(detached, Mapping)
+                or set(detached) != {"status"}
+                or not isinstance(status, str)
+                or status not in {"unsubscribed", "notSubscribed", "notLoaded"}
+            ):
+                raise RuntimeUnavailableError()
+            if status == "notLoaded":
+                return
             sleep(min(0.1, max(0, deadline - monotonic())))
 
     def _close_assist_mcp_before_release_locked(self, run: RuntimeRunState) -> None:
@@ -3901,7 +4161,7 @@ class RuntimeBroker:
         if not thread.assist_origin or thread.assist_mcp_servers is None:
             return
         try:
-            self._unload_assist_thread(
+            self._unload_provider_thread(
                 run.codex_thread_id, run.generation,
                 timeout_seconds=min(5.0, self.control_request_timeout_seconds),
             )
@@ -4154,6 +4414,10 @@ class RuntimeBroker:
         self,
         run: RuntimeRunState,
     ) -> ThreadRecord | None:
+        if run.status == "queued" or run.status in _TERMINAL_RUN_STATES:
+            active_run = self._active_run_for_thread_locked(run.thread_id)
+            if active_run is not None and active_run.run_id != run.run_id:
+                run = active_run
         try:
             record = self.storage.load_thread(run.thread_id)
         except (ThreadNotFoundError, WorkspaceBoundaryError):

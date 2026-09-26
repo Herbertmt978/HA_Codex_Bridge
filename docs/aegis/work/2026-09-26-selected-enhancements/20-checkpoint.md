@@ -40,3 +40,42 @@ automatic App updates paused until separate rollout approval. Existing owned DEV
 fixtures and the stale Git token are retained for patch verification. VM 103
 remains running as found; CT105 has been restored stopped. Disposable test output
 and live receipts remain under `D:/CodexTemp/bridge-enhancements-20260926`.
+
+## Combined Assist and native corrections — 27 September 2026
+
+The combined local candidate pairs App, Integration and panel 1.11.0 with
+Bridge 0.18.0 and unchanged Codex 0.157.1. Assist retains one configurable
+conversation entity, independently selected native or compatible custom MCP
+servers, a private read-only profile and deny-all initial native tool grants.
+Question notifications remain opt-in and cannot grant execution approval.
+
+Native evidence showed that a loaded provider thread ignores resume settings.
+The broker now confirms stable unsubscribe and explicit unload before resuming
+the same history with accepted settings. Strict identity, model, permission,
+generation and deadline checks remain. Fifteen focused provider-peer tests pass;
+independent read-only review found no actionable defect in this correction.
+
+The panel accepts an omitted default pending status only on the authoritative
+pending-list route. Native completed Plan items project into safe Markdown and
+rail excerpts; matching unfinished Plans stream without becoming acknowledged
+answers. Queue edit/remove references resolve a unique run-owned draft across
+global event and local message sequence namespaces. Rebuilds preserve reading
+position and cancelling a draft preserves a different live turn's ownership.
+The current Windows checks pass 815 units and all 131 browser cases. Desktop
+and phone screenshots verify completed Plan and edited queue presentation.
+
+The App restart regression proves the original shutdown cancels its queued
+record before recovery. Closing auth before runner teardown can wake a queued
+worker into the admission-false path. A shared locked worker predicate now
+preserves only an explicit, undispatched queued prompt when the broker is closed.
+Deterministic barrier tests preserve that prompt after closed admission and
+closed start errors while genuine open-broker account changes still cancel.
+Private account ownership and the original recovery budget remain required.
+Fresh Linux focused qualification passes 90 tests and full Ruff, including the
+real App lifespan's post-shutdown queue assertion and one dispatch/completion
+after restart. The failing diagnostics remain in the combined task evidence.
+
+Final qualification requires a clean local commit, a canonical Git archive
+verified against every committed file, fresh applicable Linux gates and parent
+native acceptance. No combined publication or deployment has occurred.
+Production remains excluded; original fixtures and failed histories are retained.

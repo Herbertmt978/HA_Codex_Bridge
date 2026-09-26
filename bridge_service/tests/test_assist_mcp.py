@@ -78,6 +78,7 @@ def test_selected_assist_mcp_is_private_immutable_and_cold_resumed(tmp_path: Pat
         private_cwd = str(storage.root.resolve() / "assist-runtime")
         assert _requests(peer, "thread/start")[0]["cwd"] == private_cwd
         assert _requests(peer, "turn/start")[0]["cwd"] == private_cwd
+        assert "sandboxPolicy" not in _requests(peer, "turn/start")[0]
         assert configured["project_doc_max_bytes"] == 0
         assert configured["permissions"]["ha_observe"]["filesystem"][project.root_path] == "read"
         assert configured["mcp_servers"]["other"] == {"enabled": False}
@@ -100,6 +101,8 @@ def test_selected_assist_mcp_is_private_immutable_and_cold_resumed(tmp_path: Pat
         second = client.post("/task-actions/continue", headers=headers, json=continuation)
         assert second.status_code == 202, second.text
         _wait_until(lambda: len(_requests(peer, "turn/start")) == 2)
+        assert _requests(peer, "turn/start")[1]["cwd"] == private_cwd
+        assert "sandboxPolicy" not in _requests(peer, "turn/start")[1]
         methods = [name for name, _ in peer.requests]
         resume_index = methods.index("thread/resume")
         assert methods[resume_index - 2:resume_index] == ["thread/unsubscribe", "thread/unsubscribe"]

@@ -111,6 +111,10 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
   mode and are separate from ordinary device control. See the
   [Assist setup and access guide](docs/home-assistant-assist.md).
 
+- **Question notifications:** opt-in generic notices and replies from verified
+  administrator Companion devices. Replies answer existing questions; they
+  cannot approve execution or access. [Setup and limits](docs/question-notifications.md).
+
 Scheduled work runs through Home Assistant, so your PC and browser do not need
 to stay open. Home Assistant, the App and the ChatGPT session must remain
 available. Tasks that overlap, miss their window or need an approval may be
@@ -132,7 +136,7 @@ from ordinary projects. Assist-only projects keep their project actions inside
 this group, including restore and delete actions when archived. Their workspace
 and history are retained; continue their messages through Home Assistant Assist.
 
-This release pairs App **1.10.1**, Integration and panel **1.10.1**, with Bridge **0.17.1**
+This release pairs App **1.11.0**, Integration and panel **1.11.0**, with Bridge **0.18.0**
 and Codex **0.157.1**. Assistant Markdown, transcript search, explicit Queue/Steer, native Plan
 and scoped Git review are described in [the conversation controls guide](docs/selected-enhancements.md). It prepares ARM64 development builds; published images
 remain **amd64-only** until native hardware qualification. It retains write-only

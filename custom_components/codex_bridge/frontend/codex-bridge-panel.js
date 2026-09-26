@@ -1119,6 +1119,7 @@ function renderAssistantMarkdown(document2, source, { createCodeBlock } = {}) {
   fragment.plainText = plainParts.filter(Boolean).join("\n\n");
   return fragment;
 }
+var assistantMarkdownMaxLength = MAX_MARKDOWN_LENGTH;
 var assistantMarkdownStyles = `
   .assistant-markdown-paragraph { margin: 0 0 0.8em; overflow-wrap: anywhere; }
   .assistant-markdown-paragraph:last-child { margin-bottom: 0; }
@@ -32684,13 +32685,44 @@ function snippet(value) {
 function projectTranscriptMessages(events = []) {
   const edits = /* @__PURE__ */ new Map();
   const removed = /* @__PURE__ */ new Set();
+  const removedQueuedRuns = /* @__PURE__ */ new Set();
+  const messages = /* @__PURE__ */ new Map();
+  const queuedByRun = /* @__PURE__ */ new Map();
   for (const event of events) {
-    if (event?.event_type === "message.removed" && Number.isSafeInteger(event.payload?.message_sequence)) removed.add(event.payload.message_sequence);
-    if (event?.event_type === "message.updated" && Number.isSafeInteger(event.payload?.message_sequence) && typeof event.payload?.text === "string") {
-      edits.set(event.payload.message_sequence, event.payload.text);
+    if (!["message.created", "message.completed"].includes(event?.event_type)) continue;
+    messages.set(event.sequence, event);
+    const runId = event.payload?.run_id;
+    if (event.event_type === "message.created" && event.payload?.queued === true && typeof runId === "string" && runId) {
+      queuedByRun.set(runId, queuedByRun.has(runId) ? null : event);
     }
   }
-  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence) ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
+  const targetSequence = (event) => {
+    const reference = event.payload?.message_sequence;
+    if (!Number.isSafeInteger(reference) || reference <= 0) return null;
+    const runId = event.payload?.run_id;
+    let target = messages.get(reference);
+    if (typeof runId === "string" && runId) {
+      if (target?.payload?.run_id !== runId) target = null;
+      target ||= queuedByRun.get(runId);
+    }
+    return target?.sequence ?? null;
+  };
+  for (const event of events) {
+    if (!["message.removed", "message.updated"].includes(event?.event_type)) continue;
+    const sequence2 = targetSequence(event);
+    if (sequence2 === null) continue;
+    if (event.event_type === "message.removed") {
+      removed.add(sequence2);
+      const target = messages.get(sequence2);
+      if (target?.event_type === "message.created" && target.payload?.queued === true && typeof target.payload?.run_id === "string") {
+        removedQueuedRuns.add(target.payload.run_id);
+      }
+    }
+    if (event.event_type === "message.updated" && typeof event.payload?.text === "string") {
+      edits.set(sequence2, event.payload.text);
+    }
+  }
+  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence)) && !(["run.queued", "run.dequeued", "run.cancelled"].includes(event?.event_type) && removedQueuedRuns.has(event.payload?.run_id))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence) ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
 }
 function projectConversationTurns(events = []) {
   const turns = [];
@@ -32773,6 +32805,95 @@ function projectConversationTurns(events = []) {
       markerWidth: conversationMarkerWidth(turn.contentLength)
     };
   });
+}
+
+// frontend/src/plan-content.js
+var PLAN_ITEM_TYPE = "plan";
+function stringId(value) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+function itemKey(runId, itemId) {
+  return `${runId.length}:${runId}${itemId}`;
+}
+function eventIdentity(event, index) {
+  if (Number.isSafeInteger(event?.sequence)) return `sequence:${event.sequence}`;
+  if (typeof event?.cursor === "string" || Number.isSafeInteger(event?.cursor)) return `cursor:${event.cursor}`;
+  return `index:${index}`;
+}
+function orderedEvents(events) {
+  if (!Array.isArray(events)) return [];
+  const ordered = events.map((event, index) => ({ event, index }));
+  if (ordered.every(({ event }) => Number.isSafeInteger(event?.sequence)) && ordered.some(({ event }, index) => index > 0 && event.sequence < ordered[index - 1].event.sequence)) {
+    ordered.sort((left, right) => left.event.sequence - right.event.sequence || left.index - right.index);
+  }
+  return ordered.map(({ event }) => event);
+}
+function uniqueEvents(ordered) {
+  const seen = /* @__PURE__ */ new Set();
+  return ordered.filter((event, index) => {
+    const identity = eventIdentity(event, index);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+function projectPlanContent(events) {
+  const states = /* @__PURE__ */ new Map();
+  const completed = /* @__PURE__ */ new Map();
+  const endedRuns = /* @__PURE__ */ new Set();
+  const ordered = orderedEvents(events);
+  for (const event of uniqueEvents(ordered)) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const runId = stringId(payload.run_id);
+    const itemId = stringId(payload.item_id);
+    const key = runId && itemId ? itemKey(runId, itemId) : null;
+    if (["run.completed", "run.cancelled", "run.failed", "run.interrupted"].includes(event?.event_type) && runId) {
+      endedRuns.add(runId);
+    }
+    if (event?.event_type === "item.started" && payload.item_type === PLAN_ITEM_TYPE && key) {
+      states.set(key, { runId, itemId, text: "" });
+      endedRuns.delete(runId);
+      continue;
+    }
+    if (event?.event_type === "plan.delta" && key && typeof payload.delta === "string") {
+      const state = states.get(key);
+      if (state && !endedRuns.has(runId) && state.text.length < assistantMarkdownMaxLength) {
+        state.text += payload.delta.slice(0, assistantMarkdownMaxLength - state.text.length);
+      }
+      continue;
+    }
+    if (event?.event_type === "item.completed" && payload.item_type === PLAN_ITEM_TYPE && key) {
+      const state = states.get(key);
+      states.delete(key);
+      if (state && !endedRuns.has(runId) && state.text.length > 0) completed.set(event, {
+        run_id: runId,
+        item_id: itemId,
+        role: "assistant",
+        text: state.text,
+        plan: true
+      });
+    }
+  }
+  return { ordered, completed, states, endedRuns };
+}
+function projectCompletedPlanMessages(events = []) {
+  const { ordered, completed } = projectPlanContent(events);
+  const projected = [];
+  for (const event of ordered) {
+    projected.push(event);
+    const payload = completed.get(event);
+    if (payload) projected.push({ ...event, event_type: "message.completed", payload });
+  }
+  return projected;
+}
+function activePlanText(events = [], runId, itemId) {
+  const wantedRunId = stringId(runId);
+  const wantedItemId = stringId(itemId);
+  if (!wantedRunId || !wantedItemId) return "";
+  const { states, endedRuns } = projectPlanContent(events);
+  const key = itemKey(wantedRunId, wantedItemId);
+  const state = states.get(key);
+  return state && !endedRuns.has(wantedRunId) ? state.text : "";
 }
 
 // frontend/src/inline-images.js
@@ -36922,7 +37043,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.10.1";
+var PANEL_VERSION = "1.11.0";
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -46330,7 +46451,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const kind = ["command_approval", "file_change_approval", "user_input", "mcp_form", "mcp_url"].includes(value.kind) ? value.kind : null;
     const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at)) ? value.expires_at : null;
     const allowed = Array.isArray(value.allowed_actions) ? [...new Set(value.allowed_actions.filter((action) => ["accept", "decline", "cancel", "answer"].includes(action)))].slice(0, 4) : [];
-    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (["user_input", "mcp_form"].includes(kind) ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
+    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || // The pending-list route omits unset defaults, including pending status.
+    Object.hasOwn(value, "status") && value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (["user_input", "mcp_form"].includes(kind) ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
       return null;
     }
     return {
@@ -47698,15 +47820,17 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderConversationTimeline();
       return;
     }
-    const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
+    const threadChanged = this._renderedThreadId !== this._selectedThreadId;
+    const shouldRebuild = this._forceMessageRebuild || threadChanged;
+    const previousScrollTop = scrollContainer.scrollTop;
+    const shouldStick = threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80;
     if (shouldRebuild) {
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
       this._forceMessageRebuild = false;
       messageList.replaceChildren();
     }
-    const shouldStick = shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
-    const transcriptEvents = projectTranscriptMessages(this._events);
+    const transcriptEvents = projectTranscriptMessages(projectCompletedPlanMessages(this._events));
     const eventsToRender = this._renderedSequence === 0 ? transcriptEvents : transcriptEvents.filter((item) => item.sequence > this._renderedSequence);
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
@@ -47730,6 +47854,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderConversationTimeline();
     if (shouldStick) {
       this._scrollMessagesToBottom();
+    } else if (shouldRebuild) {
+      scrollContainer.scrollTop = previousScrollTop;
     }
   }
   _isConversationTimelineCompact() {
@@ -47742,11 +47868,11 @@ var CodexBridgePanel = class extends HTMLElement {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "message.updated", "message.removed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "message.updated", "message.removed", "item.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
     const sameThread = this._timelineProjectedThread === this._selectedThreadId;
     const unchangedPrefix = this._timelineEvents === this._events || this._timelineEventCount > 0 && this._events[this._timelineEventCount - 1] === this._timelineLastEvent;
     const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
-    const turns = changed ? this._selectedThreadId ? projectConversationTurns(this._events) : [] : this._conversationTurns;
+    const turns = changed ? this._selectedThreadId ? projectConversationTurns(projectCompletedPlanMessages(this._events)) : [] : this._conversationTurns;
     this._timelineEvents = this._events;
     this._timelineProjectedThread = this._selectedThreadId;
     this._timelineEventCount = this._events.length;
@@ -47986,8 +48112,9 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
-    const text3 = this._streamingAssistantText(activity);
-    const isStreaming = activity.assistantState === "streaming";
+    const plan = this._streamingPlanText(activity);
+    const text3 = this._streamingAssistantText(activity, plan);
+    const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if (!isStreaming && !isPartial || !text3) {
       existing?.remove();
@@ -47998,7 +48125,7 @@ var CodexBridgePanel = class extends HTMLElement {
       "assistant",
       text3,
       isPartial ? "partial" : "streaming",
-      isPartial ? "Partial response" : ""
+      isPartial ? "Partial response" : plan && text3 === plan ? "Plan" : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
@@ -48012,8 +48139,8 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.append(article);
     }
   }
-  _streamingAssistantText(activity) {
-    if (!["streaming", "partial"].includes(activity.assistantState)) return "";
+  _streamingAssistantText(activity, plan = this._streamingPlanText(activity)) {
+    if (!["streaming", "partial"].includes(activity.assistantState)) return plan;
     let text3 = "";
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
@@ -48029,7 +48156,12 @@ var CodexBridgePanel = class extends HTMLElement {
       text3 = chunk.startsWith(text3) && chunk.length > text3.length ? chunk : `${text3}${chunk}`;
       if (text3.length > 2e5) text3 = text3.slice(-2e5);
     }
-    return text3;
+    return text3 || plan;
+  }
+  _streamingPlanText(activity) {
+    if (!activity.busy || !activity.runId) return "";
+    const item = this._events.findLast((event) => event.event_type === "item.started" && event.payload?.item_type === "plan" && event.payload?.run_id === activity.runId);
+    return item ? activePlanText(this._events, activity.runId, item.payload.item_id) : "";
   }
   _scrollMessagesToBottom() {
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || this.shadowRoot.getElementById("message-list");
@@ -48052,12 +48184,12 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (event.event_type === "message.completed") {
       if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
-      return this._renderMessage("assistant", payload.text, event.sequence);
+      return this._renderMessage("assistant", payload.text, event.sequence, payload.plan === true ? "Plan" : "");
     }
     if (event.event_type === "item.completed" && payload.item_type === "imageGeneration" && payload.status === "failed") {
       return this._renderGeneratedImageFailure(event);
     }
-    if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
+    if (["message.delta", "plan.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
       return null;
     }
     if (event.event_type === "run.started" || event.event_type === "run.completed") {
@@ -51392,6 +51524,9 @@ var CodexBridgePanel = class extends HTMLElement {
         this._events = batch.state.events;
         this._sequence = batch.state.cursor;
         hasInteractionEvents = batch.accepted.some((event) => INTERACTION_EVENT_TYPES.has(event.event_type));
+        if (batch.accepted.some((event) => ["message.updated", "message.removed"].includes(event.event_type))) {
+          this._forceMessageRebuild = true;
+        }
         this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();

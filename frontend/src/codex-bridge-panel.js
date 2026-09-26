@@ -19,6 +19,7 @@ import {
 } from "./pdf-preview.js";
 import { getRunActivityViewModel, getSafeRunFailureMessage } from "./run-activity.js";
 import { projectConversationTurns, projectTranscriptMessages, readConversationBookmarks, saveConversationBookmarks } from "./conversation-timeline.js";
+import { activePlanText, projectCompletedPlanMessages } from "./plan-content.js";
 import { InlineImageController, inlineImageCss, isInlineImage } from "./inline-images.js";
 import {
   PDF_MIME_TYPE,
@@ -43,7 +44,7 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.10.1";
+const PANEL_VERSION = "1.11.0";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -9566,7 +9567,8 @@ class CodexBridgePanel extends HTMLElement {
       !kind ||
       !Number.isSafeInteger(value.event_id) ||
       value.event_id < 0 ||
-      value.status !== "pending" ||
+      // The pending-list route omits unset defaults, including pending status.
+      (Object.hasOwn(value, "status") && value.status !== "pending") ||
       !expiresAt ||
       !value.display ||
       typeof value.display !== "object" ||
@@ -11078,7 +11080,10 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
-    const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
+    const threadChanged = this._renderedThreadId !== this._selectedThreadId;
+    const shouldRebuild = this._forceMessageRebuild || threadChanged;
+    const previousScrollTop = scrollContainer.scrollTop;
+    const shouldStick = threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80;
     if (shouldRebuild) {
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
@@ -11086,9 +11091,7 @@ class CodexBridgePanel extends HTMLElement {
       messageList.replaceChildren();
     }
 
-    const shouldStick =
-      shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
-    const transcriptEvents = projectTranscriptMessages(this._events);
+    const transcriptEvents = projectTranscriptMessages(projectCompletedPlanMessages(this._events));
     const eventsToRender =
       this._renderedSequence === 0
         ? transcriptEvents
@@ -11120,6 +11123,8 @@ class CodexBridgePanel extends HTMLElement {
 
     if (shouldStick) {
       this._scrollMessagesToBottom();
+    } else if (shouldRebuild) {
+      scrollContainer.scrollTop = previousScrollTop;
     }
   }
 
@@ -11135,12 +11140,12 @@ class CodexBridgePanel extends HTMLElement {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const relevant = new Set(["message.created", "message.completed", "message.updated", "message.removed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const relevant = new Set(["message.created", "message.completed", "message.updated", "message.removed", "item.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
     const sameThread = this._timelineProjectedThread === this._selectedThreadId;
     const unchangedPrefix = this._timelineEvents === this._events || (this._timelineEventCount > 0
       && this._events[this._timelineEventCount - 1] === this._timelineLastEvent);
     const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
-    const turns = changed ? (this._selectedThreadId ? projectConversationTurns(this._events) : []) : this._conversationTurns;
+    const turns = changed ? (this._selectedThreadId ? projectConversationTurns(projectCompletedPlanMessages(this._events)) : []) : this._conversationTurns;
     this._timelineEvents = this._events;
     this._timelineProjectedThread = this._selectedThreadId;
     this._timelineEventCount = this._events.length;
@@ -11385,8 +11390,9 @@ class CodexBridgePanel extends HTMLElement {
 
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
-    const text = this._streamingAssistantText(activity);
-    const isStreaming = activity.assistantState === "streaming";
+    const plan = this._streamingPlanText(activity);
+    const text = this._streamingAssistantText(activity, plan);
+    const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if ((!isStreaming && !isPartial) || !text) {
       existing?.remove();
@@ -11397,7 +11403,7 @@ class CodexBridgePanel extends HTMLElement {
       "assistant",
       text,
       isPartial ? "partial" : "streaming",
-      isPartial ? "Partial response" : ""
+      isPartial ? "Partial response" : plan && text === plan ? "Plan" : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
@@ -11412,8 +11418,8 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  _streamingAssistantText(activity) {
-    if (!["streaming", "partial"].includes(activity.assistantState)) return "";
+  _streamingAssistantText(activity, plan = this._streamingPlanText(activity)) {
+    if (!["streaming", "partial"].includes(activity.assistantState)) return plan;
     let text = "";
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
@@ -11431,7 +11437,14 @@ class CodexBridgePanel extends HTMLElement {
       text = chunk.startsWith(text) && chunk.length > text.length ? chunk : `${text}${chunk}`;
       if (text.length > 200000) text = text.slice(-200000);
     }
-    return text;
+    return text || plan;
+  }
+
+  _streamingPlanText(activity) {
+    if (!activity.busy || !activity.runId) return "";
+    const item = this._events.findLast((event) => event.event_type === "item.started"
+      && event.payload?.item_type === "plan" && event.payload?.run_id === activity.runId);
+    return item ? activePlanText(this._events, activity.runId, item.payload.item_id) : "";
   }
 
   _scrollMessagesToBottom() {
@@ -11457,7 +11470,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (event.event_type === "message.completed") {
       if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
-      return this._renderMessage("assistant", payload.text, event.sequence);
+      return this._renderMessage("assistant", payload.text, event.sequence, payload.plan === true ? "Plan" : "");
     }
     if (
       event.event_type === "item.completed"
@@ -11466,7 +11479,7 @@ class CodexBridgePanel extends HTMLElement {
     ) {
       return this._renderGeneratedImageFailure(event);
     }
-    if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
+    if (["message.delta", "plan.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
       return null;
     }
     if (event.event_type === "run.started" || event.event_type === "run.completed") {
@@ -15127,6 +15140,9 @@ class CodexBridgePanel extends HTMLElement {
         this._events = batch.state.events;
         this._sequence = batch.state.cursor;
         hasInteractionEvents = batch.accepted.some((event) => INTERACTION_EVENT_TYPES.has(event.event_type));
+        if (batch.accepted.some((event) => ["message.updated", "message.removed"].includes(event.event_type))) {
+          this._forceMessageRebuild = true;
+        }
         this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();

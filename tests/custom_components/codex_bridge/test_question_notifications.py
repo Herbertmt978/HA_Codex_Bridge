@@ -72,7 +72,6 @@ def _interaction(*, questions=None, expires="2099-01-01T00:00:00Z"):
         "interaction_id": "question-1",
         "thread_id": "thread-1",
         "kind": "user_input",
-        "status": "pending",
         "expires_at": expires,
         "display": {"questions": questions if questions is not None else [_question()]},
         "allowed_actions": ["answer", "cancel"],
@@ -167,6 +166,57 @@ async def test_opt_in_privacy_choice_reply_and_clear_all(monkeypatch):
     assert all(call[0] != "notify" or call[2].get("message") == "clear_notification" for call in services.calls[2:])
     await coordinator._on_action(_event(tokens[0]))
     assert client.async_answer_interaction.await_count == 1
+    await coordinator.async_close()
+
+
+@pytest.mark.parametrize("explicit_pending", [False, True])
+async def test_public_pending_question_without_status_notifies_and_accepts_reply(monkeypatch, explicit_pending):
+    item = _interaction()
+    if explicit_pending:
+        item["status"] = "pending"
+    item["allowed_actions"] = ["answer"]
+    coordinator, _runtime, client, services = _fixture(monkeypatch, [item])
+    await coordinator.async_start()
+    assert any(call[:2] == ("notify", "mobile_app_phone") for call in services.calls)
+    mobile, tokens = _tokens(services)
+    assert mobile["message"] == "A question needs your response."
+    await coordinator._on_action(_event(tokens[0], reply_text="Source only"))
+    client.async_answer_interaction.assert_awaited_once()
+    assert client.async_answer_interaction.await_args.kwargs["answers"] == [
+        {"question_id": "scope", "values": ["Source only"]}
+    ]
+    await coordinator.async_close()
+
+
+@pytest.mark.parametrize("status", [None, "answered", "expired", "cancelled"])
+async def test_explicitly_non_pending_question_never_notifies(monkeypatch, status):
+    coordinator, _runtime, client, services = _fixture(
+        monkeypatch, [{**_interaction(), "status": status}]
+    )
+    await coordinator.async_start()
+    assert services.calls == []
+    client.async_answer_interaction.assert_not_awaited()
+    await coordinator.async_close()
+
+
+async def test_redacted_question_event_refreshes_authoritative_choices(monkeypatch):
+    settings = {"enabled": True, "persistent": False, "preview": True, "mobile_targets": ["phone-registration"]}
+    coordinator, _runtime, client, services = _fixture(monkeypatch, [], settings=settings)
+    await coordinator.async_start()
+    item = _interaction(questions=[_question(allow_free_text=False)])
+    client.async_list_pending_interactions.return_value = {"items": [item]}
+    await coordinator._on_broker_event(SimpleNamespace(
+        event_type="interaction.created",
+        payload={"display": {"questions": [{**_question(), "options": [None, None]}]}},
+    ))
+    assert coordinator._refresh_task is not None
+    await coordinator._refresh_task
+    mobile, _ = _tokens(services)
+    assert [action["title"] for action in mobile["data"]["actions"]] == [
+        "Source only", "Source and docs", "Open chat"
+    ]
+    assert client.async_list_pending_interactions.await_count == 2
+    client.async_answer_interaction.assert_not_awaited()
     await coordinator.async_close()
 
 

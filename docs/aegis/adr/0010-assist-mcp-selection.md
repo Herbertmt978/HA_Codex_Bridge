@@ -19,6 +19,13 @@ definitions are masked. Unsupported or malformed higher-priority configuration
 fails closed. The native runtime's zero idle unload delay is verified before
 advertising the capability.
 
+The named permission profile is installed at thread start and cold resume.
+Assist does not send a generic read-only `turn/start` sandbox override: that
+override would replace the profile's restricted readable roots. Its immutable
+conversation cannot transition to ordinary chat execution modes. Ordinary
+chats still apply their accepted sandbox policy on every turn, including queued
+Plan-to-execution transitions.
+
 Cold resume follows an acknowledged native unload. Completion unloads the
 session while its runtime lease is held. Lost control acknowledgements or an
 invalid policy result abort the native generation before lease release. An

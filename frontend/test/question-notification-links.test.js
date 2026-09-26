@@ -61,6 +61,67 @@ describe("authenticated question notification links", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders the public pending-question envelope when status is omitted", async () => {
+    const panel = makePanel("/");
+    const publicQuestion = { ...question, event_id: 42, allowed_actions: ["answer"] };
+    delete publicQuestion.status;
+    panel._callWS = vi.fn(async () => ({ items: [publicQuestion] }));
+    const pending = await panel._listPendingInteractions("thread-one");
+    expect(pending).toHaveLength(1);
+    expect(pending[0].status).toBe("pending");
+    panel._selectedThreadId = "thread-one";
+    panel._replacePendingInteractions(pending);
+    panel._renderInteractions();
+    expect(panel.shadowRoot.querySelector(".user-input-card")?.textContent).toContain("Which files should Codex update?");
+    expect(panel._callWS).toHaveBeenCalledWith("list_pending_interactions", { thread_id: "thread-one" });
+  });
+
+  it.each([null, "answered", "expired", "cancelled"])("rejects an explicitly non-pending status %s", async (status) => {
+    const panel = makePanel("/");
+    panel._callWS = vi.fn(async () => ({ items: [{ ...question, event_id: 42, status }] }));
+    expect(await panel._listPendingInteractions("thread-one")).toEqual([]);
+  });
+
+  it.each(["poll", "subscription"])("fetches complete question choices after a redacted %s event", async (transport) => {
+    vi.useFakeTimers();
+    try {
+      const panel = makePanel("/");
+      const thread = { thread_id: "thread-one", project_id: "project-one", title: "Plan", status: "waiting_input", mode: "edit", attachments: [] };
+      const publicQuestion = { ...question, event_id: 42, allowed_actions: ["answer"] };
+      delete publicQuestion.status;
+      const event = { event_id: "event-question", thread_id: "thread-one", sequence: 42,
+        event_type: "interaction.created", timestamp: "2026-09-26T12:00:00Z",
+        payload: { interaction_id: publicQuestion.interaction_id, kind: "user_input",
+          display: { ...question.display, questions: [{ ...question.display.questions[0], options: [null, null] }] } } };
+      panel._selectedThreadId = "thread-one";
+      panel._activeThread = thread;
+      panel._status = {};
+      panel._lastStatusRefreshAt = Date.now();
+      panel._callWS = vi.fn(async (operation) => {
+        if (operation === "get_events") return [event];
+        if (operation === "list_pending_interactions") return { items: [publicQuestion] };
+        if (operation === "get_thread") return thread;
+        if (operation === "get_status") return {};
+        if (operation === "list_artifacts") return [];
+        throw new Error(`Unexpected operation ${operation}`);
+      });
+      if (transport === "poll") {
+        panel._pollActive = true; panel._pollGeneration = 1;
+        panel._scheduleNextPoll = vi.fn();
+        await panel._runPollTick(1);
+      } else {
+        panel._handleSubscribedEvent("thread-one", event);
+        await vi.advanceTimersByTimeAsync(250);
+      }
+      const card = panel.shadowRoot.querySelector(".user-input-card");
+      expect(card?.textContent).toContain("Source only");
+      expect(card?.textContent).toContain("Source and docs");
+      expect(panel._pendingInteractions[0].display.questions[0].options).toEqual(question.display.questions[0].options);
+      expect(panel._callWS).toHaveBeenCalledWith("list_pending_interactions", { thread_id: "thread-one" });
+      expect(panel._callWS.mock.calls.some(([operation]) => operation === "answer_interaction")).toBe(false);
+    } finally { vi.useRealTimers(); }
+  });
+
   it("opens the linked chat and focuses its matching pending question once", async () => {
     const panel = makePanel("/?thread=thread-one&interaction=interaction-question-1");
 

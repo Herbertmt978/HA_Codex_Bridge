@@ -169,6 +169,8 @@ class _SharedClient:
                     "rateLimitReachedType": None,
                 }
             }
+        if method == "thread/unsubscribe":
+            return {"status": "notLoaded"}
         if method in {"thread/start", "thread/resume"}:
             self._thread_number += 1
             thread_id = (
@@ -728,6 +730,62 @@ def test_first_status_after_auth_recovery_uses_the_refreshed_catalogue(
     assert response.json()["model_catalog"]["default_thinking_level"] == "max"
     assert direct.default_model == "gpt-5.6-terra"
     assert direct.default_thinking_level == "max"
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="secure Home Assistant prompt execution requires POSIX dir_fd support",
+)
+def test_app_restart_settles_account_before_resuming_explicit_queue(
+    tmp_path: Path,
+) -> None:
+    original_client = _SharedClient()
+    original_client.turn_in_progress = True
+    original_app = _ha_app(tmp_path, original_client)
+    with TestClient(original_app):
+        thread = _seed_blocked_thread(original_app, name="Recovered queue")
+        runner = original_app.state.runner
+        runner.submit_prompt(
+            thread.thread_id,
+            "Keep runtime occupied",
+            client_request_id="lifespan-recovery-active",
+        )
+        _wait_until(
+            lambda: sum(
+                method == "turn/start" for method, _params in original_client.requests
+            )
+            == 1
+        )
+        queued = runner.submit_prompt(
+            thread.thread_id,
+            "Resume after account startup",
+            client_request_id="lifespan-recovery-queued",
+            follow_up_mode="queue",
+        )
+        assert queued.status == "queued"
+
+    assert original_app.state.runner._state.runs[queued.run_id].status == "queued"
+
+    recovered_client = _SharedClient()
+    recovered_client.generation = original_client.generation + 1
+    recovered_app = _ha_app(tmp_path, recovered_client)
+    with TestClient(recovered_app):
+        _wait_until(
+            lambda: sum(
+                method == "turn/start" for method, _params in recovered_client.requests
+            )
+            == 1
+        )
+        _wait_until(
+            lambda: recovered_app.state.runner._state.runs[queued.run_id].status
+            == "completed"
+        )
+        assert recovered_app.state.runner._state.runs[queued.run_id].status == (
+            "completed"
+        )
+        assert sum(
+            method == "turn/start" for method, _params in recovered_client.requests
+        ) == 1
 
 
 def test_shared_catalogue_redacts_transport_failures(tmp_path: Path) -> None:

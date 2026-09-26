@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import random
 import struct
-from threading import Barrier, Event, Lock, RLock
+from threading import Barrier, Event, Lock, RLock, current_thread
 import time
 from typing import Any
 from types import SimpleNamespace
@@ -42,6 +42,7 @@ from codex_bridge_service.event_store import EventStoreAdmissionError
 from codex_bridge_service.models import (
     ArtifactRecord,
     ArtifactSource,
+    ContextUsageRecord,
     PublicThreadRecord,
     RunMode,
     RuntimeProfile,
@@ -53,6 +54,7 @@ from codex_bridge_service.resource_limits import (
 from codex_bridge_service.runtime_broker import (
     RuntimeBroker,
     RuntimeBrokerError,
+    RuntimeAuthenticationRequiredError,
     RuntimeCollaborationModeUnavailableError,
     QueuedPromptNotFoundError,
     QueuedPromptRevisionConflictError,
@@ -562,6 +564,8 @@ def _broker(
     browser_dynamic_tools_enabled: bool = False,
     host_access: object | None = None,
     provider_admission_check: Callable[[], bool] | None = None,
+    provider_account_owner_marker: Callable[[], str | None] | None = None,
+    defer_recovered_queued_runs: bool = False,
     mcp_manager: object | None = None,
 ) -> RuntimeBroker:
     broker = RuntimeBroker(
@@ -579,9 +583,10 @@ def _broker(
         browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
         host_access=host_access,
         provider_admission_check=provider_admission_check,
+        provider_account_owner_marker=provider_account_owner_marker,
         mcp_manager=mcp_manager,
     )
-    broker.start()
+    broker.start(defer_recovered_queued_runs=defer_recovered_queued_runs)
     return broker
 
 
@@ -8521,14 +8526,23 @@ def test_explicit_queue_is_idempotent_editable_cancellable_and_claimed_once(
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
     client = ValidatorBackedAppServer()
+    client.enable_experimental_api = True
+    client.supports_collaboration_mode = True
     broker = _broker(storage, client)
     try:
         active = broker.submit_prompt(
             thread.thread_id,
             "Active prompt",
             client_request_id="explicit-queue-active",
+            collaboration_mode="plan",
         )
         _run_id, remote_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        context_usage = ContextUsageRecord(
+            used_tokens=321,
+            context_window=4096,
+            updated_at="2026-09-26T12:00:00Z",
+        )
+        storage.update_context_usage(thread.thread_id, remote_thread_id, context_usage)
 
         queued = broker.submit_prompt(
             thread.thread_id,
@@ -8578,6 +8592,18 @@ def test_explicit_queue_is_idempotent_editable_cancellable_and_claimed_once(
                 expected_revision=1,
             )
         assert broker.cancel_queued_prompt(thread.thread_id, queued.run_id).status == "cancelled"
+        projected = storage.load_thread(thread.thread_id)
+        public = PublicThreadRecord.from_thread_view(storage.get_thread(thread.thread_id))
+        persisted_runtime = RuntimeStateStore(storage.root).load()
+        assert public.status == "running"
+        assert public.collaboration_mode == "plan"
+        assert public.context_usage == context_usage
+        assert projected.active_run_id == active.run_id
+        assert projected.active_turn_id == turn_id
+        assert projected.codex_thread_id == remote_thread_id
+        assert projected.context_usage == context_usage
+        assert persisted_runtime.runs[active.run_id].status == "running"
+        assert persisted_runtime.runs[queued.run_id].status == "cancelled"
         removed_messages = [
             event
             for event in storage.list_thread_events(thread.thread_id)
@@ -8758,6 +8784,512 @@ def test_explicit_queue_survives_broker_restart_without_duplicate_dispatch(
         assert len(_requests(recovered_client, "turn/start")) == 1
         assert recovered_broker.list_queued_prompts(queued_thread.thread_id) == []
         assert storage.load_thread(queued_thread.thread_id).active_run_id == queued.run_id
+    finally:
+        recovered_broker.close()
+
+
+def test_app_recovered_queue_waits_for_auth_owner_and_dispatches_once(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="DeferredAuthQueue")
+    owner_marker = "a" * 64
+    assert storage.bind_codex_account(owner_marker) == 0
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(
+        storage,
+        original_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=storage.codex_account_owner_marker,
+    )
+    original_broker.submit_prompt(
+        active_thread.thread_id,
+        "Hold runtime while queueing",
+        client_request_id="deferred-auth-active",
+    )
+    _active_ids(storage, active_thread.thread_id)
+    queued = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "Resume after auth settles",
+        client_request_id="deferred-auth-queue-item",
+        follow_up_mode="queue",
+    )
+    assert queued.status == "queued"
+    assert original_broker._state.runs[queued.run_id].account_owner_marker == owner_marker
+    _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+
+    auth_ready = Event()
+    recovered_client = ValidatorBackedAppServer()
+    recovered_broker = _broker(
+        storage,
+        recovered_client,
+        provider_admission_check=auth_ready.is_set,
+        provider_account_owner_marker=storage.codex_account_owner_marker,
+        defer_recovered_queued_runs=True,
+    )
+    try:
+        assert recovered_broker.gate.snapshot().active_turns == 0
+        assert recovered_broker.gate.snapshot().queued_prompts == 0
+        assert recovered_broker._state.runs[queued.run_id].status == "queued"
+        assert recovered_client.requests == []
+
+        auth_lease = recovered_broker.gate.acquire_auth_mutation()
+        assert recovered_broker.gate.snapshot().auth_mutation_active
+        auth_lease.release()
+
+        recovered_broker.resume_recovered_queued_runs()
+        assert queued.run_id in recovered_broker._recovering_queue_ids
+        assert recovered_client.requests == []
+        assert recovered_broker.gate.snapshot().active_turns == 0
+        assert recovered_broker.gate.snapshot().queued_prompts == 0
+
+        auth_ready.set()
+        recovered_broker.resume_recovered_queued_runs()
+        _wait_until(lambda: len(_requests(recovered_client, "turn/start")) == 1)
+        assert _requests(recovered_client, "turn/start")[0]["input"][0]["text"] == (
+            "Resume after auth settles"
+        )
+        assert recovered_broker.runtime_snapshot().queued_prompts == 0
+        assert recovered_broker._state.runs[queued.run_id].status in {
+            "running",
+            "completed",
+        }
+        assert len(_requests(recovered_client, "turn/start")) == 1
+    finally:
+        recovered_broker.close()
+
+
+def test_app_recovered_queue_owner_change_while_waiting_never_dispatches(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="OwnerChangesWhileWaiting")
+    owner_marker = ["a" * 64]
+    storage.bind_codex_account(owner_marker[0])
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(
+        storage,
+        original_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=lambda: owner_marker[0],
+    )
+    original_broker.submit_prompt(
+        active_thread.thread_id,
+        "Hold runtime while queueing",
+        client_request_id="owner-change-wait-active",
+    )
+    _active_ids(storage, active_thread.thread_id)
+    queued = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "Do not cross account owners",
+        client_request_id="owner-change-wait-queued",
+        follow_up_mode="queue",
+    )
+    _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+
+    auth_ready = Event()
+    recovered_client = ValidatorBackedAppServer()
+    recovered_broker = _broker(
+        storage,
+        recovered_client,
+        provider_admission_check=auth_ready.is_set,
+        provider_account_owner_marker=lambda: owner_marker[0],
+        defer_recovered_queued_runs=True,
+    )
+    try:
+        recovered_broker.resume_recovered_queued_runs()
+        _wait_until(lambda: queued.run_id in recovered_broker._recovering_queue_ids)
+        owner_marker[0] = "b" * 64
+        storage.bind_codex_account(owner_marker[0])
+        _wait_until(
+            lambda: recovered_broker._state.runs[queued.run_id].status == "cancelled"
+        )
+        assert recovered_client.requests == []
+        assert recovered_broker.gate.snapshot().active_turns == 0
+        assert recovered_broker.gate.snapshot().queued_prompts == 0
+        assert any(
+            event.event_type == "message.created"
+            and event.payload.get("text") == "Do not cross account owners"
+            for event in storage.list_thread_events(queued_thread.thread_id)
+        )
+    finally:
+        recovered_broker.close()
+
+
+def test_app_close_preserves_unready_recovered_queue_without_dispatch(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="CloseUnreadyQueue")
+    owner_marker = "a" * 64
+    storage.bind_codex_account(owner_marker)
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(
+        storage,
+        original_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=storage.codex_account_owner_marker,
+    )
+    original_broker.submit_prompt(
+        active_thread.thread_id,
+        "Hold runtime while queueing",
+        client_request_id="close-unready-active",
+    )
+    _active_ids(storage, active_thread.thread_id)
+    queued = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "Keep this queued on close",
+        client_request_id="close-unready-queued",
+        follow_up_mode="queue",
+    )
+    _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+
+    recovered_client = ValidatorBackedAppServer()
+    recovered_broker = _broker(
+        storage,
+        recovered_client,
+        provider_admission_check=lambda: False,
+        provider_account_owner_marker=storage.codex_account_owner_marker,
+        defer_recovered_queued_runs=True,
+    )
+    recovered_broker.resume_recovered_queued_runs()
+    _wait_until(lambda: queued.run_id in recovered_broker._recovering_queue_ids)
+    recovered_broker.close()
+    assert recovered_client.requests == []
+    assert recovered_broker._state.runs[queued.run_id].status == "queued"
+    assert not any(
+        event.event_type == "message.removed"
+        and event.payload.get("run_id") == queued.run_id
+        for event in storage.list_thread_events(queued_thread.thread_id)
+    )
+
+
+@pytest.mark.parametrize("close_during_admission", [False, True])
+def test_queued_worker_only_preserves_prompt_when_broker_closes_during_auth_check(
+    tmp_path: Path,
+    close_during_admission: bool,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    queued_run_id: str | None = None
+    admission_ready = True
+    hold_admission = Event()
+    admission_entered = Event()
+    release_admission = Event()
+
+    def admission_check() -> bool:
+        if (
+            queued_run_id is not None
+            and current_thread().name == f"CodexRuntime-{queued_run_id[-8:]}"
+            and hold_admission.is_set()
+        ):
+            admission_entered.set()
+            assert release_admission.wait(timeout=3)
+        return admission_ready
+
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=admission_check,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Keep runtime occupied",
+            client_request_id="shutdown-readiness-active",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        queued = broker.submit_prompt(
+            thread.thread_id,
+            "Preserve only across shutdown",
+            client_request_id="shutdown-readiness-queued",
+            follow_up_mode="queue",
+        )
+        assert queued.status == "queued"
+        queued_run_id = queued.run_id
+        hold_admission.set()
+
+        _, provider_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(
+            client,
+            remote_thread_id=provider_thread_id,
+            turn_id=turn_id,
+        )
+        assert admission_entered.wait(timeout=3)
+
+        if close_during_admission:
+            broker.close()
+            admission_ready = False
+        else:
+            admission_ready = False
+        release_admission.set()
+
+        if close_during_admission:
+            _wait_until(
+                lambda: not any(
+                    worker.name == f"CodexRuntime-{queued.run_id[-8:]}"
+                    for worker in broker._workers
+                )
+            )
+            assert broker._closed
+            assert broker._state.runs[queued.run_id].status == "queued"
+            assert storage.load_thread(thread.thread_id).status == "idle"
+        else:
+            _wait_until(
+                lambda: broker._state.runs[queued.run_id].status == "cancelled"
+            )
+            assert not broker._closed
+            assert broker._state.runs[queued.run_id].terminal_message == (
+                "The prompt was stopped while the ChatGPT account was changing."
+            )
+        assert len(_requests(client, "turn/start")) == 1
+        assert any(
+            event.event_type == "message.created"
+            and event.payload.get("text") == "Preserve only across shutdown"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        release_admission.set()
+        broker.close()
+
+
+def test_queued_worker_preserves_undispatched_prompt_after_closed_start_error(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    start_entered = Event()
+    release_start = Event()
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: True,
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Keep runtime occupied",
+            client_request_id="shutdown-start-error-active",
+        )
+        _wait_until(lambda: len(_requests(client, "turn/start")) == 1)
+        queued = broker.submit_prompt(
+            thread.thread_id,
+            "Keep the undispatched prompt",
+            client_request_id="shutdown-start-error-queued",
+            follow_up_mode="queue",
+        )
+        assert queued.status == "queued"
+
+        def fail_queued_start(_run_id: str) -> None:
+            start_entered.set()
+            assert release_start.wait(timeout=3)
+            raise RuntimeError("simulated stop between admission and start")
+
+        broker._start_turn = fail_queued_start
+        _, provider_thread_id, turn_id = _active_ids(storage, thread.thread_id)
+        _complete(
+            client,
+            remote_thread_id=provider_thread_id,
+            turn_id=turn_id,
+        )
+        assert start_entered.wait(timeout=3)
+
+        broker.close()
+        release_start.set()
+        _wait_until(
+            lambda: not any(
+                worker.name == f"CodexRuntime-{queued.run_id[-8:]}"
+                for worker in broker._workers
+            )
+        )
+
+        assert broker._state.runs[queued.run_id].status == "queued"
+        assert not broker._state.runs[queued.run_id].turn_start_dispatched
+        assert len(_requests(client, "turn/start")) == 1
+    finally:
+        release_start.set()
+        broker.close()
+
+
+def test_app_queued_prompt_requires_a_valid_owner_marker_at_acceptance(
+    tmp_path: Path,
+) -> None:
+    storage, thread = _storage_and_thread(tmp_path)
+    client = ValidatorBackedAppServer()
+    broker = _broker(
+        storage,
+        client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=lambda: "not-an-owner-marker",
+    )
+    try:
+        broker.submit_prompt(
+            thread.thread_id,
+            "Keep the active turn",
+            client_request_id="owner-marker-active",
+        )
+        _active_ids(storage, thread.thread_id)
+        with pytest.raises(RuntimeAuthenticationRequiredError):
+            broker.submit_prompt(
+                thread.thread_id,
+                "Do not queue without owner proof",
+                client_request_id="owner-marker-queued",
+                follow_up_mode="queue",
+            )
+        assert not any(
+            event.event_type == "message.created"
+            and event.payload.get("client_request_id") == "owner-marker-queued"
+            for event in storage.list_thread_events(thread.thread_id)
+        )
+    finally:
+        broker.close()
+
+
+@pytest.mark.parametrize(
+    ("saved_owner_marker", "current_owner_marker"),
+    [
+        ("a" * 64, "b" * 64),
+        ("a" * 64, None),
+        (None, "a" * 64),
+    ],
+    ids=["changed-owner", "unavailable-owner", "missing-saved-owner"],
+)
+def test_app_recovered_queue_rejects_missing_or_changed_owner_without_deleting_history(
+    tmp_path: Path,
+    saved_owner_marker: str | None,
+    current_owner_marker: str | None,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="OwnerFencedQueue")
+    owner_at_acceptance = saved_owner_marker or "a" * 64
+    storage.bind_codex_account(owner_at_acceptance)
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(
+        storage,
+        original_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=lambda: owner_at_acceptance,
+    )
+    original_broker.submit_prompt(
+        active_thread.thread_id,
+        "Hold runtime while queueing",
+        client_request_id="owner-fence-active",
+    )
+    _active_ids(storage, active_thread.thread_id)
+    queued = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "Keep queued history",
+        client_request_id="owner-fence-queue-item",
+        follow_up_mode="queue",
+    )
+    assert queued.status == "queued"
+    _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+
+    if saved_owner_marker is None:
+        checkpoint_path = storage.root / "runtime-state.json"
+        checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+        del checkpoint["runs"][queued.run_id]["account_owner_marker"]
+        checkpoint_path.write_text(
+            json.dumps(checkpoint), encoding="utf-8"
+        )
+        assert (
+            RuntimeStateStore(storage.root)
+            .load()
+            .runs[queued.run_id]
+            .account_owner_marker
+            is None
+        )
+
+    if (
+        current_owner_marker is not None
+        and owner_at_acceptance != current_owner_marker
+    ):
+        storage.bind_codex_account(current_owner_marker)
+    recovered_client = ValidatorBackedAppServer()
+    recovered_broker = _broker(
+        storage,
+        recovered_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=lambda: current_owner_marker,
+        defer_recovered_queued_runs=True,
+    )
+    try:
+        recovered_broker.resume_recovered_queued_runs()
+        assert recovered_client.requests == []
+        _wait_until(
+            lambda: recovered_broker._state.runs[queued.run_id].status == "cancelled"
+        )
+        events = storage.list_thread_events(queued_thread.thread_id)
+        assert any(
+            event.event_type == "message.created"
+            and event.payload.get("text") == "Keep queued history"
+            for event in events
+        )
+        assert not any(
+            event.event_type == "message.removed"
+            and event.payload.get("run_id") == queued.run_id
+            for event in events
+        )
+    finally:
+        recovered_broker.close()
+
+
+def test_app_recovered_queue_keeps_original_deadline_and_never_replays_dispatched_work(
+    tmp_path: Path,
+) -> None:
+    storage, active_thread = _storage_and_thread(tmp_path)
+    queued_thread = _new_thread(storage, tmp_path, name="ExpiringRecoveredQueue")
+    owner_marker = "a" * 64
+    storage.bind_codex_account(owner_marker)
+    original_client = ValidatorBackedAppServer()
+    original_broker = _broker(
+        storage,
+        original_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=storage.codex_account_owner_marker,
+    )
+    original_broker.submit_prompt(
+        active_thread.thread_id,
+        "Hold runtime while queueing",
+        client_request_id="recovery-budget-active",
+    )
+    _active_ids(storage, active_thread.thread_id)
+    expired = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "This queued turn has expired",
+        client_request_id="recovery-budget-expired",
+        follow_up_mode="queue",
+    )
+    dispatched = original_broker.submit_prompt(
+        queued_thread.thread_id,
+        "This dispatched turn must not replay",
+        client_request_id="recovery-budget-dispatched",
+        follow_up_mode="queue",
+    )
+    assert expired.status == dispatched.status == "queued"
+    with original_broker._lock:
+        original_broker._state.runs[expired.run_id].total_deadline_at = (
+            "2000-01-01T00:00:00+00:00"
+        )
+        original_broker._state.runs[dispatched.run_id].turn_start_dispatched = True
+        original_broker._persist_locked()
+    _restore_durable_runtime_checkpoint_after_stopping(original_broker, storage)
+
+    recovered_client = ValidatorBackedAppServer()
+    recovered_broker = _broker(
+        storage,
+        recovered_client,
+        provider_admission_check=lambda: True,
+        provider_account_owner_marker=storage.codex_account_owner_marker,
+        defer_recovered_queued_runs=True,
+    )
+    try:
+        recovered_broker.resume_recovered_queued_runs()
+        assert recovered_client.requests == []
+        assert recovered_broker._state.runs[expired.run_id].status == "cancelled"
+        assert recovered_broker._state.runs[dispatched.run_id].status == "interrupted"
+        assert expired.run_id not in recovered_broker._deferred_recovered_queue_ids
+        assert dispatched.run_id not in recovered_broker._deferred_recovered_queue_ids
     finally:
         recovered_broker.close()
 

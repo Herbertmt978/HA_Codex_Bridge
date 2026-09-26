@@ -2,6 +2,35 @@
 
 All notable App changes are recorded here.
 
+## 1.11.0
+
+- Applies accepted settings when resuming an idle Codex conversation, including
+  Plan-to-Implement changes, by confirming cold resume before strict policy checks.
+- Displays native Plan text while it streams and retains acknowledged Plans
+  as readable Markdown responses and conversation-rail previews.
+- Applies queued draft edits and removals to the correct transcript message,
+  preserving reading position and the original live turn when a draft is cancelled.
+- Preserves undispatched queued prompts during shutdown and re-admits them after
+  account verification. Unverified ownership or prior dispatch prevents replay;
+  retained history is preserved for manual recovery.
+- Displays pending Plan questions and sends opted-in question notices when the
+  public API omits its default pending-status field. Explicit resolved states
+  remain rejected.
+- Lets administrators select the MCP servers Assist can use independently
+  from ordinary chats, including native Home Assistant and compatible custom servers.
+- Adds an explicit native HA MCP authorisation shortcut with deny-all initial
+  tools, private token renewal and revocation before remote discovery or cleanup.
+- Keeps Assist in a private read-only runtime profile, with immutable accepted
+  permissions and fail-closed native teardown.
+- Adds opt-in question notices and verified administrator Companion replies.
+  Replies answer existing questions and cannot approve execution or access;
+  pre-dispatch failures release their claim, while uncertain dispatch stays sealed.
+- Moves HA Assistant Chats below Projects and Archived, initially collapsed,
+  retaining manual expansion and temporary search expansion.
+- Pairs App, Integration and panel `1.11.0` with Bridge `0.18.0` and unchanged
+  Codex `0.157.1`. Physical notification replies and native home control require
+  separate target acceptance.
+
 ## 1.10.1
 
 - Restores native Plan availability by negotiating its capability after the

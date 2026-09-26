@@ -89,6 +89,9 @@ class RuntimeRunState(BaseModel):
     message_sequence: int | None = Field(default=None, ge=1)
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
+    account_owner_marker: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$", repr=False
+    )
     mode: RunMode
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     model: str = Field(min_length=1, max_length=128)

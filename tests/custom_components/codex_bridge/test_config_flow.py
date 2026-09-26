@@ -728,3 +728,42 @@ async def test_question_notification_options_require_current_registered_admin_de
         assert persistent["type"] is FlowResultType.CREATE_ENTRY
         assert persistent["data"]["question_notifications_enabled"] is True
         assert persistent["data"]["question_notifications_preview"] is False
+
+
+@pytest.mark.parametrize("change", ["assist_mcp", "notification_preview"])
+async def test_assist_mcp_and_question_options_preserve_each_other(hass, change):
+    entry = MockConfigEntry(domain=DOMAIN,
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+        options={CONF_ASSIST_ENABLED: True, CONF_ASSIST_PROJECT_ID: "prj",
+            CONF_ASSIST_MCP_SERVERS: ["home"], CONF_ASSIST_INSTRUCTIONS: "Keep answers concise.",
+            "question_notifications_enabled": True,
+            "question_notifications_persistent": True,
+            "question_notifications_preview": False,
+            "question_notifications_targets": []})
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass, flow.handler = hass, entry.entry_id
+    submitted = {CONF_WEB_SEARCH_MODE: "live", CONF_ASSIST_ENABLED: True,
+                 CONF_ASSIST_PROJECT_ID: "prj"}
+    if change == "assist_mcp":
+        submitted[CONF_ASSIST_MCP_SERVERS] = ["custom"]
+    else:
+        submitted["question_notifications_preview"] = True
+    with (
+        patch.object(flow, "_assist_projects", new=AsyncMock(return_value={"prj": "Assist"})),
+        patch.object(flow, "_assist_models", new=AsyncMock(return_value={})),
+        patch.object(flow, "_assist_mcp_servers", new=AsyncMock(return_value={
+            "home": ("HA MCP", True), "custom": ("Custom MCP", True)})),
+        patch("custom_components.codex_bridge.config_flow.async_resolve_question_recipients", new=AsyncMock(return_value=[])),
+    ):
+        result = await flow.async_step_init(submitted)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    options = result["data"]
+    assert options[CONF_ASSIST_ENABLED] is True
+    assert options[CONF_ASSIST_PROJECT_ID] == "prj"
+    assert options[CONF_ASSIST_MCP_SERVERS] == (["custom"] if change == "assist_mcp" else ["home"])
+    assert options[CONF_ASSIST_INSTRUCTIONS] == "Keep answers concise."
+    assert options["question_notifications_enabled"] is True
+    assert options["question_notifications_persistent"] is True
+    assert options["question_notifications_preview"] is (change == "notification_preview")
+    assert options["question_notifications_targets"] == []

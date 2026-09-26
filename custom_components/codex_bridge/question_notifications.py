@@ -62,7 +62,9 @@ def _valid_interaction(value: object) -> bool:
         and isinstance(value.get("thread_id"), str)
         and _ID.fullmatch(value["thread_id"]) is not None
         and value.get("kind") == "user_input"
-        and value.get("status") == "pending"
+        # The authoritative pending-list route omits unset model defaults.
+        # Retain compatibility with explicit pending, but reject stale states.
+        and ("status" not in value or value["status"] == "pending")
         and isinstance(value.get("allowed_actions"), list)
         and "answer" in value["allowed_actions"]
         and _expiry(value.get("expires_at")) is not None
