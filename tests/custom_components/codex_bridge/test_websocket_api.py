@@ -12,7 +12,6 @@ import aiohttp
 import pytest
 import voluptuous as vol
 from aiohttp import web
-from aiohttp.test_utils import TestServer
 
 from custom_components.codex_bridge.bridge_api import (
     BridgeApiClient,
@@ -152,6 +151,7 @@ async def test_git_review_preserves_known_bridge_problem_through_websocket(
     error_code: str,
     status: int,
     safe_message: str,
+    bridge_server_factory,
 ) -> None:
     ready = json.loads((FIXTURES / "ready_v1.json").read_text(encoding="utf-8"))
     if "git_review_v1" not in ready["capabilities"]:
@@ -165,32 +165,30 @@ async def test_git_review_preserves_known_bridge_problem_through_websocket(
             status=status,
         )
 
-    app = web.Application()
-    app.router.add_route("*", "/{path:.*}", handler)
-    async with TestServer(app) as server:
-        runtime, _broker = _runtime()
-        async with aiohttp.ClientSession() as session:
-            client = BridgeApiClient(
-                session,
-                str(server.make_url("")),
-                "bridge-token-0123456789abcdef0123456789",
-            )
-            await client.async_ready()
-            runtime.client = client
-            hass = _Hass(runtime)
-            connection = _Connection()
+    server = await bridge_server_factory(handler)
+    runtime, _broker = _runtime()
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(
+            session,
+            str(server.make_url("")),
+            "bridge-token-0123456789abcdef0123456789",
+        )
+        await client.async_ready()
+        runtime.client = client
+        hass = _Hass(runtime)
+        connection = _Connection()
 
-            ws_git_review(
-                hass,
-                connection,
-                {
-                    "id": 98,
-                    "type": f"{DOMAIN}/git_review",
-                    "thread_id": "thread-safe",
-                    "scope": "unstaged",
-                },
-            )
-            await hass.finish()
+        ws_git_review(
+            hass,
+            connection,
+            {
+                "id": 98,
+                "type": f"{DOMAIN}/git_review",
+                "thread_id": "thread-safe",
+                "scope": "unstaged",
+            },
+        )
+        await hass.finish()
 
     assert connection.errors == [(98, error_code, safe_message)]
     assert connection.results == []
