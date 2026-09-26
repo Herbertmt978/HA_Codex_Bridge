@@ -2,6 +2,21 @@
 
 All notable App changes are recorded here.
 
+## 1.9.0
+
+- Replaces the turn-button panel with a slim conversation rail on desktop and
+  mobile. Content-sized markers follow scrolling; stable animated previews,
+  keyboard navigation and browser-local bookmarks make long chats easier to navigate.
+- Displays uploaded and generated raster images in chat, with an enlarged
+  preview, image actions, Copy image and Download. Copy requires the browser's
+  secure clipboard support; denied permission displays a useful fallback.
+- Adds administrator-only attachment reads through Home Assistant, confined to
+  verified chat-owned upload snapshots. Raster previews validate type, size,
+  dimensions and decoding, with bounded loading and private blob lifetimes.
+- Preserves chat history, workspace access, account settings and Assist policy.
+- Pairs App, Integration and panel `1.9.0` with Bridge `0.16.0` and unchanged
+  Codex `0.157.1`.
+
 ## 1.8.11
 
 - Groups Home Assistant Assist conversations in a separate **HA Assistant Chats**

@@ -134,55 +134,10 @@ def download_artifact(
         except WorkspaceBoundaryError as exc:
             raise HTTPException(status_code=400, detail="invalid artifact location") from exc
 
-        handed_off = False
-        try:
-            etag = _stream_sha256_etag(stream)
-            byte_range = None
-            if range_header and if_range == etag:
-                byte_range = _parse_single_range(range_header, size_bytes)
-            elif range_header and if_range is None:
-                byte_range = _parse_single_range(range_header, size_bytes)
-            if range_header and byte_range is None and (
-                if_range is None or if_range == etag
-            ):
-                return Response(
-                    status_code=416,
-                    media_type="application/octet-stream",
-                    headers={
-                        "Content-Range": f"bytes */{size_bytes}",
-                        "Accept-Ranges": "bytes",
-                        "Cache-Control": "private, no-store, no-transform",
-                        "Content-Disposition": _attachment_disposition(artifact.filename),
-                        "ETag": etag,
-                        "X-Content-Type-Options": "nosniff",
-                    },
-                )
-            start, end = (
-                byte_range if byte_range is not None else (0, size_bytes - 1)
-            )
-            length = end - start + 1
-            headers = {
-                "Accept-Ranges": "bytes",
-                "Cache-Control": "private, no-store, no-transform",
-                "Content-Disposition": _attachment_disposition(artifact.filename),
-                "Content-Length": str(length),
-                "ETag": etag,
-                "X-Content-Type-Options": "nosniff",
-            }
-            if byte_range is not None:
-                headers["Content-Range"] = f"bytes {start}-{end}/{size_bytes}"
-            response = StreamingResponse(
-                _stream_and_close(stream, start=start, length=length),
-                media_type="application/octet-stream",
-                headers=headers,
-                background=BackgroundTask(stream.close),
-                status_code=206 if byte_range is not None else 200,
-            )
-            handed_off = True
-            return response
-        finally:
-            if not handed_off:
-                stream.close()
+        return snapshot_download_response(
+            stream, size_bytes=size_bytes, filename=artifact.filename,
+            range_header=range_header, if_range=if_range,
+        )
 
     try:
         artifact = storage.get_artifact(thread_id, artifact_id)
@@ -194,6 +149,62 @@ def download_artifact(
         media_type=artifact.mime_type,
         filename=Path(artifact.stored_path).name,
     )
+
+
+def snapshot_download_response(
+    stream: BinaryIO, *, size_bytes: int, filename: str,
+    range_header: str | None = None, if_range: str | None = None,
+) -> Response:
+    """Own a confined anonymous file lease through a bounded ranged response."""
+    handed_off = False
+    try:
+        etag = _stream_sha256_etag(stream)
+        byte_range = None
+        if range_header and if_range == etag:
+            byte_range = _parse_single_range(range_header, size_bytes)
+        elif range_header and if_range is None:
+            byte_range = _parse_single_range(range_header, size_bytes)
+        if range_header and byte_range is None and (
+            if_range is None or if_range == etag
+        ):
+            return Response(
+                status_code=416,
+                media_type="application/octet-stream",
+                headers={
+                    "Content-Range": f"bytes */{size_bytes}",
+                    "Accept-Ranges": "bytes",
+                    "Cache-Control": "private, no-store, no-transform",
+                    "Content-Disposition": _attachment_disposition(filename),
+                    "ETag": etag,
+                    "X-Content-Type-Options": "nosniff",
+                },
+            )
+        start, end = (
+            byte_range if byte_range is not None else (0, size_bytes - 1)
+        )
+        length = end - start + 1
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Cache-Control": "private, no-store, no-transform",
+            "Content-Disposition": _attachment_disposition(filename),
+            "Content-Length": str(length),
+            "ETag": etag,
+            "X-Content-Type-Options": "nosniff",
+        }
+        if byte_range is not None:
+            headers["Content-Range"] = f"bytes {start}-{end}/{size_bytes}"
+        response = StreamingResponse(
+            _stream_and_close(stream, start=start, length=length),
+            media_type="application/octet-stream",
+            headers=headers,
+            background=BackgroundTask(stream.close),
+            status_code=206 if byte_range is not None else 200,
+        )
+        handed_off = True
+        return response
+    finally:
+        if not handed_off:
+            stream.close()
 
 
 def _stream_sha256_etag(stream: BinaryIO) -> str:

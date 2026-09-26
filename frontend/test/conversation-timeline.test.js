@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_CONVERSATION_TURNS, projectConversationTurns } from "../src/conversation-timeline.js";
+import { MAX_CONVERSATION_TURNS, conversationMarkerWidth, projectConversationTurns } from "../src/conversation-timeline.js";
 
 const event = (sequence, event_type, payload = {}) => ({ sequence, event_type, payload });
 
 describe("conversation timeline projection", () => {
+  it("uses original content length rather than truncated previews for bounded marker widths", () => {
+    const turns = projectConversationTurns([
+      event(1, "message.created", { run_id: "short", text: "Hi" }),
+      event(2, "message.completed", { run_id: "short", text: "Hello" }),
+      event(3, "message.created", { run_id: "long", text: "Explain this" }),
+      event(4, "message.completed", { run_id: "long", text: "x".repeat(30000) }),
+    ]);
+    expect(turns[1].markerWidth).toBeGreaterThan(turns[0].markerWidth);
+    expect(conversationMarkerWidth(0)).toBe(6);
+    expect(conversationMarkerWidth(Infinity)).toBe(26);
+    expect(turns[1].response).toHaveLength(120);
+  });
   it("groups queued prompts and multiple assistant messages by run ID", () => {
     const turns = projectConversationTurns([
       event(1, "message.created", { run_id: "run-a", text: "First prompt" }),

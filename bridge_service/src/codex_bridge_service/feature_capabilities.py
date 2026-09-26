@@ -54,6 +54,7 @@ def readiness_capabilities(state: Any) -> tuple[str, ...]:
     profile = getattr(getattr(state, "storage", None), "runtime_profile", None)
     if getattr(profile, "value", profile) != "home_assistant":
         return tuple(dict.fromkeys(capabilities))
+    capabilities.append("attachment_downloads")
     provider = provider_capabilities(state)
     if provider["web_search"] is True:
         capabilities.append("web_search_v1")

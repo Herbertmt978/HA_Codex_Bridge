@@ -224,6 +224,7 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
     url = "/api/codex_bridge/threads/{thread_id}/artifacts/{artifact_id}"
     name = "api:codex_bridge:thread_artifact"
     requires_auth = True
+    _attachment_download = False
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
@@ -239,6 +240,8 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
         try:
             runtime = async_get_runtime(self.hass)
             if runtime.api_version == 0:
+                if self._attachment_download:
+                    raise HttpStreamingError(503, "bridge_incompatible")
                 artifacts = await runtime.client.async_list_artifacts(thread_id)
                 artifact = next(
                     (
@@ -256,7 +259,12 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
                 )
             else:
                 range_headers = safe_range_request_headers(request)
-                download = runtime.client.async_stream_artifact(
+                stream_download = (
+                    runtime.client.async_stream_attachment
+                    if self._attachment_download
+                    else runtime.client.async_stream_artifact
+                )
+                download = stream_download(
                     thread_id,
                     artifact_id,
                     range_header=range_headers.get("Range"),
@@ -304,6 +312,23 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
             if response_started:
                 raise ConnectionResetError("Bridge download stream failed") from None
             return _runtime_unavailable_response()
+
+
+class CodexBridgeAttachmentDownloadView(CodexBridgeArtifactDownloadView):
+    """Administrator-only download of a capability-gated retained upload."""
+
+    url = "/api/codex_bridge/threads/{thread_id}/attachments/{attachment_id}"
+    name = "api:codex_bridge:thread_attachment_download"
+    _attachment_download = True
+
+    async def get(
+        self,
+        request: web.Request,
+        thread_id: str,
+        attachment_id: str,
+    ) -> web.StreamResponse:
+        _require_admin(request)
+        return await super().get(request, thread_id, attachment_id)
 
 
 class CodexBridgeMcpCredentialView(HomeAssistantView):
@@ -534,3 +559,4 @@ def async_register_http_views(hass: HomeAssistant) -> None:
     hass.http.register_view(CodexBridgeUploadChunkView(hass))
     hass.http.register_view(CodexBridgeUploadCompleteView(hass))
     hass.http.register_view(CodexBridgeArtifactDownloadView(hass))
+    hass.http.register_view(CodexBridgeAttachmentDownloadView(hass))

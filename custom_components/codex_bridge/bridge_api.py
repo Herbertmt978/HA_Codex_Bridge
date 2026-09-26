@@ -1260,6 +1260,32 @@ class BridgeApiClient:
         ) as response:
             yield response
 
+    @asynccontextmanager
+    async def async_stream_attachment(
+        self,
+        thread_id: str,
+        attachment_id: str,
+        *,
+        range_header: str | None = None,
+        if_range: str | None = None,
+    ) -> AsyncIterator[BridgeStreamResponse]:
+        """Own one capability-gated, confined upload download response."""
+
+        self.require_api_v1()
+        self.require_capability("attachment_downloads")
+        headers: dict[str, str] = {}
+        if range_header is not None:
+            headers["Range"] = range_header
+        if if_range is not None:
+            headers["If-Range"] = if_range
+        async with self.async_stream(
+            "GET",
+            f"/threads/{_path_segment(thread_id)}/attachments/{_path_segment(attachment_id)}",
+            expected_status={200, 206, 416},
+            request_headers=headers,
+        ) as response:
+            yield response
+
     async def async_upload_attachment(
         self,
         thread_id: str,

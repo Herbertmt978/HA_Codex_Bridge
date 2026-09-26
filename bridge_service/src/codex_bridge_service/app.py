@@ -1064,6 +1064,7 @@ def create_app(
         dispatch_automation if resolved_automations is not None else None
     )
     app.include_router(artifacts.router)
+    app.include_router(attachments.download_router)
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         app.include_router(approvals.router)
         app.include_router(agents.router)

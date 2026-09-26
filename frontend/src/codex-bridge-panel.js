@@ -16,7 +16,8 @@ import {
   visiblePdfPageCount,
 } from "./pdf-preview.js";
 import { getRunActivityViewModel, getSafeRunFailureMessage } from "./run-activity.js";
-import { projectConversationTurns } from "./conversation-timeline.js";
+import { projectConversationTurns, readConversationBookmarks, saveConversationBookmarks } from "./conversation-timeline.js";
+import { InlineImageController, inlineImageCss, isInlineImage } from "./inline-images.js";
 import {
   PDF_MIME_TYPE,
   createPreviewElement,
@@ -40,7 +41,7 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.8.11";
+const PANEL_VERSION = "1.9.0";
 const ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -3751,212 +3752,112 @@ template.innerHTML = `
     .conversation-layout > .message-list { grid-column: 2; }
 
     #conversation-timeline[hidden] { display: none; }
+    .conversation-layout:has(#conversation-timeline:not([hidden])) {
+      grid-template-columns: 28px minmax(0, 1fr);
+      column-gap: 12px;
+    }
     #conversation-timeline {
       position: sticky;
       top: 12px;
       z-index: 4;
-      width: 24px;
-      transform: translateX(-28px);
-      height: min(380px, calc(100dvh - 220px));
-      min-height: 120px;
+      width: 28px;
       margin-top: 20px;
-      overflow: visible;
+      align-self: start;
     }
-
     .timeline-track {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       gap: 0;
-      width: 100%;
-      height: 100%;
+      max-height: var(--timeline-track-height, min(560px, 60dvh));
       overflow-x: hidden;
       overflow-y: auto;
       overscroll-behavior: contain;
-      padding-block: 6px;
-      scrollbar-width: thin;
+      padding-block: 4px;
+      scrollbar-width: none;
     }
-
     .timeline-item {
       display: flex;
       flex: 0 0 24px;
-      width: 24px;
+      width: 28px;
       height: 24px;
       align-items: center;
-      justify-content: center;
-      padding: 0;
+      justify-content: flex-start;
+      padding: 0 1px;
       border: 0;
-      border-radius: 999px;
+      border-radius: 4px;
       background: transparent;
       color: var(--text-color);
       cursor: pointer;
+      touch-action: manipulation;
     }
-
     .timeline-item:focus-visible {
       outline: 2px solid var(--focus-ring-color);
-      outline-offset: 2px;
-      box-shadow: 0 0 0 2px var(--focus-ring-contrast);
+      outline-offset: -2px;
     }
-
     .timeline-marker {
       display: block;
-      width: 4px;
+      width: var(--marker-width, 6px);
       height: 2px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--muted-color) 35%, transparent);
-      transition: width 140ms ease, background-color 140ms ease;
+      background: color-mix(in srgb, var(--muted-color) 42%, transparent);
+      transition: width 160ms ease, background-color 160ms ease;
     }
-
+    .timeline-item[data-bookmarked] .timeline-marker { background: var(--muted-color); height: 3px; }
     .timeline-item:hover .timeline-marker,
     .timeline-item:focus-visible .timeline-marker,
     .timeline-item[aria-current="location"] .timeline-marker {
-      width: 16px;
+      width: 26px;
       background: var(--text-color);
     }
-
-    .timeline-mobile-label { display: none; }
-
     .timeline-preview {
-      position: absolute;
-      top: var(--timeline-preview-position, 50%);
-      left: calc(100% + 8px);
-      z-index: 5;
+      position: fixed;
+      left: var(--timeline-preview-left, 40px);
+      top: var(--timeline-preview-top, 100px);
+      z-index: 25;
       display: grid;
-      width: min(300px, calc(100vw - 48px));
-      gap: 5px;
-      padding: 10px 12px;
+      width: var(--timeline-preview-width, 360px);
+      max-height: var(--timeline-preview-height, 220px);
+      overflow: auto;
+      gap: 7px;
+      padding: 12px;
       border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border-radius: 14px;
       background: var(--surface-bg);
       color: var(--text-color);
       text-align: left;
-      box-shadow: 0 8px 28px color-mix(in srgb, var(--text-color) 18%, transparent);
+      box-shadow: 0 8px 28px color-mix(in srgb, var(--text-color) 15%, transparent);
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
-      transform: translate(4px, -50%);
-      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+      transform: translateX(-4px);
+      transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
     }
-
-    .timeline-preview-title { font-size: var(--font-caption-size); font-weight: 600; }
+    #conversation-timeline.preview-open .timeline-preview {
+      opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(0);
+    }
+    .timeline-preview[hidden] { display: none; }
+    .timeline-preview-heading { display: flex; align-items: start; gap: 8px; }
+    .timeline-preview-title {
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; font-size: var(--font-caption-size); font-weight: 600;
+    }
     .timeline-preview-copy {
-      display: -webkit-box;
-      overflow: hidden;
-      color: var(--muted-color);
-      font-size: var(--font-caption-size);
-      line-height: 1.4;
-      white-space: normal;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
+      display: -webkit-box; overflow: hidden; color: var(--muted-color);
+      font-size: var(--font-caption-size); line-height: 1.5; white-space: normal;
+      -webkit-box-orient: vertical; -webkit-line-clamp: 3;
     }
-
-    #conversation-timeline:has(.timeline-item:hover) .timeline-preview-desktop,
-    #conversation-timeline:has(.timeline-item:focus-visible) .timeline-preview-desktop {
-      opacity: 1;
-      visibility: visible;
-      transform: translate(0, -50%);
+    .timeline-bookmark { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 4px; border: 0; background: transparent; color: var(--muted-color); border-radius: 6px; }
+    .timeline-bookmark svg { width: 18px; height: 18px; stroke: currentColor; fill: none; }
+    .timeline-bookmark[aria-pressed="true"] svg { fill: var(--accent-soft); color: var(--text-color); }
+    .timeline-bookmark:hover { background: var(--surface-muted); }
+    .timeline-preview-jump { justify-self: start; border: 0; border-radius: 6px; background: var(--surface-muted); color: var(--text-color); padding: 6px 10px; font-size: var(--font-caption-size); }
+    @media (max-width: 880px), (pointer: coarse) {
+      .conversation-layout:has(#conversation-timeline:not([hidden])) { grid-template-columns: 32px minmax(0, 1fr); column-gap: 4px; width: calc(100% - 16px); }
+      #conversation-timeline { width: 32px; }
+      .timeline-item { width: 32px; min-height: 44px; flex-basis: 44px; }
+      .timeline-bookmark { min-width: 44px; min-height: 44px; }
+      .timeline-preview-jump { min-height: 44px; }
     }
-
-    .timeline-preview-inline { display: none; }
-    .timeline-track.is-scrollable { justify-content: flex-start; }
-    .timeline-disclosure { display: none; }
-    .timeline-disclosure[hidden] { display: none; }
-    .timeline-track[hidden],
-    .timeline-preview-inline[hidden],
-    .timeline-preview-desktop[hidden] { display: none; }
-
-
-    .conversation-layout.timeline-compact {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      width: min(calc(100% - 32px), var(--conversation-width));
-    }
-
-    .timeline-compact #conversation-timeline {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      width: 100%;
-      transform: none;
-      height: auto;
-      min-height: 0;
-      margin: 0;
-      padding: 4px 0;
-      background: var(--canvas-bg);
-    }
-
-    .timeline-compact #conversation-timeline.is-open {
-      position: relative;
-    }
-
-    .timeline-compact .timeline-disclosure {
-      display: block;
-      width: 100%;
-      min-height: 44px;
-      padding: 8px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      background: var(--surface-bg);
-      color: var(--text-color);
-      text-align: left;
-    }
-
-    .timeline-compact .timeline-disclosure:focus-visible {
-      outline: 2px solid var(--focus-ring-color);
-      outline-offset: 2px;
-    }
-
-    .timeline-compact #conversation-timeline:not(.is-open) .timeline-track { display: none; }
-    .timeline-compact .timeline-preview-desktop { display: none; }
-
-    .timeline-compact .timeline-track {
-      display: flex;
-      flex-direction: row;
-      justify-content: flex-start;
-      width: 100%;
-      height: auto;
-      gap: 6px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      overscroll-behavior-inline: contain;
-      padding: 2px 2px 6px;
-      scroll-snap-type: x proximity;
-    }
-
-    .timeline-compact .timeline-item {
-      flex: 0 0 auto;
-      width: auto;
-      min-width: 44px;
-      height: 44px;
-      padding: 0 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      background: var(--surface-bg);
-      scroll-snap-align: start;
-    }
-
-    .timeline-compact .timeline-item[aria-current="location"] {
-      border-color: color-mix(in srgb, var(--accent-color) 68%, var(--border-color) 32%);
-      background: var(--accent-soft);
-    }
-
-    .timeline-compact .timeline-marker,
-    .timeline-compact .timeline-preview { display: none; }
-    .timeline-compact .timeline-mobile-label { display: block; font-size: var(--font-caption-size); white-space: nowrap; }
-
-    .timeline-compact .timeline-preview-inline:not([hidden]) {
-      display: grid;
-      gap: 5px;
-      padding: 10px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      background: var(--surface-bg);
-    }
-
-    .timeline-compact .message-list { padding-top: 12px; }
-
 
     .status-banner.visible,
     .error-strip.visible {
@@ -5863,10 +5764,8 @@ template.innerHTML = `
         </div>
         <div class="conversation-layout" id="conversation-layout">
           <nav id="conversation-timeline" aria-label="Conversation turns" hidden>
-            <button class="timeline-disclosure" id="conversation-timeline-toggle" type="button" data-action="toggle-conversation-timeline" aria-expanded="false" aria-controls="conversation-timeline-track" hidden>Jump to message</button>
-            <div class="timeline-track" id="conversation-timeline-track" role="group" aria-label="Conversation turns" hidden></div>
-            <div class="timeline-preview-inline" id="conversation-timeline-preview" hidden></div>
-            <div class="timeline-preview timeline-preview-desktop" id="conversation-timeline-desktop-preview" aria-hidden="true" hidden></div>
+            <div class="timeline-track" id="conversation-timeline-track" role="group" aria-label="Conversation turns"></div>
+            <div class="timeline-preview timeline-preview-desktop" id="conversation-timeline-desktop-preview" role="group" aria-label="Turn preview" hidden></div>
           </nav>
           <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
         </div>
@@ -6054,6 +5953,9 @@ class CodexBridgePanel extends HTMLElement {
     const chatMenuStyle = document.createElement("style");
     chatMenuStyle.textContent = chatMenuCss;
     this.shadowRoot.append(chatMenuStyle);
+    const imageStyle = document.createElement("style");
+    imageStyle.textContent = inlineImageCss;
+    this.shadowRoot.append(imageStyle);
     this._chatContextMenu = new ChatContextMenu(this, icons);
     this._terminal = new WorkspaceTerminalView(
       this.shadowRoot.getElementById("terminal-host"),
@@ -6093,7 +5995,6 @@ class CodexBridgePanel extends HTMLElement {
     this._conversationTurns = [];
     this._timelineSelectedSequence = null;
     this._timelineTabStopSequence = null;
-    this._timelineMobileOpen = false;
     this._timelinePreviewSequence = null;
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
@@ -6255,6 +6156,11 @@ class CodexBridgePanel extends HTMLElement {
   connectedCallback() {
     this._installStaticUi();
     this._chatContextMenu.connect();
+    if (typeof ResizeObserver === "function") {
+      this._timelineResizeObserver ||= new ResizeObserver(() => this._scheduleTimelineScrollSync(true));
+      this._timelineResizeObserver.observe(this.shadowRoot.getElementById("message-list"));
+      this._timelineResizeObserver.observe(this.shadowRoot.getElementById("conversation-scroll"));
+    }
     this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.addEventListener("resize", this._viewportResizeListener);
@@ -6283,7 +6189,13 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._inlineImageController?.dispose();
+    this._inlineImageController = null;
     this._chatContextMenu.disconnect();
+    window.cancelAnimationFrame(this._timelineScrollFrame);
+    this._timelineScrollFrame = null;
+    this._closeTimelinePreview();
+    this._timelineResizeObserver?.disconnect();
     this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
@@ -6318,11 +6230,7 @@ class CodexBridgePanel extends HTMLElement {
       : window.innerHeight;
     this.style.height = `${Math.max(0, Math.round(viewportBottom - top))}px`;
     if (this._addMenuOpen) this._syncAddMenuHeight();
-    if (this.shadowRoot?.getElementById("conversation-timeline")
-      && this._timelineCompactLayout !== this._isConversationTimelineCompact()) {
-      this._timelineMobileOpen = false;
-      this._renderConversationTimeline();
-    }
+    this._scheduleTimelineScrollSync(true);
   }
 
   _syncAddMenuHeight() {
@@ -6480,6 +6388,15 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.addEventListener("mouseover", (event) => this._handleTooltipPointerOver(event));
     this.shadowRoot.addEventListener("mouseover", (event) => this._handleTimelinePointerOver(event));
     this.shadowRoot.addEventListener("mouseout", (event) => this._handleTooltipPointerOut(event));
+    this.shadowRoot.addEventListener("mouseout", (event) => this._handleTimelinePointerOut(event));
+    this.shadowRoot.addEventListener("pointerdown", (event) => {
+      const button = event.target?.closest?.(".timeline-item");
+      this._timelineTouchSequence = event.pointerType === "touch" && button ? Number(button.dataset.sequence) : null;
+    });
+    this.shadowRoot.getElementById("conversation-scroll").addEventListener("scroll", () => this._scheduleTimelineScrollSync(), { passive: true });
+    this.shadowRoot.getElementById("conversation-timeline-track").addEventListener("scroll", () => {
+      if (this._timelinePreviewSequence) this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+    }, { passive: true });
 
     this._mobileDrawerMedia = typeof window.matchMedia === "function"
       ? window.matchMedia("(max-width: 880px)")
@@ -6509,8 +6426,7 @@ class CodexBridgePanel extends HTMLElement {
       ? window.matchMedia("(max-width: 880px), (pointer: coarse)")
       : { matches: false, addEventListener() {}, removeEventListener() {} };
     this._timelineCompactMediaListener = () => {
-      this._timelineMobileOpen = false;
-      this._renderConversationTimeline();
+      this._scheduleTimelineScrollSync(true);
     };
     this._timelineCompactMedia.addEventListener("change", this._timelineCompactMediaListener);
     this._timelineCompactMediaListening = true;
@@ -6656,6 +6572,7 @@ class CodexBridgePanel extends HTMLElement {
     ) {
       this._closeAppMenu();
     }
+    if (!eventTarget?.closest("#conversation-timeline")) this._closeTimelinePreview();
     if (!actionTarget) {
       if (this._runActivityDetailsOpen && !eventTarget?.closest(".run-step-wrap")) {
         this._runActivityDetailsOpen = false;
@@ -6681,8 +6598,8 @@ class CodexBridgePanel extends HTMLElement {
       case "jump-to-conversation-turn":
         this._jumpToConversationTurn(actionTarget);
         break;
-      case "toggle-conversation-timeline":
-        this._setConversationTimelineOpen(!this._timelineMobileOpen);
+      case "bookmark-conversation-turn":
+        this._toggleConversationBookmark(actionTarget);
         break;
       case "toggle-add-menu":
         this._setAddMenuOpen(!this._addMenuOpen);
@@ -7171,9 +7088,9 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     if (this._chatContextMenu.handleKey(event)) return;
-    if (event.key === "Escape" && this._timelineMobileOpen && target.closest("#conversation-timeline")) {
+    if (event.key === "Escape" && this._timelinePreviewSequence && target.closest("#conversation-timeline")) {
       event.preventDefault();
-      this._setConversationTimelineOpen(false, { restoreFocus: true });
+      this._closeTimelinePreview({ restoreFocus: true });
       return;
     }
     if (target.matches(".timeline-item") && target.closest("#conversation-timeline")) {
@@ -7349,11 +7266,11 @@ class CodexBridgePanel extends HTMLElement {
     if (!timelineItem) this._showTooltipForTarget(target);
     this._scrollInteractionTargetIntoView(target);
     if (timelineItem) {
+      window.clearTimeout(this._timelineCloseTimer);
       this._timelinePreviewSequence = target.dataset.sequence;
       this._timelineTabStopSequence = Number(target.dataset.sequence);
       this._updateTimelineTabStops();
       this._renderTimelineDesktopPreview(target.dataset.sequence);
-      this._renderTimelineMobilePreview(target.dataset.sequence);
     }
     if (!this._isRefreshLockTarget(target)) {
       return;
@@ -7378,6 +7295,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _handleFocusOut(event) {
     const nextTarget = event.relatedTarget;
+    if (event.target?.closest?.("#conversation-timeline") && !nextTarget?.closest?.("#conversation-timeline")) this._handleTimelinePointerOut(event);
     if ((!nextTarget || !this._tooltipTarget?.contains(nextTarget)) && !this._tooltipTarget?.matches(":hover")) {
       this._hideTooltip();
     }
@@ -10546,21 +10464,39 @@ class CodexBridgePanel extends HTMLElement {
     this._render();
   }
 
+  _inlineImages() {
+    if (!this._inlineImageController) {
+      this._inlineImageController = new InlineImageController({ root: this.shadowRoot, token: () => this._accessToken() });
+    }
+    this._inlineImageController.setThread(this._selectedThreadId || "");
+    return this._inlineImageController;
+  }
+
   _renderAttachmentChips() {
     const container = this.shadowRoot.getElementById("attachment-chip-list");
     const attachments = this._activeThread?.attachments || [];
+    const images = this._inlineImages();
+    const key = JSON.stringify([this._selectedThreadId, this._config?.capabilities?.includes("attachment_downloads") === true,
+      images.pendingRevision, attachments.length, attachments.slice(-6).map((item) => [item.attachment_id, item.filename, item.mime_type, item.size_bytes])]);
+    if (this._renderedAttachmentChipsKey === key) return;
+    this._renderedAttachmentChipsKey = key;
     container.replaceChildren();
+    images.renderPending(container);
     if (!attachments.length) {
       return;
     }
 
     const visible = attachments.slice(-6);
     for (const attachment of visible) {
+      if (this._config?.capabilities?.includes("attachment_downloads") && isInlineImage(attachment)) {
+        const thumbnail = images.card("attachment", attachment, { compact: true });
+        if (thumbnail) { container.append(thumbnail); continue; }
+      }
       const chip = document.createElement("span");
       chip.className = "attachment-chip";
       chip.append(
         this._textElement("strong", "", attachment?.filename || "File"),
-        this._textElement("span", "", attachment?.relative_path || attachment?.mime_type || "")
+        this._textElement("span", "", attachment?.mime_type || "")
       );
       container.append(chip);
     }
@@ -10898,6 +10834,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _renderMessages() {
+    this._inlineImageController?.setThread(this._selectedThreadId || "");
     const messageList = this.shadowRoot.getElementById("message-list");
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || messageList;
     const activity = this._runActivityForThread();
@@ -10955,199 +10892,263 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _isConversationTimelineCompact() {
-    const availableWidth = this.shadowRoot?.getElementById("conversation-scroll")?.clientWidth || 0;
-    return Boolean(this._timelineCompactMedia?.matches || (availableWidth > 0 && availableWidth < 1016));
+    return Boolean(this._timelineCompactMedia?.matches);
+  }
+
+  _conversationBookmarkKey() {
+    return `${this._preferenceKey || "codex-bridge:preferences:local"}:bookmarks:${this._selectedThreadId}`;
   }
 
   _renderConversationTimeline() {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-
-    const turns = this._selectedThreadId ? projectConversationTurns(this._events) : [];
+    const relevant = new Set(["message.created", "message.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const sameThread = this._timelineProjectedThread === this._selectedThreadId;
+    const unchangedPrefix = this._timelineEvents === this._events || (this._timelineEventCount > 0
+      && this._events[this._timelineEventCount - 1] === this._timelineLastEvent);
+    const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
+    const turns = changed ? (this._selectedThreadId ? projectConversationTurns(this._events) : []) : this._conversationTurns;
+    this._timelineEvents = this._events;
+    this._timelineProjectedThread = this._selectedThreadId;
+    this._timelineEventCount = this._events.length;
+    this._timelineLastEvent = this._events.at(-1);
     this._conversationTurns = turns;
-    navigation.hidden = turns.length === 0;
-    const compact = this._isConversationTimelineCompact();
-    this._timelineCompactLayout = compact;
-    navigation.closest(".conversation-layout")?.classList.toggle("timeline-compact", compact);
-    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
-    disclosure.hidden = !compact;
-    disclosure.setAttribute("aria-expanded", String(compact && this._timelineMobileOpen));
-    navigation.classList.toggle("is-open", this._timelineMobileOpen);
-    track.hidden = compact && !this._timelineMobileOpen;
-    const visibleCapacity = Math.max(1, Math.floor((Math.min(380, window.innerHeight - 220) - 12) / 24));
-    track.classList.toggle("is-scrollable", turns.length > visibleCapacity);
+    navigation.hidden = !turns.length;
+    const bookmarkKey = this._conversationBookmarkKey();
+    const bookmarkScopeChanged = this._timelineBookmarkKey !== bookmarkKey;
+    if (bookmarkScopeChanged) {
+      this._closeTimelinePreview();
+      this._timelineBookmarkKey = bookmarkKey;
+      this._timelineBookmarks = readConversationBookmarks(window.localStorage, bookmarkKey);
+    }
+    if (!changed && !bookmarkScopeChanged) return;
     if (!turns.length) {
       track.replaceChildren();
       this._timelineSelectedSequence = null;
       this._timelineTabStopSequence = null;
-      this._timelineMobileOpen = false;
-      this._timelinePreviewSequence = null;
-      navigation.classList.remove("is-open");
-      disclosure.setAttribute("aria-expanded", "false");
-      track.hidden = compact;
-      this._renderTimelineMobilePreview(null);
-      this._renderTimelineDesktopPreview(null);
+      this._closeTimelinePreview();
       return;
     }
-
-    const keys = new Set(turns.map((turn) => turn.key));
-    if (!keys.has(String(this._timelineSelectedSequence))) {
-      this._timelineSelectedSequence = turns.at(-1).anchorSequence;
-    }
-    if (!keys.has(String(this._timelineTabStopSequence))) {
-      this._timelineTabStopSequence = this._timelineSelectedSequence;
-    }
-
-    const existing = new Map([...track.querySelectorAll(".timeline-item")].map((button) => [button.dataset.turnKey, button]));
+    const keys = new Set(turns.map((turn) => turn.anchorSequence));
+    if (!keys.has(this._timelineSelectedSequence)) this._timelineSelectedSequence = turns.at(-1).anchorSequence;
+    if (!keys.has(this._timelineTabStopSequence)) this._timelineTabStopSequence = this._timelineSelectedSequence;
+    const existing = new Map([...track.children].map((button) => [button.dataset.turnKey, button]));
+    this._timelineButtons = new Map();
     turns.forEach((turn, index) => {
       let button = existing.get(turn.key);
       if (!button) {
-        button = document.createElement("button");
-        button.type = "button";
-        button.className = "timeline-item";
-        button.dataset.action = "jump-to-conversation-turn";
+        button = this._actionButton("timeline-item", "jump-to-conversation-turn", turn.label);
+        button.removeAttribute("data-tooltip");
         const marker = this._textElement("span", "timeline-marker", "");
         marker.setAttribute("aria-hidden", "true");
-        const mobileLabel = this._textElement("span", "timeline-mobile-label", `Turn ${turn.index}`);
-        mobileLabel.setAttribute("aria-hidden", "true");
-        button.append(marker, mobileLabel);
+        button.append(marker);
       }
-
       const label = this._timelineTurnLabel(turn);
-      const signature = `${turn.index}|${turn.prompt}|${turn.response}|${turn.queued}|${turn.pending}|${turn.outcomeLabel}|${turn.anchorSequence}`;
-      if (button.dataset.renderSignature !== signature) {
-        button.setAttribute("aria-label", label);
-        button.dataset.renderSignature = signature;
-        button.dataset.turnKey = turn.key;
-        button.dataset.sequence = String(turn.anchorSequence);
-        button.querySelector(".timeline-mobile-label").textContent = `Turn ${turn.index}`;
-      }
-      button.toggleAttribute("aria-current", turn.anchorSequence === this._timelineSelectedSequence);
-      if (button.hasAttribute("aria-current")) button.setAttribute("aria-current", "location");
+      if (button.getAttribute("aria-label") !== label) button.setAttribute("aria-label", label);
+      button.dataset.turnKey = turn.key;
+      button.dataset.sequence = String(turn.anchorSequence);
+      button.style.setProperty("--marker-width", `${turn.markerWidth}px`);
+      button.toggleAttribute("data-bookmarked", this._timelineBookmarks.has(turn.anchorSequence));
+      if (turn.anchorSequence === this._timelineSelectedSequence) button.setAttribute("aria-current", "location");
+      else button.removeAttribute("aria-current");
       button.tabIndex = turn.anchorSequence === this._timelineTabStopSequence ? 0 : -1;
-      const atPosition = track.children[index];
-      if (atPosition !== button) track.insertBefore(button, atPosition || null);
+      if (track.children[index] !== button) track.insertBefore(button, track.children[index] || null);
       existing.delete(turn.key);
+      this._timelineButtons.set(turn.anchorSequence, button);
     });
     for (const button of existing.values()) button.remove();
-
-    const activePreview = this._timelinePreviewSequence;
-    this._renderTimelineDesktopPreview(activePreview, turns);
-    this._renderTimelineMobilePreview(this._timelineMobileOpen ? String(this._timelineSelectedSequence) : null, turns);
+    if (this._timelinePreviewSequence) this._renderTimelineDesktopPreview(this._timelinePreviewSequence, turns);
+    this._scheduleTimelineScrollSync(true);
   }
 
-  _timelineTurnLabel(turn) {
-    if (typeof turn.label === "string") return turn.label.slice(0, 120);
-    const parts = [`Turn ${turn.index}`];
-    if (turn.prompt) parts.push(`You: ${turn.prompt}`);
-    if (turn.response) parts.push(`Codex: ${turn.response}`);
-    else if (turn.pending) parts.push("Codex response in progress");
-    if (turn.queued) parts.push("Queued");
-    return parts.join(". ");
-  }
+  _timelineTurnLabel(turn) { return turn.label.slice(0, 120); }
 
   _timelinePreviewChildren(turn) {
-    const children = [this._textElement("span", "timeline-preview-title", `Turn ${turn.index}${turn.queued ? " · Queued" : ""}`)];
-    if (turn.prompt) children.push(this._textElement("span", "timeline-preview-copy", `You: ${turn.prompt}`));
-    if (turn.response) children.push(this._textElement("span", "timeline-preview-copy", `Codex: ${turn.response}`));
-    else if (turn.pending) children.push(this._textElement("span", "timeline-preview-copy", "Codex response in progress"));
-    else if (turn.outcomeLabel) children.push(this._textElement("span", "timeline-preview-copy", turn.outcomeLabel));
+    const heading = this._textElement("div", "timeline-preview-heading", "");
+    heading.append(this._textElement("span", "timeline-preview-title", turn.prompt || `Turn ${turn.index}`));
+    const saved = this._timelineBookmarks?.has(turn.anchorSequence);
+    const bookmark = this._actionButton("timeline-bookmark", "bookmark-conversation-turn", `${saved ? "Remove bookmark from" : "Bookmark"} turn ${turn.index}`);
+    bookmark.dataset.sequence = String(turn.anchorSequence);
+    bookmark.removeAttribute("data-tooltip");
+    bookmark.setAttribute("aria-pressed", String(Boolean(saved)));
+    this._appendTrustedIcon(bookmark, iconSvg('<path d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4Z"></path>'));
+    heading.append(bookmark);
+    const children = [heading];
+    if (turn.response) children.push(this._textElement("span", "timeline-preview-copy", turn.response));
+    else children.push(this._textElement("span", "timeline-preview-copy", turn.queued ? "Queued" : turn.outcomeLabel || "Codex response in progress"));
+    const jump = this._actionButton("timeline-preview-jump", "jump-to-conversation-turn", `Go to turn ${turn.index}`);
+    jump.dataset.sequence = String(turn.anchorSequence);
+    jump.removeAttribute("data-tooltip");
+    jump.textContent = "Go to message";
+    children.push(jump);
     return children;
-  }
-
-  _renderTimelineMobilePreview(sequence, turns = this._conversationTurns) {
-    const preview = this.shadowRoot.getElementById("conversation-timeline-preview");
-    if (!preview) return;
-    const turn = turns.find((item) => item.key === String(sequence));
-    preview.hidden = !turn;
-    if (!turn) {
-      preview.replaceChildren();
-      return;
-    }
-    preview.replaceChildren(...this._timelinePreviewChildren(turn));
   }
 
   _renderTimelineDesktopPreview(sequence, turns = this._conversationTurns) {
     const preview = this.shadowRoot.getElementById("conversation-timeline-desktop-preview");
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
-    const button = [...this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")]
-      .find((item) => item.dataset.sequence === String(sequence ?? ""));
+    const button = this._timelineButtons?.get(Number(sequence));
     const turn = turns.find((item) => item.key === String(sequence));
-    if (!preview || !navigation || !button || !turn) {
-      if (preview) preview.hidden = true;
-      return;
+    if (!preview || !navigation || !button || !turn) { this._closeTimelinePreview(); return; }
+    this._timelinePreviewSequence = String(sequence);
+    const signature = `${turn.key}|${turn.prompt}|${turn.response}|${turn.pending}|${turn.queued}|${turn.outcomeLabel}|${this._timelineBookmarks?.has(turn.anchorSequence)}`;
+    if (preview.dataset.signature !== signature) {
+      const focusedAction = preview.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.dataset.action : null;
+      preview.replaceChildren(...this._timelinePreviewChildren(turn));
+      preview.dataset.signature = signature;
+      if (focusedAction) [...preview.querySelectorAll("[data-action]")].find((item) => item.dataset.action === focusedAction)?.focus({ preventScroll: true });
     }
     preview.hidden = false;
-    preview.replaceChildren(...this._timelinePreviewChildren(turn));
-    const navRect = navigation.getBoundingClientRect();
-    const buttonRect = button.getBoundingClientRect();
-    const previewHeight = preview.getBoundingClientRect().height || 96;
-    const center = buttonRect.top - navRect.top + buttonRect.height / 2;
-    const y = Math.max(previewHeight / 2, Math.min(navRect.height - previewHeight / 2, center));
-    navigation.style.setProperty("--timeline-preview-position", `${y}px`);
+    navigation.classList.add("preview-open");
+    const viewport = window.visualViewport;
+    const scroller = this.shadowRoot.getElementById("conversation-scroll");
+    const bounds = scroller.getBoundingClientRect();
+    const rect = button.getBoundingClientRect();
+    const leftEdge = Math.max(8, bounds.left + 8, (viewport?.offsetLeft || 0) + 8);
+    const rightEdge = Math.min(window.innerWidth - 8, bounds.right - 8, (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth) - 8);
+    const preferredLeft = Math.max(leftEdge, rect.right + 8);
+    const width = Math.max(0, Math.min(420, rightEdge - preferredLeft));
+    const topEdge = Math.max(bounds.top + 8, (viewport?.offsetTop || 0) + 8);
+    const bottomEdge = Math.min(bounds.bottom - 8, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight) - 8);
+    if (bottomEdge - topEdge < 60 || width < 80) { this._closeTimelinePreview(); return; }
+    preview.style.setProperty("--timeline-preview-width", `${width}px`);
+    preview.style.setProperty("--timeline-preview-height", `${bottomEdge - topEdge}px`);
+    const left = preferredLeft;
+    const height = preview.getBoundingClientRect().height || 120;
+    const top = Math.max(topEdge, Math.min(bottomEdge - height, rect.top + rect.height / 2 - height / 2));
+    preview.style.setProperty("--timeline-preview-left", `${left}px`);
+    preview.style.setProperty("--timeline-preview-top", `${top}px`);
   }
 
   _handleTimelinePointerOver(event) {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const button = target.closest("#conversation-timeline .timeline-item");
-    if (!button || button.matches(":focus-visible")) return;
-    this._timelinePreviewSequence = button.dataset.sequence;
-    this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("#conversation-timeline")) window.clearTimeout(this._timelineCloseTimer);
+    const button = target?.closest(".timeline-item");
+    if (button && !("pointerType" in event && event.pointerType === "touch")) this._renderTimelineDesktopPreview(button.dataset.sequence);
   }
 
-  _setConversationTimelineOpen(open, { restoreFocus = false } = {}) {
-    this._timelineMobileOpen = open;
-    const navigation = this.shadowRoot.getElementById("conversation-timeline");
-    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
-    const track = this.shadowRoot.getElementById("conversation-timeline-track");
-    navigation?.classList.toggle("is-open", open);
-    if (track) track.hidden = !open && this._isConversationTimelineCompact();
-    disclosure?.setAttribute("aria-expanded", String(open));
-    this._renderTimelineMobilePreview(open ? String(this._timelineSelectedSequence) : null);
-    if (open && this._isConversationTimelineCompact()) navigation?.scrollIntoView({ block: "nearest" });
-    if (!open) this._renderTimelineDesktopPreview(null);
-    if (restoreFocus) disclosure?.focus();
+  _handleTimelinePointerOut(event) {
+    if (!event.target?.closest?.("#conversation-timeline")) return;
+    if (event.relatedTarget?.closest?.("#conversation-timeline")) return;
+    window.clearTimeout(this._timelineCloseTimer);
+    this._timelineCloseTimer = window.setTimeout(() => {
+      if (!this.shadowRoot.activeElement?.closest("#conversation-timeline")) this._closeTimelinePreview();
+    }, 200);
+  }
+
+  _closeTimelinePreview({ restoreFocus = false } = {}) {
+    window.clearTimeout(this._timelineCloseTimer);
+    const sequence = Number(this._timelinePreviewSequence);
+    this._timelinePreviewSequence = null;
+    this.shadowRoot.getElementById("conversation-timeline")?.classList.remove("preview-open");
+    const preview = this.shadowRoot.getElementById("conversation-timeline-desktop-preview");
+    if (preview) preview.hidden = true;
+    if (restoreFocus) this._timelineButtons?.get(sequence)?.focus({ preventScroll: true });
+    // Focus restoration should not reopen the just-dismissed card.
+    if (preview) preview.hidden = true;
+    this._timelinePreviewSequence = null;
+    this.shadowRoot.getElementById("conversation-timeline")?.classList.remove("preview-open");
+  }
+
+  _toggleConversationBookmark(button) {
+    const sequence = Number(button.dataset.sequence);
+    if (!this._conversationTurns.some((turn) => turn.anchorSequence === sequence)) return;
+    const next = new Set(this._timelineBookmarks);
+    if (next.has(sequence)) next.delete(sequence); else next.add(sequence);
+    try {
+      this._timelineBookmarks = saveConversationBookmarks(window.localStorage, this._conversationBookmarkKey(), next);
+    } catch {
+      this._setError(new Error("The bookmark could not be saved in this browser."));
+      return;
+    }
+    this._timelineButtons.get(sequence)?.toggleAttribute("data-bookmarked", this._timelineBookmarks.has(sequence));
+    this._renderTimelineDesktopPreview(String(sequence));
   }
 
   _updateTimelineTabStops() {
-    for (const button of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
-      button.tabIndex = Number(button.dataset.sequence) === this._timelineTabStopSequence ? 0 : -1;
-    }
+    for (const [sequence, button] of this._timelineButtons || []) button.tabIndex = sequence === this._timelineTabStopSequence ? 0 : -1;
   }
 
   _focusTimelineItem(button) {
     if (!button) return;
+    window.clearTimeout(this._timelineCloseTimer);
     this._timelineTabStopSequence = Number(button.dataset.sequence);
     this._updateTimelineTabStops();
-    button.focus();
+    button.focus({ preventScroll: true });
+    const track = button.parentElement;
+    if (button.offsetTop < track.scrollTop) track.scrollTop = button.offsetTop;
+    else if (button.offsetTop + button.offsetHeight > track.scrollTop + track.clientHeight) track.scrollTop = button.offsetTop + button.offsetHeight - track.clientHeight;
+    this._renderTimelineDesktopPreview(button.dataset.sequence);
   }
 
   _jumpToConversationTurn(button) {
-    if (!(button instanceof HTMLElement)) return;
     const sequence = Number(button.dataset.sequence);
-    if (!Number.isSafeInteger(sequence) || sequence <= 0) return;
-    const list = this.shadowRoot.getElementById("message-list");
+    const target = [...this.shadowRoot.querySelectorAll("#message-list [data-sequence]")].find((node) => Number(node.dataset.sequence) === sequence);
     const scroller = this.shadowRoot.getElementById("conversation-scroll");
-    const target = [...(list?.querySelectorAll("[data-sequence]") || [])]
-      .find((node) => Number(node.dataset.sequence) === sequence);
     if (!target || !scroller) return;
-
-    this._timelineSelectedSequence = sequence;
+    // Touch first exposes a preview; its explicit Go to message action jumps.
+    if (button.classList.contains("timeline-item") && this._timelineTouchSequence === sequence) {
+      window.clearTimeout(this._timelineCloseTimer);
+      this._timelineTouchSequence = null;
+      this._renderTimelineDesktopPreview(String(sequence));
+      return;
+    }
+    this._selectVisibleTimelineTurn(sequence);
     this._timelineTabStopSequence = sequence;
     this._updateTimelineTabStops();
-    for (const item of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
-      if (Number(item.dataset.sequence) === sequence) item.setAttribute("aria-current", "location");
-      else item.removeAttribute("aria-current");
-    }
-    const compact = this._isConversationTimelineCompact();
-    if (compact) this._setConversationTimelineOpen(false, { restoreFocus: true });
-    else this._renderTimelineDesktopPreview(String(sequence));
+    scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - scroller.clientTop - 16;
+    this._closeTimelinePreview({ restoreFocus: button.classList.contains("timeline-preview-jump") });
+  }
 
-    const scrollerRect = scroller.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    scroller.scrollTop += targetRect.top - scrollerRect.top - scroller.clientTop - 16;
+  _selectVisibleTimelineTurn(sequence) {
+    if (sequence === this._timelineSelectedSequence) return;
+    this._timelineButtons?.get(this._timelineSelectedSequence)?.removeAttribute("aria-current");
+    this._timelineSelectedSequence = sequence;
+    this._timelineButtons?.get(sequence)?.setAttribute("aria-current", "location");
+    this._revealCurrentTimelineTurn();
+  }
+
+  _revealCurrentTimelineTurn() {
+    if (this._timelinePreviewSequence || this.shadowRoot.activeElement?.closest("#conversation-timeline")) return;
+    const button = this._timelineButtons?.get(this._timelineSelectedSequence);
+    const track = button?.parentElement;
+    if (!track || !track.clientHeight) return;
+    if (button.offsetTop < track.scrollTop) track.scrollTop = button.offsetTop;
+    else if (button.offsetTop + button.offsetHeight > track.scrollTop + track.clientHeight) track.scrollTop = button.offsetTop + button.offsetHeight - track.clientHeight;
+  }
+
+  _scheduleTimelineScrollSync(remeasure = false) {
+    this._timelineNeedsMeasure ||= remeasure;
+    if (this._timelineScrollFrame) return;
+    this._timelineScrollFrame = window.requestAnimationFrame(() => {
+      this._timelineScrollFrame = null;
+      const scroller = this.shadowRoot.getElementById("conversation-scroll");
+      if (!this.isConnected || !scroller || !this._conversationTurns.length) return;
+      const rect = scroller.getBoundingClientRect();
+      if (!scroller.clientHeight) return;
+      const navigation = this.shadowRoot.getElementById("conversation-timeline");
+      const height = Math.max(44, scroller.clientHeight - 40);
+      navigation.style.setProperty("--timeline-track-height", `${height}px`);
+      const step = this._isConversationTimelineCompact() ? 44 : 24;
+      this.shadowRoot.getElementById("conversation-timeline-track").classList.toggle("is-scrollable", this._conversationTurns.length * step + 8 > height);
+      if (this._timelineNeedsMeasure || !this._timelineOffsets) {
+        const anchors = new Set(this._conversationTurns.map((turn) => turn.anchorSequence));
+        this._timelineOffsets = [...this.shadowRoot.querySelectorAll("#message-list [data-sequence]")]
+          .filter((node) => anchors.has(Number(node.dataset.sequence)))
+          .map((node) => ({ sequence: Number(node.dataset.sequence), top: node.getBoundingClientRect().top - rect.top + scroller.scrollTop }));
+        this._timelineNeedsMeasure = false;
+      }
+      const offsets = this._timelineOffsets;
+      if (!offsets?.length) return;
+      const readingTop = scroller.scrollTop + 32;
+      let low = 0, high = offsets.length;
+      while (low < high) { const mid = (low + high) >>> 1; if (offsets[mid].top <= readingTop) low = mid + 1; else high = mid; }
+      const index = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 4 ? offsets.length - 1 : Math.max(0, low - 1);
+      this._selectVisibleTimelineTurn(offsets[index].sequence);
+      this._revealCurrentTimelineTurn();
+      if (this._timelinePreviewSequence) this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+    });
   }
 
   _syncStreamingMessage(messageList, activity) {
@@ -11258,7 +11259,19 @@ class CodexBridgePanel extends HTMLElement {
       return this._textElement("div", "event-row", "Run cancelled");
     }
     if (event.event_type === "attachment.added") {
-      return this._textElement("div", "event-row", `Uploaded ${payload.relative_path || payload.filename || "file"}`);
+      const attachment = this._activeThread?.attachments?.find((item) => item.attachment_id === payload.attachment_id) || payload;
+      if (this._config?.capabilities?.includes("attachment_downloads") && isInlineImage(attachment)) {
+        const card = this._inlineImages().card("attachment", attachment);
+        if (card) {
+          const article = document.createElement("article");
+          article.className = "message user uploaded-image-message";
+          article.dataset.sequence = String(event.sequence);
+          article.setAttribute("aria-label", `Uploaded image: ${displayArtifactFilename(attachment.filename, "image")}`);
+          article.append(card);
+          return article;
+        }
+      }
+      return this._textElement("div", "event-row", `Uploaded ${displayArtifactFilename(payload.filename || payload.relative_path, "file")}`);
     }
     if (event.event_type === "artifact.added") {
       const generatedImage = this._generatedImageArtifactForEvent(event);
@@ -11363,8 +11376,13 @@ class CodexBridgePanel extends HTMLElement {
       thumbnail.dataset.artifactId = artifact.artifact_id;
       thumbnail.append(cachedPreview);
       bubble.append(heading, thumbnail);
+      if (isInlineImage(artifact)) this._inlineImages().bindExisting("artifact", artifact, thumbnail, bubble);
     } else {
       bubble.append(heading);
+      if (isInlineImage(artifact)) {
+        const thumbnail = this._inlineImages().card("artifact", artifact);
+        if (thumbnail) bubble.append(thumbnail);
+      }
     }
     bubble.append(this._textElement("span", "generated-image-meta", metadata.join(" · ")));
     if (action && download) {
@@ -12909,6 +12927,10 @@ class CodexBridgePanel extends HTMLElement {
     );
     heading.append(icon, info);
     bubble.append(heading);
+    if (isInlineImage(artifact)) {
+      const thumbnail = this._inlineImages().card("artifact", artifact);
+      if (thumbnail) bubble.append(thumbnail);
+    }
     if (artifact?.artifact_id) {
       const actions = document.createElement("div");
       actions.className = "artifact-file-actions";
@@ -13177,7 +13199,6 @@ class CodexBridgePanel extends HTMLElement {
       if (nextThreadId !== this._selectedThreadId) {
         this._timelineSelectedSequence = null;
         this._timelineTabStopSequence = null;
-        this._timelineMobileOpen = false;
         this._timelinePreviewSequence = null;
         this._conversationTurns = [];
         this._stopDictation({ abort: true });
@@ -13197,6 +13218,7 @@ class CodexBridgePanel extends HTMLElement {
       this._clearArtifactPreview();
     }
     this._selectedThreadId = nextThreadId;
+    this._inlineImageController?.setThread(nextThreadId || "");
     return this._threadSelectionEpoch;
   }
 
@@ -13854,6 +13876,7 @@ class CodexBridgePanel extends HTMLElement {
         currentPercent: 0,
         totalBytes,
       };
+      this._inlineImages().setPending(files);
       this._render();
       for (const file of files) {
         const relativePath = useRelativePaths
@@ -13880,6 +13903,7 @@ class CodexBridgePanel extends HTMLElement {
       this._uploadAbortController = null;
       this._pendingUploads = 0;
       this._uploadProgress = null;
+      this._inlineImageController?.clearPending();
       this._render();
     }
   }

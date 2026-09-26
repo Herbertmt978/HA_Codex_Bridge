@@ -254,24 +254,24 @@ function renderHostAccessDialog(doc, state) {
     dialog.append(error);
   }
   const actions = node(doc, "div", "", "confirmation-actions");
-  const button3 = (label, action) => {
+  const button4 = (label, action) => {
     const result = node(doc, "button", label, "panel-button");
     result.type = "button";
     result.dataset.action = action;
     return result;
   };
-  const cancel = button3("Cancel", "cancel-host-access");
+  const cancel = button4("Cancel", "cancel-host-access");
   cancel.id = "cancel-host-access";
   cancel.disabled = !!state.busy;
   actions.append(cancel);
   if (ready) {
-    const enable = button3(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
+    const enable = button4(state.busy ? "Enabling…" : state.status?.enabled ? "Use host access" : "Enable host access", "confirm-host-access");
     enable.id = "confirm-host-access";
     enable.classList.add("panel-button-primary");
     enable.disabled = !!state.busy || !state.acknowledged || state.context === "schedule" && !state.unattended;
     actions.append(enable);
   } else if (!state.loading) {
-    actions.append(button3("Check again", "retry-host-access"));
+    actions.append(button4("Check again", "retry-host-access"));
   }
   dialog.append(actions);
   return dialog;
@@ -32244,6 +32244,22 @@ function getRunActivityViewModel(thread = {}, events = []) {
 // frontend/src/conversation-timeline.js
 var MAX_CONVERSATION_TURNS = 12500;
 var SNIPPET_LIMIT = 120;
+function conversationMarkerWidth(length) {
+  return Math.round(6 + Math.min(1, Math.log2(1 + Math.max(0, Number(length) || 0)) / 14) * 20);
+}
+function readConversationBookmarks(storage, key) {
+  try {
+    const value = JSON.parse(storage.getItem(key) || "[]");
+    return new Set((Array.isArray(value) ? value : []).filter((item) => Number.isSafeInteger(item) && item > 0).slice(-500));
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+function saveConversationBookmarks(storage, key, values) {
+  const safe = [...values].filter((item) => Number.isSafeInteger(item) && item > 0).slice(-500);
+  storage.setItem(key, JSON.stringify(safe));
+  return new Set(safe);
+}
 var TERMINAL_LABELS = Object.freeze({
   completed: "Run completed without a recorded answer",
   cancelled: "Run cancelled",
@@ -32296,6 +32312,7 @@ function projectConversationTurns(events = []) {
       turn.userSequence ??= event.sequence;
       turn.firstSequence = Math.min(turn.firstSequence, event.sequence);
       turn.prompt = snippet([turn.prompt, snippet(payload.text)].filter(Boolean).join(" "));
+      turn.contentLength = Math.min(1e6, (turn.contentLength || 0) + (typeof payload.text === "string" ? payload.text.length : 0));
       turn.queued ||= payload.queued === true;
       lastUserTurn = turn;
       continue;
@@ -32308,6 +32325,7 @@ function projectConversationTurns(events = []) {
     }
     turn.firstSequence = Math.min(turn.firstSequence, event.sequence);
     const response = snippet(payload.text);
+    turn.contentLength = Math.min(1e6, (turn.contentLength || 0) + (typeof payload.text === "string" ? payload.text.length : 0));
     if (response) turn.response = snippet([turn.response, response].filter(Boolean).join(" · "));
   }
   const ordered = turns.sort((left, right) => left.firstSequence - right.firstSequence).slice(-MAX_CONVERSATION_TURNS);
@@ -32332,10 +32350,616 @@ function projectConversationTurns(events = []) {
       queued: turn.queued,
       pending,
       outcomeLabel,
-      label
+      label,
+      markerWidth: conversationMarkerWidth(turn.contentLength)
     };
   });
 }
+
+// frontend/src/inline-images.js
+var INLINE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+var MAX_PIXELS = 32 * 1024 * 1024;
+var MAX_EDGE = 8192;
+var MAX_CACHED_IMAGES = 12;
+var MAX_CACHE_BYTES = 32 * 1024 * 1024;
+var MAX_CACHE_PIXELS = 32 * 1024 * 1024;
+var MIME = /* @__PURE__ */ new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+var identifier = (value) => typeof value === "string" && /^[A-Za-z0-9_.:-]{1,200}$/.test(value);
+var imageFilename = (value, fallback = "image") => sanitizeFilename(typeof value === "string" ? value.split(/[\\/]/).at(-1) : value, fallback);
+function isInlineImage(record) {
+  return typeof record?.mime_type === "string" && MIME.has(record.mime_type.toLowerCase()) && Number.isSafeInteger(record?.size_bytes) && record.size_bytes > 0 && record.size_bytes <= INLINE_IMAGE_MAX_BYTES;
+}
+function inlineImageEndpoint(threadId, kind, id) {
+  if (!identifier(threadId) || !identifier(id) || !["artifact", "attachment"].includes(kind)) throw new Error("Invalid image reference");
+  return `/api/codex_bridge/threads/${encodeURIComponent(threadId)}/${kind}s/${encodeURIComponent(id)}`;
+}
+async function validateInlineImage(blob, expectedMime) {
+  if (!MIME.has(expectedMime) || !blob || blob.size < 10 || blob.size > INLINE_IMAGE_MAX_BYTES) throw new Error("Image preview is not available");
+  const bytes = new Uint8Array(await blob.slice(0, 65536).arrayBuffer());
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ascii = (offset, length) => String.fromCharCode(...bytes.subarray(offset, offset + length));
+  let mime, width, height;
+  if (bytes.length >= 24 && bytes[0] === 137 && ascii(1, 7) === "PNG\r\n\n" && ascii(12, 4) === "IHDR") {
+    mime = "image/png";
+    width = view.getUint32(16);
+    height = view.getUint32(20);
+  } else if (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a") {
+    mime = "image/gif";
+    width = view.getUint16(6, true);
+    height = view.getUint16(8, true);
+  } else if (bytes.length >= 30 && ascii(0, 4) === "RIFF" && ascii(8, 4) === "WEBP") {
+    mime = "image/webp";
+    if (ascii(12, 4) === "VP8X") {
+      width = 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16);
+      height = 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16);
+    } else if (ascii(12, 4) === "VP8L" && bytes[20] === 47) {
+      width = 1 + ((bytes[21] | bytes[22] << 8) & 16383);
+      height = 1 + ((bytes[22] >> 6 | bytes[23] << 2 | bytes[24] << 10) & 16383);
+    } else if (ascii(12, 4) === "VP8 " && bytes[23] === 157 && bytes[24] === 1 && bytes[25] === 42) {
+      width = view.getUint16(26, true) & 16383;
+      height = view.getUint16(28, true) & 16383;
+    }
+  } else if (bytes[0] === 255 && bytes[1] === 216) {
+    mime = "image/jpeg";
+    let position = 2;
+    while (position + 8 < bytes.length) {
+      if (bytes[position] !== 255) break;
+      while (bytes[position] === 255) position += 1;
+      const marker = bytes[position++];
+      if (marker === 217 || marker === 218 || position + 2 > bytes.length) break;
+      if (marker === 216 || marker === 1 || marker >= 208 && marker <= 215) continue;
+      const length = view.getUint16(position);
+      if (length < 2 || position + length > bytes.length) break;
+      if ([192, 193, 194, 195, 197, 198, 199, 201, 202, 203, 205, 206, 207].includes(marker) && length >= 8) {
+        height = view.getUint16(position + 3);
+        width = view.getUint16(position + 5);
+        break;
+      }
+      position += length;
+    }
+  }
+  if (mime !== expectedMime || !width || !height || width > MAX_EDGE || height > MAX_EDGE || width * height > MAX_PIXELS) throw new Error("Image preview is not available");
+  return { blob: new Blob([blob], { type: mime }), width, height, mime };
+}
+async function fetchInlineImage(url, { token = "", signal, fetchImpl = fetch } = {}) {
+  if (!/^\/api\/codex_bridge\/threads\/[A-Za-z0-9_.:%-]+\/(?:artifacts|attachments)\/[A-Za-z0-9_.:%-]+$/.test(url)) throw new Error("Invalid image endpoint");
+  const response = await fetchImpl(url, { headers: { ...token ? { Authorization: `Bearer ${token}` } : {}, Range: `bytes=0-${INLINE_IMAGE_MAX_BYTES - 1}` }, signal, redirect: "error", credentials: "same-origin" });
+  if (!response.ok) throw new Error("Image could not be loaded through Home Assistant");
+  const length = response.headers.get("Content-Length");
+  if (length && (!/^\d+$/.test(length) || Number(length) > INLINE_IMAGE_MAX_BYTES)) {
+    await response.body?.cancel();
+    throw new Error("Image is too large to preview");
+  }
+  const range = response.headers.get("Content-Range");
+  if (range && (!/^bytes 0-\d+\/\d+$/.test(range) || Number(range.split("/")[1]) > INLINE_IMAGE_MAX_BYTES)) {
+    await response.body?.cancel();
+    throw new Error("Image is too large to preview");
+  }
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Image response is not available");
+  const chunks = [];
+  let size = 0;
+  try {
+    for (; ; ) {
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > INLINE_IMAGE_MAX_BYTES) throw new Error("Image is too large to preview");
+      chunks.push(value);
+    }
+  } catch (error) {
+    await reader.cancel();
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+  return new Blob(chunks);
+}
+function element2(tag, className, text3 = "") {
+  const node2 = document.createElement(tag);
+  node2.className = className;
+  node2.textContent = text3;
+  return node2;
+}
+function button(label, click) {
+  const node2 = element2("button", "inline-image-action", label);
+  node2.type = "button";
+  node2.setAttribute("aria-label", label);
+  node2.addEventListener("click", click);
+  return node2;
+}
+var InlineImageController = class {
+  constructor({ root, token = () => "", fetchImpl = fetch } = {}) {
+    this.root = root;
+    this.token = token;
+    this.fetchImpl = fetchImpl;
+    this.threadId = "";
+    this.records = /* @__PURE__ */ new Map();
+    this.targets = /* @__PURE__ */ new Map();
+    this.pending = [];
+    this.pendingRevision = 0;
+    this.downloadTimers = /* @__PURE__ */ new Map();
+    this.generation = 0;
+    this.modalRequest = 0;
+    this.pendingModalRequest = null;
+    this.activeLoads = 0;
+    this.loadQueue = [];
+    this.observer = typeof IntersectionObserver === "function" ? new IntersectionObserver((entries) => {
+      for (const entry of entries) if (entry.isIntersecting) {
+        this.observer.unobserve(entry.target);
+        void this.load(this.targets.get(entry.target));
+      }
+    }, { root: null, rootMargin: "160px" }) : null;
+    this.outside = (event) => {
+      if (this.menu && !event.composedPath().includes(this.menu)) this.closeMenu();
+    };
+    root?.addEventListener("pointerdown", this.outside);
+    this.cancelPendingModal = (event) => {
+      if (event.key === "Escape" && this.pendingModalRequest !== null && !this.modal) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.closeModal();
+      }
+    };
+    root?.addEventListener("keydown", this.cancelPendingModal);
+    this.resize = () => {
+      this.placeMenu();
+      this.placeModal();
+    };
+    window.addEventListener("resize", this.resize);
+    window.visualViewport?.addEventListener("resize", this.resize);
+    window.visualViewport?.addEventListener("scroll", this.resize);
+  }
+  setThread(threadId) {
+    if (threadId === this.threadId) return;
+    this.clear();
+    this.threadId = threadId || "";
+  }
+  card(kind, record, { compact = false } = {}) {
+    const id = kind === "attachment" ? record?.attachment_id : kind === "local" ? record?.id : record?.artifact_id;
+    if (!isInlineImage(record) || !identifier(id) || !this.threadId) return null;
+    const key = `${kind}:${id}`;
+    let state = this.records.get(key);
+    if (!state) {
+      state = { key, kind, record, status: "idle", nodes: /* @__PURE__ */ new Set(), controller: new AbortController() };
+      this.records.set(key, state);
+    }
+    const card = element2("figure", `inline-image-card${compact ? " compact" : ""}`);
+    card.dataset.inlineImageKey = key;
+    const open = button(`Preview ${imageFilename(record.filename)}`, () => this.open(state, open));
+    open.className = "inline-image-thumbnail";
+    const placeholder = element2("span", "inline-image-placeholder", "Image preview");
+    open.append(placeholder);
+    const caption = element2("figcaption", "inline-image-caption", imageFilename(record.filename));
+    const actions = element2("div", "inline-image-actions");
+    const options = button("Image actions", () => this.openMenu(state, options));
+    options.textContent = "⋯";
+    options.setAttribute("aria-haspopup", "menu");
+    options.setAttribute("aria-label", `Actions for ${caption.textContent}`);
+    actions.append(options);
+    const status = element2("span", "inline-image-status");
+    status.setAttribute("role", "status");
+    card.append(open, caption, actions, status);
+    const node2 = { card, open, placeholder, status };
+    state.nodes.add(node2);
+    this.targets.set(card, state);
+    card.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openMenu(state, open, { x: event.clientX, y: event.clientY });
+    });
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openMenu(state, open);
+      }
+    });
+    this.paint(state);
+    if (this.observer) this.observer.observe(card);
+    else queueMicrotask(() => {
+      if (card.isConnected) void this.load(state);
+    });
+    this.pruneTargets();
+    return card;
+  }
+  pruneTargets() {
+    clearTimeout(this.pruneTimer);
+    this.pruneTimer = setTimeout(() => {
+      for (const [target, state] of this.targets) if (!target.isConnected) {
+        this.observer?.unobserve(target);
+        this.targets.delete(target);
+        for (const node2 of state.nodes) if (node2.card === target) state.nodes.delete(node2);
+      }
+      for (const state of this.records.values()) for (const node2 of state.nodes) if (!node2.card.isConnected) state.nodes.delete(node2);
+    }, 0);
+  }
+  bindExisting(kind, record, thumbnail, container) {
+    const card = this.card(kind, record);
+    if (!card) return;
+    const state = this.records.get(card.dataset.inlineImageKey);
+    const status = card.querySelector(".inline-image-status");
+    container.append(card.querySelector(".inline-image-actions"), status);
+    state.nodes.add({ card: container, open: thumbnail, status });
+    thumbnail.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openMenu(state, thumbnail, { x: event.clientX, y: event.clientY });
+    });
+    thumbnail.addEventListener("keydown", (event) => {
+      if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openMenu(state, thumbnail);
+      }
+    });
+  }
+  paint(state) {
+    for (const node2 of state.nodes) {
+      if (state.url) {
+        let image = node2.open.querySelector("img");
+        if (!image) {
+          image = element2("img", "inline-image-raster");
+          image.alt = imageFilename(state.record.filename, "Image");
+          image.draggable = false;
+          node2.open.replaceChildren(image);
+        }
+        image.src = state.url;
+        image.width = state.width;
+        image.height = state.height;
+      }
+      node2.status.textContent = state.notice || (state.status === "loading" ? "Loading image…" : state.status === "error" ? "Preview unavailable. Use Image actions to retry." : "");
+      node2.open.setAttribute("aria-busy", String(state.status === "loading"));
+    }
+  }
+  load(state) {
+    if (!state || this.records.get(state.key) !== state) return Promise.resolve(null);
+    if (state.blob) {
+      this.records.delete(state.key);
+      this.records.set(state.key, state);
+      return Promise.resolve(state);
+    }
+    if (state.promise) return state.promise;
+    const generation = this.generation;
+    const threadId = this.threadId;
+    state.status = "loading";
+    state.notice = "";
+    this.paint(state);
+    state.promise = (async () => {
+      await new Promise((resolve) => {
+        if (this.activeLoads < 2) {
+          this.activeLoads += 1;
+          resolve();
+        } else this.loadQueue.push(resolve);
+      });
+      try {
+        if (generation !== this.generation || state.controller.signal.aborted) return null;
+        const blob = state.kind === "local" ? state.record.file : await fetchInlineImage(inlineImageEndpoint(threadId, state.kind, state.kind === "attachment" ? state.record.attachment_id : state.record.artifact_id), { token: this.token(), signal: state.controller.signal, fetchImpl: this.fetchImpl });
+        const validated = await validateInlineImage(blob, state.record.mime_type.toLowerCase());
+        if (generation !== this.generation || state.controller.signal.aborted || this.records.get(state.key) !== state) return null;
+        const url = URL.createObjectURL(validated.blob);
+        state.candidateUrl = url;
+        try {
+          const image = new Image();
+          image.src = url;
+          await image.decode();
+          if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth > MAX_EDGE || image.naturalHeight > MAX_EDGE || image.naturalWidth * image.naturalHeight > MAX_PIXELS) throw new Error("Image preview is not available");
+          if (generation !== this.generation || state.controller.signal.aborted || this.records.get(state.key) !== state) {
+            URL.revokeObjectURL(url);
+            return null;
+          }
+        } catch (error) {
+          URL.revokeObjectURL(url);
+          throw error;
+        } finally {
+          state.candidateUrl = null;
+        }
+        Object.assign(state, validated, { url, status: "ready" });
+        this.trim(state);
+        this.paint(state);
+        return state;
+      } catch (error) {
+        if (generation === this.generation && !state.controller.signal.aborted) {
+          state.status = "error";
+          this.paint(state);
+        }
+        if (error?.name === "AbortError") return null;
+        return null;
+      } finally {
+        state.promise = null;
+        const next = this.loadQueue.shift();
+        if (next) next();
+        else this.activeLoads -= 1;
+      }
+    })();
+    return state.promise;
+  }
+  trim(current) {
+    let cached = [...this.records.values()].filter((state) => state.blob);
+    let bytes = cached.reduce((total, state) => total + state.blob.size, 0);
+    let pixels = cached.reduce((total, state) => total + state.width * state.height, 0);
+    for (const state of cached) {
+      if (cached.length <= MAX_CACHED_IMAGES && bytes <= MAX_CACHE_BYTES && pixels <= MAX_CACHE_PIXELS) break;
+      if (state === current || this.modalState === state) continue;
+      bytes -= state.blob.size;
+      pixels -= state.width * state.height;
+      cached = cached.filter((item) => item !== state);
+      URL.revokeObjectURL(state.url);
+      state.url = null;
+      state.blob = null;
+      state.status = "idle";
+      for (const node2 of state.nodes) node2.open.replaceChildren(element2("span", "inline-image-placeholder", "Open image to reload preview"));
+    }
+  }
+  setPending(files) {
+    this.clearPending();
+    this.pending = files.slice(0, 6).map((file, index) => ({ id: `pending-${index}`, filename: file.name, mime_type: file.type, size_bytes: file.size, file })).filter(isInlineImage);
+  }
+  clearPending() {
+    for (const [key, state] of this.records) if (state.kind === "local") {
+      state.controller.abort();
+      if (state.url) URL.revokeObjectURL(state.url);
+      if (state.candidateUrl) URL.revokeObjectURL(state.candidateUrl);
+      this.records.delete(key);
+    }
+    this.pending = [];
+    this.pendingRevision += 1;
+  }
+  renderPending(container) {
+    for (const record of this.pending) {
+      const card = this.card("local", record, { compact: true });
+      if (card) {
+        container.append(card);
+        void this.load(this.records.get(card.dataset.inlineImageKey));
+      }
+    }
+  }
+  openMenu(state, trigger, position) {
+    this.closeMenu();
+    const menu = element2("div", "inline-image-menu");
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Image actions");
+    const items = [button("Open image", () => {
+      this.closeMenu();
+      void this.open(state, trigger);
+    }), button("Copy image", () => {
+      this.closeMenu();
+      void this.copy(state);
+    }), button("Download image", () => {
+      this.closeMenu();
+      void this.download(state);
+    })];
+    for (const item of items) {
+      item.setAttribute("role", "menuitem");
+      menu.append(item);
+    }
+    (this.modal || this.root).append(menu);
+    this.menu = menu;
+    this.menuTrigger = trigger;
+    this.menuPosition = position;
+    this.placeMenu();
+    menu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" || event.key === "Tab") {
+        if (event.key === "Escape") event.preventDefault();
+        event.stopPropagation();
+        this.closeMenu();
+      }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        event.stopPropagation();
+        const index = items.indexOf(this.root.activeElement);
+        items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+      }
+    });
+    items[0].focus();
+  }
+  closeMenu() {
+    if (!this.menu) return;
+    this.menu.remove();
+    this.menu = null;
+    this.menuTrigger?.focus();
+    this.menuTrigger = null;
+  }
+  viewport() {
+    const viewport = window.visualViewport;
+    return { left: viewport?.offsetLeft || 0, top: viewport?.offsetTop || 0, width: viewport?.width || window.innerWidth, height: viewport?.height || window.innerHeight };
+  }
+  placeMenu() {
+    if (!this.menu || !this.menuTrigger) return;
+    const viewport = this.viewport();
+    const bounds = this.menuTrigger.getBoundingClientRect();
+    this.menu.style.maxWidth = `${Math.max(40, viewport.width - 16)}px`;
+    this.menu.style.maxHeight = `${Math.max(40, viewport.height - 16)}px`;
+    this.menu.style.overflow = "auto";
+    const rect = this.menu.getBoundingClientRect();
+    this.menu.style.left = `${Math.max(viewport.left + 8, Math.min(this.menuPosition?.x ?? bounds.left, viewport.left + viewport.width - rect.width - 8))}px`;
+    this.menu.style.top = `${Math.max(viewport.top + 8, Math.min(this.menuPosition?.y ?? bounds.bottom, viewport.top + viewport.height - rect.height - 8))}px`;
+  }
+  placeModal() {
+    if (!this.modal) return;
+    const viewport = this.viewport();
+    this.modal.style.inset = "auto";
+    this.modal.style.margin = "0";
+    this.modal.style.width = `${Math.max(40, Math.min(1e3, viewport.width - 32))}px`;
+    this.modal.style.maxHeight = `${Math.max(40, viewport.height - 32)}px`;
+    const controls = this.modal.querySelector(".inline-image-dialog-controls");
+    const image = this.modal.querySelector(".inline-image-full");
+    image.style.maxHeight = `${Math.max(40, viewport.height - controls.scrollHeight - 96)}px`;
+    const rect = this.modal.getBoundingClientRect();
+    this.modal.style.left = `${viewport.left + Math.max(16, (viewport.width - rect.width) / 2)}px`;
+    this.modal.style.top = `${viewport.top + Math.max(16, (viewport.height - rect.height) / 2)}px`;
+  }
+  async open(state, trigger) {
+    const generation = this.generation;
+    const request = ++this.modalRequest;
+    this.pendingModalRequest = request;
+    const loaded = await this.load(state);
+    if (this.pendingModalRequest === request) this.pendingModalRequest = null;
+    if (!loaded || generation !== this.generation || request !== this.modalRequest) return;
+    this._removeModal();
+    const modal = element2("dialog", "inline-image-dialog");
+    modal.setAttribute("aria-label", `Image preview: ${imageFilename(state.record.filename)}`);
+    const controls = element2("div", "inline-image-dialog-controls");
+    const close = button("Close", () => this.closeModal());
+    controls.append(element2("strong", "inline-image-dialog-name", imageFilename(state.record.filename)), button("Copy image", () => this.copy(state)), button("Download", () => this.download(state)), close);
+    const image = element2("img", "inline-image-full");
+    image.src = loaded.url;
+    image.alt = imageFilename(state.record.filename);
+    image.addEventListener("load", () => this.placeModal());
+    const status = element2("p", "inline-image-status");
+    status.setAttribute("role", "status");
+    modal.append(controls, image, status);
+    this.root.append(modal);
+    this.modal = modal;
+    this.modalState = state;
+    this.modalTrigger = trigger;
+    modal.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.closeModal();
+    });
+    modal.addEventListener("contextmenu", (event) => {
+      if (event.target === image) {
+        event.preventDefault();
+        this.openMenu(state, close, { x: event.clientX, y: event.clientY });
+      }
+    });
+    modal.showModal();
+    this.placeModal();
+    close.focus();
+  }
+  closeModal() {
+    this.modalRequest += 1;
+    this.pendingModalRequest = null;
+    this._removeModal();
+  }
+  _removeModal() {
+    if (!this.modal) return;
+    this.closeMenu();
+    this.modal.close();
+    this.modal.remove();
+    this.modal = null;
+    this.modalState = null;
+    this.modalTrigger?.focus();
+    this.modalTrigger = null;
+  }
+  notice(state, text3) {
+    state.notice = text3;
+    this.paint(state);
+    if (this.modalState === state) {
+      this.modal.querySelector(".inline-image-status").textContent = text3;
+      this.placeModal();
+    }
+  }
+  async copy(state) {
+    const generation = this.generation;
+    if (!globalThis.isSecureContext || !navigator.clipboard?.write || typeof ClipboardItem !== "function") {
+      this.notice(state, "Copy image needs a secure browser connection. Download the image instead.");
+      return;
+    }
+    try {
+      const png = (async () => {
+        const loaded = await this.load(state);
+        if (!loaded || generation !== this.generation) throw new Error("Image changed");
+        if (loaded.mime === "image/png") return loaded.blob;
+        const image = new Image();
+        image.src = loaded.url;
+        await image.decode();
+        if (generation !== this.generation || image.naturalWidth > MAX_EDGE || image.naturalHeight > MAX_EDGE || image.naturalWidth * image.naturalHeight > MAX_PIXELS) throw new Error("Image changed");
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Copy unavailable");
+        context.drawImage(image, 0, 0);
+        return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Copy unavailable")), "image/png"));
+      })();
+      void png.catch(() => {
+      });
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+      if (generation === this.generation) this.notice(state, "Image copied.");
+    } catch {
+      if (generation === this.generation) this.notice(state, "Image could not be copied. Check clipboard permission or download it instead.");
+    }
+  }
+  async download(state) {
+    const generation = this.generation;
+    const loaded = await this.load(state);
+    if (!loaded || generation !== this.generation) return;
+    const url = URL.createObjectURL(loaded.blob);
+    const anchor = element2("a", "");
+    anchor.href = url;
+    anchor.download = imageFilename(state.record.filename);
+    this.root.append(anchor);
+    anchor.click();
+    anchor.remove();
+    this.downloadTimers.set(url, setTimeout(() => {
+      URL.revokeObjectURL(url);
+      this.downloadTimers.delete(url);
+    }, 6e4));
+  }
+  clear() {
+    this.generation += 1;
+    this.closeModal();
+    this.closeMenu();
+    this.observer?.disconnect();
+    clearTimeout(this.pruneTimer);
+    for (const state of this.records.values()) {
+      state.controller.abort();
+      if (state.url) URL.revokeObjectURL(state.url);
+      if (state.candidateUrl) URL.revokeObjectURL(state.candidateUrl);
+    }
+    for (const [url, timer] of this.downloadTimers) {
+      clearTimeout(timer);
+      URL.revokeObjectURL(url);
+    }
+    this.downloadTimers.clear();
+    this.records.clear();
+    this.targets.clear();
+    this.pending = [];
+    this.pendingRevision += 1;
+  }
+  dispose() {
+    this.clear();
+    this.root?.removeEventListener("pointerdown", this.outside);
+    this.root?.removeEventListener("keydown", this.cancelPendingModal);
+    window.removeEventListener("resize", this.resize);
+    window.visualViewport?.removeEventListener("resize", this.resize);
+    window.visualViewport?.removeEventListener("scroll", this.resize);
+  }
+};
+var inlineImageCss = `
+  .inline-image-card { position: relative; margin: 0; width: min(380px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+  .uploaded-image-message > .inline-image-card { justify-self: end; }
+  .inline-image-thumbnail { grid-column: 1 / -1; display: block; width: 100%; height: 240px; padding: 0; overflow: hidden; border: 1px solid var(--border-color); border-radius: 14px; background: var(--surface-muted); color: var(--muted-color); cursor: zoom-in; }
+  .inline-image-thumbnail:focus-visible, .inline-image-action:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 3px; }
+  .inline-image-raster { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .inline-image-caption { align-self: center; color: var(--muted-color); font-size: var(--font-caption-size); overflow-wrap: anywhere; }
+  .inline-image-actions { display: flex; gap: 8px; justify-content: end; }
+  .inline-image-actions .inline-image-action { min-width: 40px; font-size: 20px; padding: 3px 8px; }
+  .inline-image-action { min-height: 36px; border: 0; border-radius: 8px; background: var(--surface-muted); color: var(--text-color); padding: 7px 12px; font: inherit; cursor: pointer; }
+  .inline-image-action:hover { background: var(--hover-bg, var(--surface-muted)); }
+  .inline-image-status { grid-column: 1 / -1; color: var(--muted-color); font-size: var(--font-caption-size); overflow-wrap: anywhere; }
+  .inline-image-status:empty { display: none; }
+  .inline-image-card.compact { width: 112px; gap: 4px; }
+  .inline-image-card.compact .inline-image-thumbnail { height: 64px; }
+  .inline-image-card.compact .inline-image-caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .inline-image-card.compact .inline-image-status { max-height: 32px; overflow: auto; }
+  .inline-image-card.compact .inline-image-actions { position: absolute; top: 4px; right: 4px; }
+  .inline-image-card.compact .inline-image-action { font-size: 20px; min-width: 40px; min-height: 40px; padding: 4px 6px; }
+  .composer-shell:has(.attachment-chips .inline-image-card) { padding-top: 152px; }
+  .composer-shell:has(.attachment-chips .inline-image-card) .attachment-chips { top: 12px; bottom: auto; max-height: 132px; overflow: auto; align-items: start; flex-wrap: nowrap; }
+  .composer-shell .attachment-chips .inline-image-card { flex: 0 0 112px; }
+  .inline-image-menu { position: fixed; z-index: 10010; display: grid; gap: 3px; min-width: 176px; max-width: calc(100vw - 16px); padding: 6px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--surface-bg); box-shadow: 0 8px 28px #0002; }
+  .inline-image-menu .inline-image-action { text-align: left; background: transparent; }
+  .inline-image-menu .inline-image-action:hover, .inline-image-menu .inline-image-action:focus-visible { background: var(--surface-muted); }
+  .inline-image-dialog { position: fixed; inset: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); width: min(1000px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; color: var(--text-color); background: var(--surface-bg); }
+  .inline-image-dialog::backdrop { background: #0009; }
+  .inline-image-dialog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .inline-image-dialog-name { margin-right: auto; overflow-wrap: anywhere; min-width: 0; }
+  .inline-image-full { display: block; max-width: 100%; max-height: calc(100dvh - 160px); width: auto; height: auto; margin: auto; object-fit: contain; }
+  @media (max-width: 600px) { .inline-image-card { width: min(300px, 100%); } .inline-image-thumbnail { height: 200px; } .inline-image-action { min-height: 44px; } .inline-image-dialog { padding: 10px; } .inline-image-full { max-height: calc(100dvh - 210px); } }
+`;
 
 // frontend/src/uploads.js
 var UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
@@ -32973,12 +33597,12 @@ function renderAuth(container, model) {
   const actions = document.createElement("div");
   actions.className = "auth-actions";
   for (const action of model.actions) {
-    const button3 = document.createElement("button");
-    button3.type = "button";
-    button3.dataset.action = action.id;
-    button3.className = action.primary ? "primary" : "";
-    button3.textContent = action.label;
-    actions.append(button3);
+    const button4 = document.createElement("button");
+    button4.type = "button";
+    button4.dataset.action = action.id;
+    button4.className = action.primary ? "primary" : "";
+    button4.textContent = action.label;
+    actions.append(button4);
   }
   card.append(actions);
   container.append(card);
@@ -33087,14 +33711,14 @@ function renderApproval(container, model) {
   const actions = document.createElement("div");
   actions.className = "decision-actions";
   for (const action of model.actions) {
-    const button3 = document.createElement("button");
-    button3.type = "button";
-    button3.dataset.action = `${action.id}-interaction`;
-    button3.dataset.decision = action.id;
-    button3.textContent = action.label;
-    button3.disabled = action.disabled;
-    button3.setAttribute("aria-disabled", String(action.disabled));
-    actions.append(button3);
+    const button4 = document.createElement("button");
+    button4.type = "button";
+    button4.dataset.action = `${action.id}-interaction`;
+    button4.dataset.decision = action.id;
+    button4.textContent = action.label;
+    button4.disabled = action.disabled;
+    button4.setAttribute("aria-disabled", String(action.disabled));
+    actions.append(button4);
   }
   card.append(actions);
   container.append(card);
@@ -33230,13 +33854,13 @@ function renderMcpElicitation(container, interaction, { pending = false, draft =
   const actionList = interaction?.kind === "mcp_url" ? [["accept", "I've completed this"], ["decline", "Decline"], ["cancel", "Cancel"]] : [["answer", "Send answer"], ["decline", "Decline"], ["cancel", "Cancel"]];
   for (const [action, label] of actionList) {
     if (!interaction?.allowed_actions?.includes(action)) continue;
-    const button3 = document.createElement("button");
-    button3.type = "button";
-    button3.dataset.action = action === "answer" ? "answer-mcp-form" : `${action}-interaction`;
-    if (action !== "answer") button3.dataset.decision = action;
-    button3.textContent = label;
-    button3.disabled = pending || interaction.status !== "pending" || action === "accept" && !safeUrl(interaction.authorization_url, display.mcp_url_host);
-    actions.append(button3);
+    const button4 = document.createElement("button");
+    button4.type = "button";
+    button4.dataset.action = action === "answer" ? "answer-mcp-form" : `${action}-interaction`;
+    if (action !== "answer") button4.dataset.decision = action;
+    button4.textContent = label;
+    button4.disabled = pending || interaction.status !== "pending" || action === "accept" && !safeUrl(interaction.authorization_url, display.mcp_url_host);
+    actions.append(button4);
   }
   card.append(actions);
   container.append(card);
@@ -33621,7 +34245,7 @@ var text = (doc, tag, value, className = "") => {
   node2.className = className;
   return node2;
 };
-var button = (doc, label, action, extra = {}) => {
+var button2 = (doc, label, action, extra = {}) => {
   const node2 = text(doc, "button", label, "panel-button");
   node2.type = "button";
   node2.dataset.desktopAction = action;
@@ -33664,7 +34288,7 @@ function renderStdioPackages(doc, state, { available = false, management = false
   const packages = (Array.isArray(state.data.stdio_packages) ? state.data.stdio_packages : []).filter(validStdioPackage);
   const servers = (Array.isArray(state.data.mcp_servers) ? state.data.mcp_servers : []).filter((row) => row.transport === "stdio");
   if (!available || !packages.length) section2.append(text(doc, "p", "No verified local packages are available. Check the App option and worker status, then refresh. Existing connections are shown below.", "desktop-note"));
-  else section2.append(button(doc, "Add isolated server", "open-stdio-form"));
+  else section2.append(button2(doc, "Add isolated server", "open-stdio-form"));
   if (["stdio-add", "stdio-update"].includes(state.form)) {
     const updating = state.form === "stdio-update";
     const server = updating ? state.stdioEditing : null;
@@ -33717,9 +34341,9 @@ function renderStdioPackages(doc, state, { available = false, management = false
       form.append(error);
     }
     const actions = text(doc, "div", "", "desktop-form-actions");
-    const submit = button(doc, updating ? "Update paused server" : "Add paused server", updating ? "submit-stdio-update" : "submit-stdio-add");
+    const submit = button2(doc, updating ? "Update paused server" : "Add paused server", updating ? "submit-stdio-update" : "submit-stdio-add");
     submit.disabled = !selected || state.loading;
-    actions.append(submit, button(doc, "Cancel", "close-form"));
+    actions.append(submit, button2(doc, "Cancel", "close-form"));
     form.append(actions);
     section2.append(form);
   }
@@ -33735,18 +34359,18 @@ function renderStdioPackages(doc, state, { available = false, management = false
     if (server.failure || startup === "failed" || startup === "cancelled") card.append(text(doc, "p", "This worker needs attention. Pause it, check the App logs and package, then refresh status. If recovery is uncertain, restart the App.", "desktop-error"));
     if (server.status_unavailable) card.append(text(doc, "p", "Worker status is unavailable. Refresh before enabling it.", "desktop-error"));
     const actions = text(doc, "div", "", "mcp-connection-actions");
-    actions.append(button(doc, state.expandedStdioServer === server.name ? "Hide details" : "Details", "toggle-stdio-details", { id: server.name }));
-    if (available && server.enabled === false && packages.some((item) => item.package_id === server.package_id && item.revision !== server.package_revision)) actions.append(button(doc, "Update revision", "open-stdio-update", { id: server.name }));
-    if (available && server.rollback_available && server.enabled === false) actions.append(button(doc, "Roll back revision", "rollback-stdio", { id: server.name }));
-    if (available && toolPermissions) actions.append(button(doc, "Choose allowed tools", "edit-mcp-tools", { id: server.name }));
+    actions.append(button2(doc, state.expandedStdioServer === server.name ? "Hide details" : "Details", "toggle-stdio-details", { id: server.name }));
+    if (available && server.enabled === false && packages.some((item) => item.package_id === server.package_id && item.revision !== server.package_revision)) actions.append(button2(doc, "Update revision", "open-stdio-update", { id: server.name }));
+    if (available && server.rollback_available && server.enabled === false) actions.append(button2(doc, "Roll back revision", "rollback-stdio", { id: server.name }));
+    if (available && toolPermissions) actions.append(button2(doc, "Choose allowed tools", "edit-mcp-tools", { id: server.name }));
     if (management) {
       if (available || server.enabled !== false) {
-        const stateButton = button(doc, server.enabled === false ? "Resume" : "Pause", server.enabled === false ? "resume-mcp" : "pause-mcp", { id: server.name });
+        const stateButton = button2(doc, server.enabled === false ? "Resume" : "Pause", server.enabled === false ? "resume-mcp" : "pause-mcp", { id: server.name });
         stateButton.disabled = server.enabled === false && server.status_unavailable;
         actions.append(stateButton);
       }
     }
-    actions.append(button(doc, "Remove server", "remove-mcp", { id: server.name }));
+    actions.append(button2(doc, "Remove server", "remove-mcp", { id: server.name }));
     card.append(actions);
     if (state.expandedStdioServer === server.name) {
       const details = text(doc, "dl", "", "stdio-server-details desktop-note");
@@ -33773,12 +34397,12 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEn
       ["Home Assistant (HA-MCP)", "Guided installation and connection for devices, states and automations.", "choose-ha-mcp"],
       ["Other MCP server", "Connect a compatible public HTTPS server or an explicitly enabled local server.", "choose-custom-mcp"]
     ]) {
-      const choice = button(doc, "", action);
+      const choice = button2(doc, "", action);
       choice.className = "mcp-choice";
       choice.append(text(doc, "strong", title), text(doc, "span", description));
       choices.append(choice);
     }
-    section2.append(choices, button(doc, "Cancel", "close-form"));
+    section2.append(choices, button2(doc, "Cancel", "close-form"));
     return section2;
   }
   const guided = state.form === "mcp-ha";
@@ -33794,7 +34418,7 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEn
     steps.append(install, connect, enable);
     section2.append(steps);
   }
-  section2.append(text(doc, "p", enabled ? "MCP is enabled. You can add a server below." : "MCP is not available on this connection. Enable MCP in the Codex Bridge App and restart it. If the option is missing, update both the App and HACS Integration, then restart Home Assistant.", "desktop-note"), button(doc, "Check connection options again", "refresh-settings-capabilities"));
+  section2.append(text(doc, "p", enabled ? "MCP is enabled. You can add a server below." : "MCP is not available on this connection. Enable MCP in the Codex Bridge App and restart it. If the option is missing, update both the App and HACS Integration, then restart Home Assistant.", "desktop-note"), button2(doc, "Check connection options again", "refresh-settings-capabilities"));
   const form = doc.createElement("form");
   form.className = "desktop-form";
   form.dataset.desktopForm = "mcp";
@@ -33847,10 +34471,10 @@ function renderMcpSetup(doc, state, enabled, localEnabled = false, credentialsEn
     form.append(error);
   }
   const actions = text(doc, "div", "", "desktop-form-actions");
-  const add = button(doc, "Add server", "submit-mcp");
+  const add = button2(doc, "Add server", "submit-mcp");
   add.classList.add("panel-button-primary");
   add.disabled = !enabled;
-  actions.append(add, button(doc, "Cancel", "close-form"));
+  actions.append(add, button2(doc, "Cancel", "close-form"));
   form.append(actions);
   section2.append(form);
   if (guided) section2.append(text(doc, "h3", "Check it works", "desktop-subheading"), text(doc, "p", "After adding the server, use Sign in if it asks for OAuth. Refresh the server status, then start a new chat and ask Codex to describe an entity without changing it. Confirm the result before allowing changes.", "desktop-note"));
@@ -33880,12 +34504,12 @@ function renderMcpAuthentication(doc, state, { local = false, replacing = false 
   if (mode === "bearer") section2.append(secretInput("Bearer token", "data-mcp-token"));
   if (mode === "headers") {
     const rows = text(doc, "div", "", "mcp-header-rows");
-    const add = button(doc, "Add another header", "");
+    const add = button2(doc, "Add another header", "");
     delete add.dataset.desktopAction;
     const addRow = () => {
       const row = text(doc, "div", "", "mcp-header-row");
       row.append(secretInput("Header name", "data-mcp-header-name", "text"), secretInput("API-key value", "data-mcp-header-value"));
-      const remove = button(doc, "Remove header", "");
+      const remove = button2(doc, "Remove header", "");
       delete remove.dataset.desktopAction;
       remove.onclick = () => {
         row.remove();
@@ -33977,9 +34601,9 @@ function renderMcpToolPermissions(doc, state) {
     form.append(error);
   }
   const actions = text(doc, "div", "", "desktop-form-actions");
-  const save = button(doc, "Save allowed tools", "submit-mcp-tools");
+  const save = button2(doc, "Save allowed tools", "submit-mcp-tools");
   save.disabled = !inventory.catalogue_available || state.loading;
-  actions.append(save, button(doc, "Cancel", "close-form"));
+  actions.append(save, button2(doc, "Cancel", "close-form"));
   form.append(actions);
   return form;
 }
@@ -34035,7 +34659,7 @@ function renderMcpConnectionForm(doc, state) {
     form.append(error);
   }
   const actions = text(doc, "div", "", "desktop-form-actions");
-  actions.append(button(doc, "Save paused connection", "submit-mcp-connection"), button(doc, "Cancel", "close-form"));
+  actions.append(button2(doc, "Save paused connection", "submit-mcp-connection"), button2(doc, "Cancel", "close-form"));
   form.append(actions);
   return form;
 }
@@ -34051,10 +34675,10 @@ function renderMcpCredentialForm(doc, state) {
     form.append(error);
   }
   const actions = text(doc, "div", "", "desktop-form-actions");
-  const save = button(doc, "Save credential", "submit-mcp-credential");
+  const save = button2(doc, "Save credential", "submit-mcp-credential");
   save.disabled = state.loading;
   save.classList.add("panel-button-primary");
-  actions.append(save, button(doc, "Cancel", "close-form"));
+  actions.append(save, button2(doc, "Cancel", "close-form"));
   form.append(actions);
   return form;
 }
@@ -34140,7 +34764,7 @@ var text2 = (documentRef, tag, value, className = "") => {
   node2.textContent = value == null ? "" : String(value);
   return node2;
 };
-var button2 = (documentRef, label, action, extra = {}) => {
+var button3 = (documentRef, label, action, extra = {}) => {
   const node2 = documentRef.createElement("button");
   node2.type = "button";
   node2.className = "panel-button";
@@ -34259,8 +34883,8 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
   toolbar.append(text2(documentRef, "div", "Automations", "desktop-section-label"));
-  if (proposalsSupported) toolbar.append(button2(documentRef, "Describe a task", "open-schedule-description"));
-  toolbar.append(button2(documentRef, "New schedule", "open-schedule-form"));
+  if (proposalsSupported) toolbar.append(button3(documentRef, "Describe a task", "open-schedule-description"));
+  toolbar.append(button3(documentRef, "New schedule", "open-schedule-form"));
   if (!state.form) section2.append(toolbar);
   if (state.form === "schedule" || state.form === "schedule-edit") {
     section2.append(renderScheduleForm(documentRef, state, defaultTimezone, { ...state.scheduleContext, proposalsSupported }));
@@ -34300,10 +34924,10 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     form.append(error);
     const actions = documentRef.createElement("div");
     actions.className = "schedule-actions";
-    actions.append(button2(documentRef, "Cancel", "close-form"));
-    if (state.automationEditRefreshRequired) actions.append(button2(documentRef, "Refresh task", "refresh-automation-edit", { id: state.editingAutomation?.automation_id }));
-    else if (state.automationEditProposal) actions.append(button2(documentRef, "Back", "revise-automation-edit"), button2(documentRef, "Save changes", "save-automation-edit"));
-    else actions.append(button2(documentRef, "Review changes", "review-automation-edit"));
+    actions.append(button3(documentRef, "Cancel", "close-form"));
+    if (state.automationEditRefreshRequired) actions.append(button3(documentRef, "Refresh task", "refresh-automation-edit", { id: state.editingAutomation?.automation_id }));
+    else if (state.automationEditProposal) actions.append(button3(documentRef, "Back", "revise-automation-edit"), button3(documentRef, "Save changes", "save-automation-edit"));
+    else actions.append(button3(documentRef, "Review changes", "review-automation-edit"));
     form.append(actions);
     section2.append(form);
     return section2;
@@ -34326,7 +34950,7 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     form.append(error);
     const actions = documentRef.createElement("div");
     actions.className = "schedule-actions";
-    actions.append(button2(documentRef, "Cancel", "close-form"), button2(documentRef, "Review timing", "review-schedule-description"));
+    actions.append(button3(documentRef, "Cancel", "close-form"), button3(documentRef, "Review timing", "review-schedule-description"));
     form.append(actions);
     section2.append(form);
     return section2;
@@ -34335,8 +34959,8 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
   section2.append(renderTable(documentRef, rows, [["title", "Title"], ["schedule", "Schedule"], ["permissions", "Permissions"], ["status", "Status"]], (row, td) => {
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
-    td.append(button2(documentRef, "Run", "run-automation", common), button2(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button2(documentRef, "Runs", "list-automation-runs", common), button2(documentRef, "Update", "update-automation", common), button2(documentRef, "Delete", "delete-automation", common));
-    if (textEditsSupported) td.append(button2(documentRef, "Describe change", "describe-automation-edit", common));
+    td.append(button3(documentRef, "Run", "run-automation", common), button3(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button3(documentRef, "Runs", "list-automation-runs", common), button3(documentRef, "Update", "update-automation", common), button3(documentRef, "Delete", "delete-automation", common));
+    if (textEditsSupported) td.append(button3(documentRef, "Describe change", "describe-automation-edit", common));
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
@@ -34354,7 +34978,7 @@ function renderSkills(documentRef, state) {
   section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
   toolbar.className = "desktop-toolbar";
-  toolbar.append(text2(documentRef, "div", "Workspace capabilities", "desktop-section-label"), button2(documentRef, "Create skill", "open-skill-form"));
+  toolbar.append(text2(documentRef, "div", "Workspace capabilities", "desktop-section-label"), button3(documentRef, "Create skill", "open-skill-form"));
   section2.append(toolbar);
   if (state.form === "skill") {
     const form = documentRef.createElement("form");
@@ -34363,7 +34987,7 @@ function renderSkills(documentRef, state) {
     form.append(input(documentRef, "Name", "name", formValue(state, "name")), input(documentRef, "Description", "description", formValue(state, "description"), "textarea"), input(documentRef, "Instructions", "instructions", formValue(state, "instructions"), "textarea"));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
-    actions.append(button2(documentRef, "Create skill", "submit-skill"), button2(documentRef, "Cancel", "close-form"));
+    actions.append(button3(documentRef, "Create skill", "submit-skill"), button3(documentRef, "Cancel", "close-form"));
     form.append(actions);
     section2.append(form);
   }
@@ -34385,8 +35009,8 @@ function renderSkills(documentRef, state) {
     group.append(heading);
     group.append(renderTable(documentRef, [...skills].sort((a2, b3) => String(a2.name).localeCompare(String(b3.name))), [["name", "Skill"], ["scope", "Scope"], ["enabled", "Enabled"]], (row, td) => {
       const id = row.id || row.skill_id || row.name || "";
-      td.append(button2(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
-      td.append(button2(documentRef, "Delete", "delete-skill", { id }));
+      td.append(button3(documentRef, row.enabled === false ? "Enable" : "Disable", "toggle-skill", { id, enabled: row.enabled === false ? "true" : "false" }));
+      td.append(button3(documentRef, "Delete", "delete-skill", { id }));
     }));
     section2.append(group);
   }
@@ -34409,14 +35033,14 @@ function renderPlugins(documentRef, state) {
   });
   section2.append(renderTable(documentRef, namedRows, [["visible_name", "Plugin"], ["version", "Version"], ["enabled", "State"]], (row, td) => {
     const id = row.id || row.plugin_id || row.name || "";
-    td.append(button2(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
+    td.append(button3(documentRef, row.installed || row.enabled ? "Uninstall" : "Install", row.installed || row.enabled ? "uninstall-plugin" : "install-plugin", { id, name: row.name || id, marketplace: row.marketplace_name || "" }));
   }));
   const market = normalizeDesktopList(state.data.marketplaces);
   const marketHeading = text2(documentRef, "h3", "Trusted marketplaces", "desktop-subheading");
   section2.append(marketHeading);
   const marketActions = documentRef.createElement("div");
   marketActions.className = "desktop-form-actions";
-  marketActions.append(button2(documentRef, "Add marketplace", "open-marketplace-form"));
+  marketActions.append(button3(documentRef, "Add marketplace", "open-marketplace-form"));
   section2.append(marketActions);
   if (state.form === "marketplace") {
     const form = documentRef.createElement("form");
@@ -34425,12 +35049,12 @@ function renderPlugins(documentRef, state) {
     form.append(input(documentRef, "HTTPS source URL", "source", formValue(state, "source"), "url"), input(documentRef, "Ref (optional)", "ref_name", formValue(state, "ref_name")), input(documentRef, "Sparse paths (comma separated)", "sparse_paths", formValue(state, "sparse_paths")));
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
-    actions.append(button2(documentRef, "Add marketplace", "submit-marketplace"), button2(documentRef, "Cancel", "close-form"));
+    actions.append(button3(documentRef, "Add marketplace", "submit-marketplace"), button3(documentRef, "Cancel", "close-form"));
     form.append(actions);
     section2.append(form);
   }
   const marketRows = market.map((row) => ({ ...row, plugin_count: Array.isArray(row.plugins) ? row.plugins.length : 0 }));
-  section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button2(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button2(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
+  section2.append(renderTable(documentRef, marketRows, [["name", "Name"], ["plugin_count", "Plugins"]], (row, td) => td.append(button3(documentRef, "Remove", "remove-marketplace", { id: row.name || "" }), button3(documentRef, "Upgrade", "upgrade-marketplace", { id: row.name || "" }))));
   return section2;
 }
 function renderSettings(documentRef, state, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {}) {
@@ -34443,7 +35067,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   const tabItems = [["general", "General"], ["access", "Access"], ["appearance", "Appearance"], ["mcp", "MCP servers"], ["instructions", "Instructions"], ["shortcuts", "Keyboard shortcuts"], ["about", "About / security"]];
   const tab = state.settingsTab || "general";
   for (const [id, label] of tabItems) {
-    const control2 = button2(documentRef, label, "select-settings-tab", { tab: id });
+    const control2 = button3(documentRef, label, "select-settings-tab", { tab: id });
     control2.className = "settings-tab";
     control2.id = `settings-tab-${id}`;
     control2.dataset.settingsTab = id;
@@ -34508,7 +35132,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     guide.style.color = "inherit";
     recommendation.append(guide);
     panel.append(recommendation);
-    panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button2(documentRef, "Add MCP server", "open-mcp-form"));
+    panel.append(text2(documentRef, "h3", "MCP servers", "desktop-subheading"), text2(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button3(documentRef, "Add MCP server", "open-mcp-form"));
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
     const management = config?.capabilities?.includes("mcp_management_v1");
     const toolPermissions = config?.capabilities?.includes("mcp_tool_permissions_v1");
@@ -34520,7 +35144,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     if (stdio || mcp.some((row) => row.transport === "stdio")) panel.append(renderStdioPackages(documentRef, state, { available: stdio, management, toolPermissions }));
     if (!stdio) panel.append(text2(documentRef, "p", "Isolated local packages require a newer App with its separate stdio option enabled. Update the App and Integration, then refresh connection options.", "desktop-note"));
     panel.append(text2(documentRef, "p", management ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats." : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
-    panel.append(button2(documentRef, "Refresh server status", "refresh-settings-capabilities"));
+    panel.append(button3(documentRef, "Refresh server status", "refresh-settings-capabilities"));
     panel.append(renderTable(documentRef, mcp.filter((row) => row.transport !== "stdio"), [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const controls = text2(documentRef, "div", "", "mcp-connection-actions");
       td.append(controls);
@@ -34528,19 +35152,19 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       const oauth = row.auth === "oauth_required" || row.auth === "oauth";
       if (management) {
         const paused = row.enabled === false;
-        controls.append(button2(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
-        const edit = button2(documentRef, "Edit connection", "edit-mcp-connection", { id });
+        controls.append(button3(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
+        const edit = button3(documentRef, "Edit connection", "edit-mcp-connection", { id });
         edit.disabled = !paused;
         edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
         controls.append(edit, text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
-        if (toolPermissions) controls.append(button2(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
+        if (toolPermissions) controls.append(button3(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
         if (row.failure) controls.append(text2(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
       }
-      controls.append(button2(documentRef, "Remove server", "remove-mcp", { id }));
+      controls.append(button3(documentRef, "Remove server", "remove-mcp", { id }));
       if (credentials && ["bearer", "headers"].includes(row.auth)) {
-        controls.append(text2(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button2(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
-        if (row.credential_configured) controls.append(button2(documentRef, "Remove credential", "remove-mcp-credential", { id }));
-      } else if (oauth) controls.append(button2(documentRef, "Sign in", "login-mcp", { id }));
+        controls.append(text2(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button3(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
+        if (row.credential_configured) controls.append(button3(documentRef, "Remove credential", "remove-mcp-credential", { id }));
+      } else if (oauth) controls.append(button3(documentRef, "Sign in", "login-mcp", { id }));
       else controls.append(text2(documentRef, "span", "No OAuth", "desktop-action-note"));
     }));
   }
@@ -34562,7 +35186,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(contentField);
     const actions = documentRef.createElement("div");
     actions.className = "desktop-form-actions";
-    actions.append(button2(documentRef, "Save instructions", "save-agents"), button2(documentRef, "Delete instructions", "delete-agents"));
+    actions.append(button3(documentRef, "Save instructions", "save-agents"), button3(documentRef, "Delete instructions", "delete-agents"));
     panel.append(actions);
   }
   if (tab === "shortcuts") panel.append(text2(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text2(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
@@ -34570,23 +35194,23 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   if (tab === "access") {
     panel.append(text2(documentRef, "h3", "Choose the access your task needs", "desktop-subheading"));
     const workspace = text2(documentRef, "section", "", "schedule-card host-access-settings");
-    workspace.append(text2(documentRef, "h3", "Full auto · workspace"), text2(documentRef, "p", "Codex can use enabled tools automatically and edit files inside the selected workspace. It cannot use private host paths or direct network connections. Set your new-chat permission default in General, or change permissions for an individual chat.", "desktop-note"), button2(documentRef, "New chat defaults", "select-settings-tab", { tab: "general" }));
+    workspace.append(text2(documentRef, "h3", "Full auto · workspace"), text2(documentRef, "p", "Codex can use enabled tools automatically and edit files inside the selected workspace. It cannot use private host paths or direct network connections. Set your new-chat permission default in General, or change permissions for an individual chat.", "desktop-note"), button3(documentRef, "New chat defaults", "select-settings-tab", { tab: "general" }));
     const mcpCard = text2(documentRef, "section", "", "schedule-card host-access-settings");
-    mcpCard.append(text2(documentRef, "h3", "Home Assistant devices and automations"), text2(documentRef, "p", "Connect HA-MCP to give Codex the Home Assistant tools you choose. This is separate from root host access; revoking one does not revoke the other.", "desktop-note"), button2(documentRef, "Set up Home Assistant tools", "select-settings-tab", { tab: "mcp" }));
+    mcpCard.append(text2(documentRef, "h3", "Home Assistant devices and automations"), text2(documentRef, "p", "Connect HA-MCP to give Codex the Home Assistant tools you choose. This is separate from root host access; revoking one does not revoke the other.", "desktop-note"), button3(documentRef, "Set up Home Assistant tools", "select-settings-tab", { tab: "mcp" }));
     const host = state.data?.host_access;
     const card = text2(documentRef, "section", "", "schedule-card host-access-settings");
     card.append(text2(documentRef, "h3", HOST_LABEL), text2(documentRef, "p", "The optional Codex Host Access App lets Codex run commands as root on the HAOS machine. That includes its files, credentials, services, internet and local network. It can change or delete data and interrupt Home Assistant.", "desktop-note"));
     if (config?.capabilities?.includes("host_access_v1")) {
-      card.append(text2(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Review the full warning before enabling access. If the companion App is missing, the setup dialog links to its installation instructions.", "desktop-note"), button2(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
-      if (host?.enabled) card.append(button2(documentRef, "Revoke host access", "revoke-host-access"));
-      if (host?.enabled && settings.threadId) card.append(button2(documentRef, "Use for current chat", "use-host-access"));
+      card.append(text2(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Review the full warning before enabling access. If the companion App is missing, the setup dialog links to its installation instructions.", "desktop-note"), button3(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
+      if (host?.enabled) card.append(button3(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) card.append(button3(documentRef, "Use for current chat", "use-host-access"));
     } else {
       card.append(text2(documentRef, "p", "Host access is not available on this connection. Update the Codex Bridge App and HACS Integration, then restart Home Assistant and reload this panel. Updating does not grant host access.", "desktop-note"));
       const guide = text2(documentRef, "a", "Update instructions and missing-update checks");
       guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/installation.md#update-an-existing-installation";
       guide.target = "_blank";
       guide.rel = "noopener noreferrer";
-      card.append(guide, button2(documentRef, "Check connection options again", "refresh-settings-capabilities"));
+      card.append(guide, button3(documentRef, "Check connection options again", "refresh-settings-capabilities"));
     }
     panel.append(workspace, mcpCard, card);
   }
@@ -34615,7 +35239,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       text2(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
       text2(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"),
       saved,
-      button2(documentRef, "Access settings and Home Assistant control", "select-settings-tab", { tab: "access" }),
+      button3(documentRef, "Access settings and Home Assistant control", "select-settings-tab", { tab: "access" }),
       text2(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
       text2(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
@@ -34684,7 +35308,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const error = text2(documentRef, "p", state.error, "desktop-error");
     error.setAttribute("role", "alert");
     container.append(error);
-    container.append(button2(documentRef, "Retry", "retry-desktop"));
+    container.append(button3(documentRef, "Retry", "retry-desktop"));
     return;
   }
   if (state.notice) {
@@ -34696,7 +35320,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     const confirm2 = documentRef.createElement("div");
     confirm2.className = "desktop-notice";
     confirm2.setAttribute("role", "alert");
-    confirm2.append(text2(documentRef, "span", state.confirmAction.action === "rollback-stdio" ? "Restore the previously packaged revision? The server stays paused while you review its tools." : "This action is destructive. Confirm to continue."), button2(documentRef, "Confirm", "confirm-desktop"), button2(documentRef, "Cancel", "cancel-desktop-confirm"));
+    confirm2.append(text2(documentRef, "span", state.confirmAction.action === "rollback-stdio" ? "Restore the previously packaged revision? The server stays paused while you review its tools." : "This action is destructive. Confirm to continue."), button3(documentRef, "Confirm", "confirm-desktop"), button3(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm2);
   }
   const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1"), config?.capabilities?.includes("automation_text_edits_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
@@ -34963,7 +35587,7 @@ var ChatContextMenu = class {
   }
   syncTrigger() {
     if (!this.header) {
-      const current = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button3) => button3.dataset.threadId === this.threadId);
+      const current = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button4) => button4.dataset.threadId === this.threadId);
       if (current) this.trigger = current;
     }
     const trigger = this.trigger;
@@ -35042,7 +35666,7 @@ var ChatContextMenu = class {
     if (focus) this.returnFocus();
   }
   returnFocus() {
-    const replacement = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button3) => button3.dataset.threadId === this.threadId);
+    const replacement = [...this.panel.shadowRoot.querySelectorAll(".thread-actions-toggle")].find((button4) => button4.dataset.threadId === this.threadId);
     (this.trigger?.isConnected ? this.trigger : replacement || this.panel.shadowRoot.getElementById("chat-menu-button"))?.focus();
   }
   entries(page = this.page) {
@@ -35235,10 +35859,10 @@ var ChatContextMenu = class {
     const statusParent = this.submenu || this.menu;
     if (this.status.parentNode !== statusParent) statusParent.append(this.status);
     this.position();
-    const available = (button3) => !button3.hidden && !button3.disabled && !(this.compact && this.page && button3.closest(".chat-menu-root"));
+    const available = (button4) => !button4.hidden && !button4.disabled && !(this.compact && this.page && button4.closest(".chat-menu-root"));
     if (preserveFocus && selected && !(old.isConnected && available(old) && this.panel.shadowRoot.activeElement === old)) {
       const buttons = [...this.menu.querySelectorAll("button")].filter(available);
-      (buttons.find((button3) => button3.dataset.chatAction === selected[0] && button3._chatValue === selected[1]) || buttons[0])?.focus({ preventScroll: true });
+      (buttons.find((button4) => button4.dataset.chatAction === selected[0] && button4._chatValue === selected[1]) || buttons[0])?.focus({ preventScroll: true });
     }
   }
   position() {
@@ -35253,7 +35877,7 @@ var ChatContextMenu = class {
     const submenu = this.menu.querySelector(".chat-menu-submenu");
     if (submenu && !this.compact) {
       const anchorPage = this.page.startsWith("manage-section") ? "section" : this.page;
-      const anchor = [...this.menu.querySelectorAll('.chat-menu-root [data-chat-action="submenu"]')].find((button3) => button3._chatValue === anchorPage)?.getBoundingClientRect() || rect;
+      const anchor = [...this.menu.querySelectorAll('.chat-menu-root [data-chat-action="submenu"]')].find((button4) => button4._chatValue === anchorPage)?.getBoundingClientRect() || rect;
       const parent = this.menu.getBoundingClientRect();
       const child = submenu.getBoundingClientRect();
       const x2 = parent.right + child.width + 8 <= left + width ? parent.right + 4 : parent.left - child.width - 4;
@@ -35340,7 +35964,7 @@ var ChatContextMenu = class {
       this.notice = "";
       this.render();
       if (this.page) this.menu.querySelector(".chat-menu-submenu button:not(:disabled):not([hidden])")?.focus();
-      else [...this.menu.querySelectorAll('button[data-chat-action="submenu"]')].find((button3) => button3._chatValue === previous)?.focus();
+      else [...this.menu.querySelectorAll('button[data-chat-action="submenu"]')].find((button4) => button4._chatValue === previous)?.focus();
       return;
     }
     if (["pin", "unread", "section", "move", "fork", "create-section", "rename-section", "remove-section"].includes(action) && !this.supported) return;
@@ -35715,7 +36339,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.11";
+var PANEL_VERSION = "1.9.0";
 var ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -39392,212 +40016,112 @@ template.innerHTML = `
     .conversation-layout > .message-list { grid-column: 2; }
 
     #conversation-timeline[hidden] { display: none; }
+    .conversation-layout:has(#conversation-timeline:not([hidden])) {
+      grid-template-columns: 28px minmax(0, 1fr);
+      column-gap: 12px;
+    }
     #conversation-timeline {
       position: sticky;
       top: 12px;
       z-index: 4;
-      width: 24px;
-      transform: translateX(-28px);
-      height: min(380px, calc(100dvh - 220px));
-      min-height: 120px;
+      width: 28px;
       margin-top: 20px;
-      overflow: visible;
+      align-self: start;
     }
-
     .timeline-track {
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       gap: 0;
-      width: 100%;
-      height: 100%;
+      max-height: var(--timeline-track-height, min(560px, 60dvh));
       overflow-x: hidden;
       overflow-y: auto;
       overscroll-behavior: contain;
-      padding-block: 6px;
-      scrollbar-width: thin;
+      padding-block: 4px;
+      scrollbar-width: none;
     }
-
     .timeline-item {
       display: flex;
       flex: 0 0 24px;
-      width: 24px;
+      width: 28px;
       height: 24px;
       align-items: center;
-      justify-content: center;
-      padding: 0;
+      justify-content: flex-start;
+      padding: 0 1px;
       border: 0;
-      border-radius: 999px;
+      border-radius: 4px;
       background: transparent;
       color: var(--text-color);
       cursor: pointer;
+      touch-action: manipulation;
     }
-
     .timeline-item:focus-visible {
       outline: 2px solid var(--focus-ring-color);
-      outline-offset: 2px;
-      box-shadow: 0 0 0 2px var(--focus-ring-contrast);
+      outline-offset: -2px;
     }
-
     .timeline-marker {
       display: block;
-      width: 4px;
+      width: var(--marker-width, 6px);
       height: 2px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--muted-color) 35%, transparent);
-      transition: width 140ms ease, background-color 140ms ease;
+      background: color-mix(in srgb, var(--muted-color) 42%, transparent);
+      transition: width 160ms ease, background-color 160ms ease;
     }
-
+    .timeline-item[data-bookmarked] .timeline-marker { background: var(--muted-color); height: 3px; }
     .timeline-item:hover .timeline-marker,
     .timeline-item:focus-visible .timeline-marker,
     .timeline-item[aria-current="location"] .timeline-marker {
-      width: 16px;
+      width: 26px;
       background: var(--text-color);
     }
-
-    .timeline-mobile-label { display: none; }
-
     .timeline-preview {
-      position: absolute;
-      top: var(--timeline-preview-position, 50%);
-      left: calc(100% + 8px);
-      z-index: 5;
+      position: fixed;
+      left: var(--timeline-preview-left, 40px);
+      top: var(--timeline-preview-top, 100px);
+      z-index: 25;
       display: grid;
-      width: min(300px, calc(100vw - 48px));
-      gap: 5px;
-      padding: 10px 12px;
+      width: var(--timeline-preview-width, 360px);
+      max-height: var(--timeline-preview-height, 220px);
+      overflow: auto;
+      gap: 7px;
+      padding: 12px;
       border: 1px solid var(--border-color);
-      border-radius: 10px;
+      border-radius: 14px;
       background: var(--surface-bg);
       color: var(--text-color);
       text-align: left;
-      box-shadow: 0 8px 28px color-mix(in srgb, var(--text-color) 18%, transparent);
+      box-shadow: 0 8px 28px color-mix(in srgb, var(--text-color) 15%, transparent);
       opacity: 0;
       visibility: hidden;
       pointer-events: none;
-      transform: translate(4px, -50%);
-      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+      transform: translateX(-4px);
+      transition: opacity 140ms ease, transform 140ms ease, visibility 140ms ease;
     }
-
-    .timeline-preview-title { font-size: var(--font-caption-size); font-weight: 600; }
+    #conversation-timeline.preview-open .timeline-preview {
+      opacity: 1; visibility: visible; pointer-events: auto; transform: translateX(0);
+    }
+    .timeline-preview[hidden] { display: none; }
+    .timeline-preview-heading { display: flex; align-items: start; gap: 8px; }
+    .timeline-preview-title {
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; font-size: var(--font-caption-size); font-weight: 600;
+    }
     .timeline-preview-copy {
-      display: -webkit-box;
-      overflow: hidden;
-      color: var(--muted-color);
-      font-size: var(--font-caption-size);
-      line-height: 1.4;
-      white-space: normal;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
+      display: -webkit-box; overflow: hidden; color: var(--muted-color);
+      font-size: var(--font-caption-size); line-height: 1.5; white-space: normal;
+      -webkit-box-orient: vertical; -webkit-line-clamp: 3;
     }
-
-    #conversation-timeline:has(.timeline-item:hover) .timeline-preview-desktop,
-    #conversation-timeline:has(.timeline-item:focus-visible) .timeline-preview-desktop {
-      opacity: 1;
-      visibility: visible;
-      transform: translate(0, -50%);
+    .timeline-bookmark { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 4px; border: 0; background: transparent; color: var(--muted-color); border-radius: 6px; }
+    .timeline-bookmark svg { width: 18px; height: 18px; stroke: currentColor; fill: none; }
+    .timeline-bookmark[aria-pressed="true"] svg { fill: var(--accent-soft); color: var(--text-color); }
+    .timeline-bookmark:hover { background: var(--surface-muted); }
+    .timeline-preview-jump { justify-self: start; border: 0; border-radius: 6px; background: var(--surface-muted); color: var(--text-color); padding: 6px 10px; font-size: var(--font-caption-size); }
+    @media (max-width: 880px), (pointer: coarse) {
+      .conversation-layout:has(#conversation-timeline:not([hidden])) { grid-template-columns: 32px minmax(0, 1fr); column-gap: 4px; width: calc(100% - 16px); }
+      #conversation-timeline { width: 32px; }
+      .timeline-item { width: 32px; min-height: 44px; flex-basis: 44px; }
+      .timeline-bookmark { min-width: 44px; min-height: 44px; }
+      .timeline-preview-jump { min-height: 44px; }
     }
-
-    .timeline-preview-inline { display: none; }
-    .timeline-track.is-scrollable { justify-content: flex-start; }
-    .timeline-disclosure { display: none; }
-    .timeline-disclosure[hidden] { display: none; }
-    .timeline-track[hidden],
-    .timeline-preview-inline[hidden],
-    .timeline-preview-desktop[hidden] { display: none; }
-
-
-    .conversation-layout.timeline-compact {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      width: min(calc(100% - 32px), var(--conversation-width));
-    }
-
-    .timeline-compact #conversation-timeline {
-      position: sticky;
-      top: 0;
-      z-index: 5;
-      width: 100%;
-      transform: none;
-      height: auto;
-      min-height: 0;
-      margin: 0;
-      padding: 4px 0;
-      background: var(--canvas-bg);
-    }
-
-    .timeline-compact #conversation-timeline.is-open {
-      position: relative;
-    }
-
-    .timeline-compact .timeline-disclosure {
-      display: block;
-      width: 100%;
-      min-height: 44px;
-      padding: 8px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      background: var(--surface-bg);
-      color: var(--text-color);
-      text-align: left;
-    }
-
-    .timeline-compact .timeline-disclosure:focus-visible {
-      outline: 2px solid var(--focus-ring-color);
-      outline-offset: 2px;
-    }
-
-    .timeline-compact #conversation-timeline:not(.is-open) .timeline-track { display: none; }
-    .timeline-compact .timeline-preview-desktop { display: none; }
-
-    .timeline-compact .timeline-track {
-      display: flex;
-      flex-direction: row;
-      justify-content: flex-start;
-      width: 100%;
-      height: auto;
-      gap: 6px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      overscroll-behavior-inline: contain;
-      padding: 2px 2px 6px;
-      scroll-snap-type: x proximity;
-    }
-
-    .timeline-compact .timeline-item {
-      flex: 0 0 auto;
-      width: auto;
-      min-width: 44px;
-      height: 44px;
-      padding: 0 8px;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      background: var(--surface-bg);
-      scroll-snap-align: start;
-    }
-
-    .timeline-compact .timeline-item[aria-current="location"] {
-      border-color: color-mix(in srgb, var(--accent-color) 68%, var(--border-color) 32%);
-      background: var(--accent-soft);
-    }
-
-    .timeline-compact .timeline-marker,
-    .timeline-compact .timeline-preview { display: none; }
-    .timeline-compact .timeline-mobile-label { display: block; font-size: var(--font-caption-size); white-space: nowrap; }
-
-    .timeline-compact .timeline-preview-inline:not([hidden]) {
-      display: grid;
-      gap: 5px;
-      padding: 10px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 10px;
-      background: var(--surface-bg);
-    }
-
-    .timeline-compact .message-list { padding-top: 12px; }
-
 
     .status-banner.visible,
     .error-strip.visible {
@@ -41504,10 +42028,8 @@ template.innerHTML = `
         </div>
         <div class="conversation-layout" id="conversation-layout">
           <nav id="conversation-timeline" aria-label="Conversation turns" hidden>
-            <button class="timeline-disclosure" id="conversation-timeline-toggle" type="button" data-action="toggle-conversation-timeline" aria-expanded="false" aria-controls="conversation-timeline-track" hidden>Jump to message</button>
-            <div class="timeline-track" id="conversation-timeline-track" role="group" aria-label="Conversation turns" hidden></div>
-            <div class="timeline-preview-inline" id="conversation-timeline-preview" hidden></div>
-            <div class="timeline-preview timeline-preview-desktop" id="conversation-timeline-desktop-preview" aria-hidden="true" hidden></div>
+            <div class="timeline-track" id="conversation-timeline-track" role="group" aria-label="Conversation turns"></div>
+            <div class="timeline-preview timeline-preview-desktop" id="conversation-timeline-desktop-preview" role="group" aria-label="Turn preview" hidden></div>
           </nav>
           <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
         </div>
@@ -41692,6 +42214,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const chatMenuStyle = document.createElement("style");
     chatMenuStyle.textContent = chatMenuCss;
     this.shadowRoot.append(chatMenuStyle);
+    const imageStyle = document.createElement("style");
+    imageStyle.textContent = inlineImageCss;
+    this.shadowRoot.append(imageStyle);
     this._chatContextMenu = new ChatContextMenu(this, icons);
     this._terminal = new WorkspaceTerminalView(
       this.shadowRoot.getElementById("terminal-host"),
@@ -41731,7 +42256,6 @@ var CodexBridgePanel = class extends HTMLElement {
     this._conversationTurns = [];
     this._timelineSelectedSequence = null;
     this._timelineTabStopSequence = null;
-    this._timelineMobileOpen = false;
     this._timelinePreviewSequence = null;
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
@@ -41892,6 +42416,11 @@ var CodexBridgePanel = class extends HTMLElement {
   connectedCallback() {
     this._installStaticUi();
     this._chatContextMenu.connect();
+    if (typeof ResizeObserver === "function") {
+      this._timelineResizeObserver ||= new ResizeObserver(() => this._scheduleTimelineScrollSync(true));
+      this._timelineResizeObserver.observe(this.shadowRoot.getElementById("message-list"));
+      this._timelineResizeObserver.observe(this.shadowRoot.getElementById("conversation-scroll"));
+    }
     this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.addEventListener("resize", this._viewportResizeListener);
@@ -41919,7 +42448,13 @@ var CodexBridgePanel = class extends HTMLElement {
     this._render();
   }
   disconnectedCallback() {
+    this._inlineImageController?.dispose();
+    this._inlineImageController = null;
     this._chatContextMenu.disconnect();
+    window.cancelAnimationFrame(this._timelineScrollFrame);
+    this._timelineScrollFrame = null;
+    this._closeTimelinePreview();
+    this._timelineResizeObserver?.disconnect();
     this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
@@ -41951,10 +42486,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const viewportBottom = window.visualViewport ? window.visualViewport.offsetTop + window.visualViewport.height : window.innerHeight;
     this.style.height = `${Math.max(0, Math.round(viewportBottom - top))}px`;
     if (this._addMenuOpen) this._syncAddMenuHeight();
-    if (this.shadowRoot?.getElementById("conversation-timeline") && this._timelineCompactLayout !== this._isConversationTimelineCompact()) {
-      this._timelineMobileOpen = false;
-      this._renderConversationTimeline();
-    }
+    this._scheduleTimelineScrollSync(true);
   }
   _syncAddMenuHeight() {
     const menu = this.shadowRoot.getElementById("add-menu");
@@ -42090,6 +42622,15 @@ var CodexBridgePanel = class extends HTMLElement {
     this.shadowRoot.addEventListener("mouseover", (event) => this._handleTooltipPointerOver(event));
     this.shadowRoot.addEventListener("mouseover", (event) => this._handleTimelinePointerOver(event));
     this.shadowRoot.addEventListener("mouseout", (event) => this._handleTooltipPointerOut(event));
+    this.shadowRoot.addEventListener("mouseout", (event) => this._handleTimelinePointerOut(event));
+    this.shadowRoot.addEventListener("pointerdown", (event) => {
+      const button4 = event.target?.closest?.(".timeline-item");
+      this._timelineTouchSequence = event.pointerType === "touch" && button4 ? Number(button4.dataset.sequence) : null;
+    });
+    this.shadowRoot.getElementById("conversation-scroll").addEventListener("scroll", () => this._scheduleTimelineScrollSync(), { passive: true });
+    this.shadowRoot.getElementById("conversation-timeline-track").addEventListener("scroll", () => {
+      if (this._timelinePreviewSequence) this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+    }, { passive: true });
     this._mobileDrawerMedia = typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 880px)") : {
       matches: false,
       addEventListener() {
@@ -42118,8 +42659,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }, removeEventListener() {
     } };
     this._timelineCompactMediaListener = () => {
-      this._timelineMobileOpen = false;
-      this._renderConversationTimeline();
+      this._scheduleTimelineScrollSync(true);
     };
     this._timelineCompactMedia.addEventListener("change", this._timelineCompactMediaListener);
     this._timelineCompactMediaListening = true;
@@ -42246,6 +42786,7 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._appMenuOpen && !eventTarget?.closest("#app-menu, #app-menu-toggle")) {
       this._closeAppMenu();
     }
+    if (!eventTarget?.closest("#conversation-timeline")) this._closeTimelinePreview();
     if (!actionTarget) {
       if (this._runActivityDetailsOpen && !eventTarget?.closest(".run-step-wrap")) {
         this._runActivityDetailsOpen = false;
@@ -42267,8 +42808,8 @@ var CodexBridgePanel = class extends HTMLElement {
       case "jump-to-conversation-turn":
         this._jumpToConversationTurn(actionTarget);
         break;
-      case "toggle-conversation-timeline":
-        this._setConversationTimelineOpen(!this._timelineMobileOpen);
+      case "bookmark-conversation-turn":
+        this._toggleConversationBookmark(actionTarget);
         break;
       case "toggle-add-menu":
         this._setAddMenuOpen(!this._addMenuOpen);
@@ -42757,9 +43298,9 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (this._chatContextMenu.handleKey(event)) return;
-    if (event.key === "Escape" && this._timelineMobileOpen && target.closest("#conversation-timeline")) {
+    if (event.key === "Escape" && this._timelinePreviewSequence && target.closest("#conversation-timeline")) {
       event.preventDefault();
-      this._setConversationTimelineOpen(false, { restoreFocus: true });
+      this._closeTimelinePreview({ restoreFocus: true });
       return;
     }
     if (target.matches(".timeline-item") && target.closest("#conversation-timeline")) {
@@ -42911,11 +43452,11 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!timelineItem) this._showTooltipForTarget(target);
     this._scrollInteractionTargetIntoView(target);
     if (timelineItem) {
+      window.clearTimeout(this._timelineCloseTimer);
       this._timelinePreviewSequence = target.dataset.sequence;
       this._timelineTabStopSequence = Number(target.dataset.sequence);
       this._updateTimelineTabStops();
       this._renderTimelineDesktopPreview(target.dataset.sequence);
-      this._renderTimelineMobilePreview(target.dataset.sequence);
     }
     if (!this._isRefreshLockTarget(target)) {
       return;
@@ -42938,6 +43479,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _handleFocusOut(event) {
     const nextTarget = event.relatedTarget;
+    if (event.target?.closest?.("#conversation-timeline") && !nextTarget?.closest?.("#conversation-timeline")) this._handleTimelinePointerOut(event);
     if ((!nextTarget || !this._tooltipTarget?.contains(nextTarget)) && !this._tooltipTarget?.matches(":hover")) {
       this._hideTooltip();
     }
@@ -44486,15 +45028,15 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _renderDictationControl(activeThread, locked) {
-    const button3 = this.shadowRoot.getElementById("dictation-button");
-    if (!button3) return;
+    const button4 = this.shadowRoot.getElementById("dictation-button");
+    if (!button4) return;
     const Recognition = window.SpeechRecognition;
-    button3.hidden = !activeThread || !this._speechAvailable || typeof Recognition !== "function" || !Recognition.prototype || !("processLocally" in Recognition.prototype);
-    button3.disabled = locked || activeThread?.schedule_eligible === false;
+    button4.hidden = !activeThread || !this._speechAvailable || typeof Recognition !== "function" || !Recognition.prototype || !("processLocally" in Recognition.prototype);
+    button4.disabled = locked || activeThread?.schedule_eligible === false;
     const listening = Boolean(this._speechRecognition);
-    button3.setAttribute("aria-pressed", String(listening));
-    button3.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
-    this._setTooltipTarget(button3, listening ? "Stop dictation" : "Dictate on this device");
+    button4.setAttribute("aria-pressed", String(listening));
+    button4.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
+    this._setTooltipTarget(button4, listening ? "Stop dictation" : "Dictate on this device");
   }
   _stopDictation({ abort = false } = {}) {
     const recognition = this._speechRecognition;
@@ -44639,22 +45181,22 @@ var CodexBridgePanel = class extends HTMLElement {
           for (const control2 of wrapper.querySelectorAll(".mcp-form-fields input, .mcp-form-fields select")) {
             control2.disabled = true;
           }
-          for (const button3 of wrapper.querySelectorAll(".decision-actions button")) {
-            const original = button3.dataset.decision === mutation.decision || button3.dataset.action === "answer-mcp-form" && mutation.kind === "mcp_form";
-            button3.disabled = !original;
-            if (original) button3.textContent = `Retry ${button3.textContent.toLowerCase()}`;
+          for (const button4 of wrapper.querySelectorAll(".decision-actions button")) {
+            const original = button4.dataset.decision === mutation.decision || button4.dataset.action === "answer-mcp-form" && mutation.kind === "mcp_form";
+            button4.disabled = !original;
+            if (original) button4.textContent = `Retry ${button4.textContent.toLowerCase()}`;
           }
         }
       } else {
         const model = getApprovalViewModel(interaction, { pending });
         renderApproval(wrapper, model);
         if (mutation?.state === "retryable") {
-          for (const button3 of wrapper.querySelectorAll("[data-decision]")) {
-            const isOriginalDecision = button3.dataset.decision === mutation.decision;
-            button3.disabled = !isOriginalDecision;
-            button3.setAttribute("aria-disabled", String(!isOriginalDecision));
+          for (const button4 of wrapper.querySelectorAll("[data-decision]")) {
+            const isOriginalDecision = button4.dataset.decision === mutation.decision;
+            button4.disabled = !isOriginalDecision;
+            button4.setAttribute("aria-disabled", String(!isOriginalDecision));
             if (isOriginalDecision) {
-              button3.textContent = `Retry ${button3.textContent.toLowerCase()}`;
+              button4.textContent = `Retry ${button4.textContent.toLowerCase()}`;
             }
           }
         }
@@ -44948,9 +45490,9 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return null;
     }
-    const identifier = (candidate, limit = 256) => typeof candidate === "string" && candidate.length <= limit && /^[A-Za-z0-9_.:-]+$/u.test(candidate) ? candidate : null;
-    const interactionId = identifier(value.interaction_id, 128);
-    const actualThreadId = identifier(value.thread_id, 128);
+    const identifier2 = (candidate, limit = 256) => typeof candidate === "string" && candidate.length <= limit && /^[A-Za-z0-9_.:-]+$/u.test(candidate) ? candidate : null;
+    const interactionId = identifier2(value.interaction_id, 128);
+    const actualThreadId = identifier2(value.thread_id, 128);
     const kind = ["command_approval", "file_change_approval", "user_input", "mcp_form", "mcp_url"].includes(value.kind) ? value.kind : null;
     const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at)) ? value.expires_at : null;
     const allowed = Array.isArray(value.allowed_actions) ? [...new Set(value.allowed_actions.filter((action) => ["accept", "decline", "cancel", "answer"].includes(action)))].slice(0, 4) : [];
@@ -45096,8 +45638,8 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     renderAuth(container, this._authViewModel());
     if (this._authActionPending) {
-      for (const button3 of container.querySelectorAll("button[data-action]")) {
-        button3.disabled = true;
+      for (const button4 of container.querySelectorAll("button[data-action]")) {
+        button4.disabled = true;
       }
     }
   }
@@ -45159,9 +45701,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const browseActions = document.createElement("div");
       browseActions.className = "browser-actions";
       for (const [action, label] of [["browse-current", "Browse"], ["browse-up", "Up"], ["browse-roots", "Workspace root"]]) {
-        const button3 = this._actionButton("text-button", action);
-        button3.textContent = label;
-        browseActions.append(button3);
+        const button4 = this._actionButton("text-button", action);
+        button4.textContent = label;
+        browseActions.append(button4);
       }
       const browseList = document.createElement("div");
       browseList.className = "browse-list";
@@ -45562,10 +46104,10 @@ var CodexBridgePanel = class extends HTMLElement {
       secondary.setAttribute("aria-label", `Actions for ${project.name || "project"}`);
       secondary.hidden = !expanded;
       for (const [action, label, icon] of secondaryActions) {
-        const button3 = this._actionButton("rail-menu-item", action, label);
-        button3.dataset.projectId = String(project.project_id || "");
-        this._setTrustedButtonContent(button3, icon, label);
-        secondary.append(button3);
+        const button4 = this._actionButton("rail-menu-item", action, label);
+        button4.dataset.projectId = String(project.project_id || "");
+        this._setTrustedButtonContent(button4, icon, label);
+        secondary.append(button4);
       }
       projectHead.append(secondary);
     }
@@ -45702,14 +46244,14 @@ var CodexBridgePanel = class extends HTMLElement {
   _renderToolbar() {
     const container = this.shadowRoot.getElementById("compact-toolbar");
     const limits = this._status?.limits;
-    const updateLimits = (button3) => {
-      if (!button3) return;
+    const updateLimits = (button4) => {
+      if (!button4) return;
       const summary = this._compactLimitsSummary(limits);
       const description = `${summary}. ${this._limitsFootnote(limits)}`;
-      button3.textContent = summary;
-      button3.setAttribute("aria-label", `Open usage details. ${description}`);
-      button3.title = description;
-      this._setTooltipTarget(button3, description);
+      button4.textContent = summary;
+      button4.setAttribute("aria-label", `Open usage details. ${description}`);
+      button4.title = description;
+      this._setTooltipTarget(button4, description);
     };
     updateLimits(container.querySelector(".composer-limits-button"));
     const focused = this.shadowRoot.activeElement;
@@ -45831,8 +46373,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const actions = state.actions || [];
     const renderKey = `${state.key}:${actions.map((action) => `${action.action}:${action.label}`).join("|")}`;
     if (this._renderedStatusBannerKey === renderKey && banner.classList.contains("visible")) {
-      for (const button3 of banner.querySelectorAll(".banner-action")) {
-        button3.disabled = this._authActionPending && AUTH_ACTION_IDS.has(button3.dataset.action);
+      for (const button4 of banner.querySelectorAll(".banner-action")) {
+        button4.disabled = this._authActionPending && AUTH_ACTION_IDS.has(button4.dataset.action);
       }
       return;
     }
@@ -45852,12 +46394,12 @@ var CodexBridgePanel = class extends HTMLElement {
       const actionContainer = document.createElement("div");
       actionContainer.className = "banner-actions";
       for (const action of actions) {
-        const button3 = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
-        button3.textContent = action.label;
+        const button4 = this._actionButton(`banner-action${action.primary ? " primary" : ""}`, action.action);
+        button4.textContent = action.label;
         if (this._authActionPending && AUTH_ACTION_IDS.has(action.action)) {
-          button3.disabled = true;
+          button4.disabled = true;
         }
-        actionContainer.append(button3);
+        actionContainer.append(button4);
       }
       banner.append(actionContainer);
     }
@@ -45968,20 +46510,45 @@ var CodexBridgePanel = class extends HTMLElement {
     this._dismissedBannerKey = state?.key || "";
     this._render();
   }
+  _inlineImages() {
+    if (!this._inlineImageController) {
+      this._inlineImageController = new InlineImageController({ root: this.shadowRoot, token: () => this._accessToken() });
+    }
+    this._inlineImageController.setThread(this._selectedThreadId || "");
+    return this._inlineImageController;
+  }
   _renderAttachmentChips() {
     const container = this.shadowRoot.getElementById("attachment-chip-list");
     const attachments = this._activeThread?.attachments || [];
+    const images = this._inlineImages();
+    const key = JSON.stringify([
+      this._selectedThreadId,
+      this._config?.capabilities?.includes("attachment_downloads") === true,
+      images.pendingRevision,
+      attachments.length,
+      attachments.slice(-6).map((item) => [item.attachment_id, item.filename, item.mime_type, item.size_bytes])
+    ]);
+    if (this._renderedAttachmentChipsKey === key) return;
+    this._renderedAttachmentChipsKey = key;
     container.replaceChildren();
+    images.renderPending(container);
     if (!attachments.length) {
       return;
     }
     const visible = attachments.slice(-6);
     for (const attachment of visible) {
+      if (this._config?.capabilities?.includes("attachment_downloads") && isInlineImage(attachment)) {
+        const thumbnail = images.card("attachment", attachment, { compact: true });
+        if (thumbnail) {
+          container.append(thumbnail);
+          continue;
+        }
+      }
       const chip = document.createElement("span");
       chip.className = "attachment-chip";
       chip.append(
         this._textElement("strong", "", attachment?.filename || "File"),
-        this._textElement("span", "", attachment?.relative_path || attachment?.mime_type || "")
+        this._textElement("span", "", attachment?.mime_type || "")
       );
       container.append(chip);
     }
@@ -46283,6 +46850,7 @@ var CodexBridgePanel = class extends HTMLElement {
     return parts.join(". ");
   }
   _renderMessages() {
+    this._inlineImageController?.setThread(this._selectedThreadId || "");
     const messageList = this.shadowRoot.getElementById("message-list");
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || messageList;
     const activity = this._runActivityForThread();
@@ -46328,180 +46896,256 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _isConversationTimelineCompact() {
-    const availableWidth = this.shadowRoot?.getElementById("conversation-scroll")?.clientWidth || 0;
-    return Boolean(this._timelineCompactMedia?.matches || availableWidth > 0 && availableWidth < 1016);
+    return Boolean(this._timelineCompactMedia?.matches);
+  }
+  _conversationBookmarkKey() {
+    return `${this._preferenceKey || "codex-bridge:preferences:local"}:bookmarks:${this._selectedThreadId}`;
   }
   _renderConversationTimeline() {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const turns = this._selectedThreadId ? projectConversationTurns(this._events) : [];
+    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const sameThread = this._timelineProjectedThread === this._selectedThreadId;
+    const unchangedPrefix = this._timelineEvents === this._events || this._timelineEventCount > 0 && this._events[this._timelineEventCount - 1] === this._timelineLastEvent;
+    const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
+    const turns = changed ? this._selectedThreadId ? projectConversationTurns(this._events) : [] : this._conversationTurns;
+    this._timelineEvents = this._events;
+    this._timelineProjectedThread = this._selectedThreadId;
+    this._timelineEventCount = this._events.length;
+    this._timelineLastEvent = this._events.at(-1);
     this._conversationTurns = turns;
-    navigation.hidden = turns.length === 0;
-    const compact = this._isConversationTimelineCompact();
-    this._timelineCompactLayout = compact;
-    navigation.closest(".conversation-layout")?.classList.toggle("timeline-compact", compact);
-    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
-    disclosure.hidden = !compact;
-    disclosure.setAttribute("aria-expanded", String(compact && this._timelineMobileOpen));
-    navigation.classList.toggle("is-open", this._timelineMobileOpen);
-    track.hidden = compact && !this._timelineMobileOpen;
-    const visibleCapacity = Math.max(1, Math.floor((Math.min(380, window.innerHeight - 220) - 12) / 24));
-    track.classList.toggle("is-scrollable", turns.length > visibleCapacity);
+    navigation.hidden = !turns.length;
+    const bookmarkKey = this._conversationBookmarkKey();
+    const bookmarkScopeChanged = this._timelineBookmarkKey !== bookmarkKey;
+    if (bookmarkScopeChanged) {
+      this._closeTimelinePreview();
+      this._timelineBookmarkKey = bookmarkKey;
+      this._timelineBookmarks = readConversationBookmarks(window.localStorage, bookmarkKey);
+    }
+    if (!changed && !bookmarkScopeChanged) return;
     if (!turns.length) {
       track.replaceChildren();
       this._timelineSelectedSequence = null;
       this._timelineTabStopSequence = null;
-      this._timelineMobileOpen = false;
-      this._timelinePreviewSequence = null;
-      navigation.classList.remove("is-open");
-      disclosure.setAttribute("aria-expanded", "false");
-      track.hidden = compact;
-      this._renderTimelineMobilePreview(null);
-      this._renderTimelineDesktopPreview(null);
+      this._closeTimelinePreview();
       return;
     }
-    const keys = new Set(turns.map((turn) => turn.key));
-    if (!keys.has(String(this._timelineSelectedSequence))) {
-      this._timelineSelectedSequence = turns.at(-1).anchorSequence;
-    }
-    if (!keys.has(String(this._timelineTabStopSequence))) {
-      this._timelineTabStopSequence = this._timelineSelectedSequence;
-    }
-    const existing = new Map([...track.querySelectorAll(".timeline-item")].map((button3) => [button3.dataset.turnKey, button3]));
+    const keys = new Set(turns.map((turn) => turn.anchorSequence));
+    if (!keys.has(this._timelineSelectedSequence)) this._timelineSelectedSequence = turns.at(-1).anchorSequence;
+    if (!keys.has(this._timelineTabStopSequence)) this._timelineTabStopSequence = this._timelineSelectedSequence;
+    const existing = new Map([...track.children].map((button4) => [button4.dataset.turnKey, button4]));
+    this._timelineButtons = /* @__PURE__ */ new Map();
     turns.forEach((turn, index) => {
-      let button3 = existing.get(turn.key);
-      if (!button3) {
-        button3 = document.createElement("button");
-        button3.type = "button";
-        button3.className = "timeline-item";
-        button3.dataset.action = "jump-to-conversation-turn";
+      let button4 = existing.get(turn.key);
+      if (!button4) {
+        button4 = this._actionButton("timeline-item", "jump-to-conversation-turn", turn.label);
+        button4.removeAttribute("data-tooltip");
         const marker = this._textElement("span", "timeline-marker", "");
         marker.setAttribute("aria-hidden", "true");
-        const mobileLabel = this._textElement("span", "timeline-mobile-label", `Turn ${turn.index}`);
-        mobileLabel.setAttribute("aria-hidden", "true");
-        button3.append(marker, mobileLabel);
+        button4.append(marker);
       }
       const label = this._timelineTurnLabel(turn);
-      const signature = `${turn.index}|${turn.prompt}|${turn.response}|${turn.queued}|${turn.pending}|${turn.outcomeLabel}|${turn.anchorSequence}`;
-      if (button3.dataset.renderSignature !== signature) {
-        button3.setAttribute("aria-label", label);
-        button3.dataset.renderSignature = signature;
-        button3.dataset.turnKey = turn.key;
-        button3.dataset.sequence = String(turn.anchorSequence);
-        button3.querySelector(".timeline-mobile-label").textContent = `Turn ${turn.index}`;
-      }
-      button3.toggleAttribute("aria-current", turn.anchorSequence === this._timelineSelectedSequence);
-      if (button3.hasAttribute("aria-current")) button3.setAttribute("aria-current", "location");
-      button3.tabIndex = turn.anchorSequence === this._timelineTabStopSequence ? 0 : -1;
-      const atPosition = track.children[index];
-      if (atPosition !== button3) track.insertBefore(button3, atPosition || null);
+      if (button4.getAttribute("aria-label") !== label) button4.setAttribute("aria-label", label);
+      button4.dataset.turnKey = turn.key;
+      button4.dataset.sequence = String(turn.anchorSequence);
+      button4.style.setProperty("--marker-width", `${turn.markerWidth}px`);
+      button4.toggleAttribute("data-bookmarked", this._timelineBookmarks.has(turn.anchorSequence));
+      if (turn.anchorSequence === this._timelineSelectedSequence) button4.setAttribute("aria-current", "location");
+      else button4.removeAttribute("aria-current");
+      button4.tabIndex = turn.anchorSequence === this._timelineTabStopSequence ? 0 : -1;
+      if (track.children[index] !== button4) track.insertBefore(button4, track.children[index] || null);
       existing.delete(turn.key);
+      this._timelineButtons.set(turn.anchorSequence, button4);
     });
-    for (const button3 of existing.values()) button3.remove();
-    const activePreview = this._timelinePreviewSequence;
-    this._renderTimelineDesktopPreview(activePreview, turns);
-    this._renderTimelineMobilePreview(this._timelineMobileOpen ? String(this._timelineSelectedSequence) : null, turns);
+    for (const button4 of existing.values()) button4.remove();
+    if (this._timelinePreviewSequence) this._renderTimelineDesktopPreview(this._timelinePreviewSequence, turns);
+    this._scheduleTimelineScrollSync(true);
   }
   _timelineTurnLabel(turn) {
-    if (typeof turn.label === "string") return turn.label.slice(0, 120);
-    const parts = [`Turn ${turn.index}`];
-    if (turn.prompt) parts.push(`You: ${turn.prompt}`);
-    if (turn.response) parts.push(`Codex: ${turn.response}`);
-    else if (turn.pending) parts.push("Codex response in progress");
-    if (turn.queued) parts.push("Queued");
-    return parts.join(". ");
+    return turn.label.slice(0, 120);
   }
   _timelinePreviewChildren(turn) {
-    const children = [this._textElement("span", "timeline-preview-title", `Turn ${turn.index}${turn.queued ? " · Queued" : ""}`)];
-    if (turn.prompt) children.push(this._textElement("span", "timeline-preview-copy", `You: ${turn.prompt}`));
-    if (turn.response) children.push(this._textElement("span", "timeline-preview-copy", `Codex: ${turn.response}`));
-    else if (turn.pending) children.push(this._textElement("span", "timeline-preview-copy", "Codex response in progress"));
-    else if (turn.outcomeLabel) children.push(this._textElement("span", "timeline-preview-copy", turn.outcomeLabel));
+    const heading = this._textElement("div", "timeline-preview-heading", "");
+    heading.append(this._textElement("span", "timeline-preview-title", turn.prompt || `Turn ${turn.index}`));
+    const saved = this._timelineBookmarks?.has(turn.anchorSequence);
+    const bookmark = this._actionButton("timeline-bookmark", "bookmark-conversation-turn", `${saved ? "Remove bookmark from" : "Bookmark"} turn ${turn.index}`);
+    bookmark.dataset.sequence = String(turn.anchorSequence);
+    bookmark.removeAttribute("data-tooltip");
+    bookmark.setAttribute("aria-pressed", String(Boolean(saved)));
+    this._appendTrustedIcon(bookmark, iconSvg('<path d="M6 4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17l-6-4-6 4Z"></path>'));
+    heading.append(bookmark);
+    const children = [heading];
+    if (turn.response) children.push(this._textElement("span", "timeline-preview-copy", turn.response));
+    else children.push(this._textElement("span", "timeline-preview-copy", turn.queued ? "Queued" : turn.outcomeLabel || "Codex response in progress"));
+    const jump = this._actionButton("timeline-preview-jump", "jump-to-conversation-turn", `Go to turn ${turn.index}`);
+    jump.dataset.sequence = String(turn.anchorSequence);
+    jump.removeAttribute("data-tooltip");
+    jump.textContent = "Go to message";
+    children.push(jump);
     return children;
-  }
-  _renderTimelineMobilePreview(sequence2, turns = this._conversationTurns) {
-    const preview = this.shadowRoot.getElementById("conversation-timeline-preview");
-    if (!preview) return;
-    const turn = turns.find((item) => item.key === String(sequence2));
-    preview.hidden = !turn;
-    if (!turn) {
-      preview.replaceChildren();
-      return;
-    }
-    preview.replaceChildren(...this._timelinePreviewChildren(turn));
   }
   _renderTimelineDesktopPreview(sequence2, turns = this._conversationTurns) {
     const preview = this.shadowRoot.getElementById("conversation-timeline-desktop-preview");
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
-    const button3 = [...this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")].find((item) => item.dataset.sequence === String(sequence2 ?? ""));
+    const button4 = this._timelineButtons?.get(Number(sequence2));
     const turn = turns.find((item) => item.key === String(sequence2));
-    if (!preview || !navigation || !button3 || !turn) {
-      if (preview) preview.hidden = true;
+    if (!preview || !navigation || !button4 || !turn) {
+      this._closeTimelinePreview();
       return;
     }
+    this._timelinePreviewSequence = String(sequence2);
+    const signature = `${turn.key}|${turn.prompt}|${turn.response}|${turn.pending}|${turn.queued}|${turn.outcomeLabel}|${this._timelineBookmarks?.has(turn.anchorSequence)}`;
+    if (preview.dataset.signature !== signature) {
+      const focusedAction = preview.contains(this.shadowRoot.activeElement) ? this.shadowRoot.activeElement?.dataset.action : null;
+      preview.replaceChildren(...this._timelinePreviewChildren(turn));
+      preview.dataset.signature = signature;
+      if (focusedAction) [...preview.querySelectorAll("[data-action]")].find((item) => item.dataset.action === focusedAction)?.focus({ preventScroll: true });
+    }
     preview.hidden = false;
-    preview.replaceChildren(...this._timelinePreviewChildren(turn));
-    const navRect = navigation.getBoundingClientRect();
-    const buttonRect = button3.getBoundingClientRect();
-    const previewHeight = preview.getBoundingClientRect().height || 96;
-    const center = buttonRect.top - navRect.top + buttonRect.height / 2;
-    const y2 = Math.max(previewHeight / 2, Math.min(navRect.height - previewHeight / 2, center));
-    navigation.style.setProperty("--timeline-preview-position", `${y2}px`);
+    navigation.classList.add("preview-open");
+    const viewport = window.visualViewport;
+    const scroller = this.shadowRoot.getElementById("conversation-scroll");
+    const bounds = scroller.getBoundingClientRect();
+    const rect = button4.getBoundingClientRect();
+    const leftEdge = Math.max(8, bounds.left + 8, (viewport?.offsetLeft || 0) + 8);
+    const rightEdge = Math.min(window.innerWidth - 8, bounds.right - 8, (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth) - 8);
+    const preferredLeft = Math.max(leftEdge, rect.right + 8);
+    const width = Math.max(0, Math.min(420, rightEdge - preferredLeft));
+    const topEdge = Math.max(bounds.top + 8, (viewport?.offsetTop || 0) + 8);
+    const bottomEdge = Math.min(bounds.bottom - 8, (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight) - 8);
+    if (bottomEdge - topEdge < 60 || width < 80) {
+      this._closeTimelinePreview();
+      return;
+    }
+    preview.style.setProperty("--timeline-preview-width", `${width}px`);
+    preview.style.setProperty("--timeline-preview-height", `${bottomEdge - topEdge}px`);
+    const left = preferredLeft;
+    const height = preview.getBoundingClientRect().height || 120;
+    const top = Math.max(topEdge, Math.min(bottomEdge - height, rect.top + rect.height / 2 - height / 2));
+    preview.style.setProperty("--timeline-preview-left", `${left}px`);
+    preview.style.setProperty("--timeline-preview-top", `${top}px`);
   }
   _handleTimelinePointerOver(event) {
-    const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    const button3 = target.closest("#conversation-timeline .timeline-item");
-    if (!button3 || button3.matches(":focus-visible")) return;
-    this._timelinePreviewSequence = button3.dataset.sequence;
-    this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("#conversation-timeline")) window.clearTimeout(this._timelineCloseTimer);
+    const button4 = target?.closest(".timeline-item");
+    if (button4 && !("pointerType" in event && event.pointerType === "touch")) this._renderTimelineDesktopPreview(button4.dataset.sequence);
   }
-  _setConversationTimelineOpen(open, { restoreFocus = false } = {}) {
-    this._timelineMobileOpen = open;
-    const navigation = this.shadowRoot.getElementById("conversation-timeline");
-    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
-    const track = this.shadowRoot.getElementById("conversation-timeline-track");
-    navigation?.classList.toggle("is-open", open);
-    if (track) track.hidden = !open && this._isConversationTimelineCompact();
-    disclosure?.setAttribute("aria-expanded", String(open));
-    this._renderTimelineMobilePreview(open ? String(this._timelineSelectedSequence) : null);
-    if (open && this._isConversationTimelineCompact()) navigation?.scrollIntoView({ block: "nearest" });
-    if (!open) this._renderTimelineDesktopPreview(null);
-    if (restoreFocus) disclosure?.focus();
+  _handleTimelinePointerOut(event) {
+    if (!event.target?.closest?.("#conversation-timeline")) return;
+    if (event.relatedTarget?.closest?.("#conversation-timeline")) return;
+    window.clearTimeout(this._timelineCloseTimer);
+    this._timelineCloseTimer = window.setTimeout(() => {
+      if (!this.shadowRoot.activeElement?.closest("#conversation-timeline")) this._closeTimelinePreview();
+    }, 200);
+  }
+  _closeTimelinePreview({ restoreFocus = false } = {}) {
+    window.clearTimeout(this._timelineCloseTimer);
+    const sequence2 = Number(this._timelinePreviewSequence);
+    this._timelinePreviewSequence = null;
+    this.shadowRoot.getElementById("conversation-timeline")?.classList.remove("preview-open");
+    const preview = this.shadowRoot.getElementById("conversation-timeline-desktop-preview");
+    if (preview) preview.hidden = true;
+    if (restoreFocus) this._timelineButtons?.get(sequence2)?.focus({ preventScroll: true });
+    if (preview) preview.hidden = true;
+    this._timelinePreviewSequence = null;
+    this.shadowRoot.getElementById("conversation-timeline")?.classList.remove("preview-open");
+  }
+  _toggleConversationBookmark(button4) {
+    const sequence2 = Number(button4.dataset.sequence);
+    if (!this._conversationTurns.some((turn) => turn.anchorSequence === sequence2)) return;
+    const next = new Set(this._timelineBookmarks);
+    if (next.has(sequence2)) next.delete(sequence2);
+    else next.add(sequence2);
+    try {
+      this._timelineBookmarks = saveConversationBookmarks(window.localStorage, this._conversationBookmarkKey(), next);
+    } catch {
+      this._setError(new Error("The bookmark could not be saved in this browser."));
+      return;
+    }
+    this._timelineButtons.get(sequence2)?.toggleAttribute("data-bookmarked", this._timelineBookmarks.has(sequence2));
+    this._renderTimelineDesktopPreview(String(sequence2));
   }
   _updateTimelineTabStops() {
-    for (const button3 of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
-      button3.tabIndex = Number(button3.dataset.sequence) === this._timelineTabStopSequence ? 0 : -1;
-    }
+    for (const [sequence2, button4] of this._timelineButtons || []) button4.tabIndex = sequence2 === this._timelineTabStopSequence ? 0 : -1;
   }
-  _focusTimelineItem(button3) {
-    if (!button3) return;
-    this._timelineTabStopSequence = Number(button3.dataset.sequence);
+  _focusTimelineItem(button4) {
+    if (!button4) return;
+    window.clearTimeout(this._timelineCloseTimer);
+    this._timelineTabStopSequence = Number(button4.dataset.sequence);
     this._updateTimelineTabStops();
-    button3.focus();
+    button4.focus({ preventScroll: true });
+    const track = button4.parentElement;
+    if (button4.offsetTop < track.scrollTop) track.scrollTop = button4.offsetTop;
+    else if (button4.offsetTop + button4.offsetHeight > track.scrollTop + track.clientHeight) track.scrollTop = button4.offsetTop + button4.offsetHeight - track.clientHeight;
+    this._renderTimelineDesktopPreview(button4.dataset.sequence);
   }
-  _jumpToConversationTurn(button3) {
-    if (!(button3 instanceof HTMLElement)) return;
-    const sequence2 = Number(button3.dataset.sequence);
-    if (!Number.isSafeInteger(sequence2) || sequence2 <= 0) return;
-    const list = this.shadowRoot.getElementById("message-list");
+  _jumpToConversationTurn(button4) {
+    const sequence2 = Number(button4.dataset.sequence);
+    const target = [...this.shadowRoot.querySelectorAll("#message-list [data-sequence]")].find((node2) => Number(node2.dataset.sequence) === sequence2);
     const scroller = this.shadowRoot.getElementById("conversation-scroll");
-    const target = [...list?.querySelectorAll("[data-sequence]") || []].find((node2) => Number(node2.dataset.sequence) === sequence2);
     if (!target || !scroller) return;
-    this._timelineSelectedSequence = sequence2;
+    if (button4.classList.contains("timeline-item") && this._timelineTouchSequence === sequence2) {
+      window.clearTimeout(this._timelineCloseTimer);
+      this._timelineTouchSequence = null;
+      this._renderTimelineDesktopPreview(String(sequence2));
+      return;
+    }
+    this._selectVisibleTimelineTurn(sequence2);
     this._timelineTabStopSequence = sequence2;
     this._updateTimelineTabStops();
-    for (const item of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
-      if (Number(item.dataset.sequence) === sequence2) item.setAttribute("aria-current", "location");
-      else item.removeAttribute("aria-current");
-    }
-    const compact = this._isConversationTimelineCompact();
-    if (compact) this._setConversationTimelineOpen(false, { restoreFocus: true });
-    else this._renderTimelineDesktopPreview(String(sequence2));
-    const scrollerRect = scroller.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    scroller.scrollTop += targetRect.top - scrollerRect.top - scroller.clientTop - 16;
+    scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - scroller.clientTop - 16;
+    this._closeTimelinePreview({ restoreFocus: button4.classList.contains("timeline-preview-jump") });
+  }
+  _selectVisibleTimelineTurn(sequence2) {
+    if (sequence2 === this._timelineSelectedSequence) return;
+    this._timelineButtons?.get(this._timelineSelectedSequence)?.removeAttribute("aria-current");
+    this._timelineSelectedSequence = sequence2;
+    this._timelineButtons?.get(sequence2)?.setAttribute("aria-current", "location");
+    this._revealCurrentTimelineTurn();
+  }
+  _revealCurrentTimelineTurn() {
+    if (this._timelinePreviewSequence || this.shadowRoot.activeElement?.closest("#conversation-timeline")) return;
+    const button4 = this._timelineButtons?.get(this._timelineSelectedSequence);
+    const track = button4?.parentElement;
+    if (!track || !track.clientHeight) return;
+    if (button4.offsetTop < track.scrollTop) track.scrollTop = button4.offsetTop;
+    else if (button4.offsetTop + button4.offsetHeight > track.scrollTop + track.clientHeight) track.scrollTop = button4.offsetTop + button4.offsetHeight - track.clientHeight;
+  }
+  _scheduleTimelineScrollSync(remeasure = false) {
+    this._timelineNeedsMeasure ||= remeasure;
+    if (this._timelineScrollFrame) return;
+    this._timelineScrollFrame = window.requestAnimationFrame(() => {
+      this._timelineScrollFrame = null;
+      const scroller = this.shadowRoot.getElementById("conversation-scroll");
+      if (!this.isConnected || !scroller || !this._conversationTurns.length) return;
+      const rect = scroller.getBoundingClientRect();
+      if (!scroller.clientHeight) return;
+      const navigation = this.shadowRoot.getElementById("conversation-timeline");
+      const height = Math.max(44, scroller.clientHeight - 40);
+      navigation.style.setProperty("--timeline-track-height", `${height}px`);
+      const step = this._isConversationTimelineCompact() ? 44 : 24;
+      this.shadowRoot.getElementById("conversation-timeline-track").classList.toggle("is-scrollable", this._conversationTurns.length * step + 8 > height);
+      if (this._timelineNeedsMeasure || !this._timelineOffsets) {
+        const anchors = new Set(this._conversationTurns.map((turn) => turn.anchorSequence));
+        this._timelineOffsets = [...this.shadowRoot.querySelectorAll("#message-list [data-sequence]")].filter((node2) => anchors.has(Number(node2.dataset.sequence))).map((node2) => ({ sequence: Number(node2.dataset.sequence), top: node2.getBoundingClientRect().top - rect.top + scroller.scrollTop }));
+        this._timelineNeedsMeasure = false;
+      }
+      const offsets = this._timelineOffsets;
+      if (!offsets?.length) return;
+      const readingTop = scroller.scrollTop + 32;
+      let low = 0, high = offsets.length;
+      while (low < high) {
+        const mid = low + high >>> 1;
+        if (offsets[mid].top <= readingTop) low = mid + 1;
+        else high = mid;
+      }
+      const index = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 4 ? offsets.length - 1 : Math.max(0, low - 1);
+      this._selectVisibleTimelineTurn(offsets[index].sequence);
+      this._revealCurrentTimelineTurn();
+      if (this._timelinePreviewSequence) this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+    });
   }
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
@@ -46601,7 +47245,19 @@ var CodexBridgePanel = class extends HTMLElement {
       return this._textElement("div", "event-row", "Run cancelled");
     }
     if (event.event_type === "attachment.added") {
-      return this._textElement("div", "event-row", `Uploaded ${payload.relative_path || payload.filename || "file"}`);
+      const attachment = this._activeThread?.attachments?.find((item) => item.attachment_id === payload.attachment_id) || payload;
+      if (this._config?.capabilities?.includes("attachment_downloads") && isInlineImage(attachment)) {
+        const card = this._inlineImages().card("attachment", attachment);
+        if (card) {
+          const article = document.createElement("article");
+          article.className = "message user uploaded-image-message";
+          article.dataset.sequence = String(event.sequence);
+          article.setAttribute("aria-label", `Uploaded image: ${displayArtifactFilename(attachment.filename, "image")}`);
+          article.append(card);
+          return article;
+        }
+      }
+      return this._textElement("div", "event-row", `Uploaded ${displayArtifactFilename(payload.filename || payload.relative_path, "file")}`);
     }
     if (event.event_type === "artifact.added") {
       const generatedImage = this._generatedImageArtifactForEvent(event);
@@ -46688,8 +47344,13 @@ var CodexBridgePanel = class extends HTMLElement {
       thumbnail.dataset.artifactId = artifact.artifact_id;
       thumbnail.append(cachedPreview);
       bubble.append(heading, thumbnail);
+      if (isInlineImage(artifact)) this._inlineImages().bindExisting("artifact", artifact, thumbnail, bubble);
     } else {
       bubble.append(heading);
+      if (isInlineImage(artifact)) {
+        const thumbnail = this._inlineImages().card("artifact", artifact);
+        if (thumbnail) bubble.append(thumbnail);
+      }
     }
     bubble.append(this._textElement("span", "generated-image-meta", metadata.join(" · ")));
     if (action && download) {
@@ -47705,16 +48366,16 @@ var CodexBridgePanel = class extends HTMLElement {
     if (tab === "terminal") this._terminal.resize();
   }
   _renderTerminalAvailability() {
-    const button3 = this.shadowRoot.getElementById("open-terminal-button");
+    const button4 = this.shadowRoot.getElementById("open-terminal-button");
     const explanation = this.shadowRoot.getElementById("terminal-availability");
     const supported = this._config?.capabilities?.includes("workspace_terminal_v1");
     const reason = !supported ? "Update the App to use the workspace terminal." : !this._activeThread ? "Select an editable chat to use the workspace terminal." : this._activeThread.archived_at ? "Restore this archived chat before opening its terminal." : this._activeThread.schedule_eligible === false ? "Assist conversations do not provide a workspace terminal. Choose a regular editable chat." : this._activeThread.mode === "observe" ? "Observe mode is read-only. Choose Edit workspace or Full auto in Chat settings to use the terminal." : this._runActivityForThread().busy ? "Wait for the current Codex turn to finish before opening the terminal." : "";
-    button3.disabled = Boolean(reason) || Boolean(this._terminalActive);
+    button4.disabled = Boolean(reason) || Boolean(this._terminalActive);
     explanation.textContent = reason;
     explanation.hidden = !reason;
-    if (reason) button3.setAttribute("aria-describedby", "terminal-availability");
-    else button3.removeAttribute("aria-describedby");
-    button3.removeAttribute("title");
+    if (reason) button4.setAttribute("aria-describedby", "terminal-availability");
+    else button4.removeAttribute("aria-describedby");
+    button4.removeAttribute("title");
   }
   _renderChatControls() {
     this._renderTerminalAvailability();
@@ -47741,15 +48402,15 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _renderContextUsage() {
-    const button3 = this.shadowRoot.getElementById("context-usage-button");
-    if (!button3) return;
+    const button4 = this.shadowRoot.getElementById("context-usage-button");
+    if (!button4) return;
     const usage = contextUsage(this._activeThread?.context_usage);
-    button3.hidden = !this._activeThread || !usage.known;
-    button3.setAttribute("aria-label", `${usage.label}. Open usage details`);
-    button3.title = usage.label;
-    this._setTooltipTarget(button3, usage.label);
-    button3.dataset.level = usage.percent === null ? "unknown" : usage.percent >= 95 ? "full" : usage.percent >= 80 ? "high" : "normal";
-    button3.querySelector(".context-fill").setAttribute("stroke-dasharray", `${usage.percent ?? 0} 100`);
+    button4.hidden = !this._activeThread || !usage.known;
+    button4.setAttribute("aria-label", `${usage.label}. Open usage details`);
+    button4.title = usage.label;
+    this._setTooltipTarget(button4, usage.label);
+    button4.dataset.level = usage.percent === null ? "unknown" : usage.percent >= 95 ? "full" : usage.percent >= 80 ? "high" : "normal";
+    button4.querySelector(".context-fill").setAttribute("stroke-dasharray", `${usage.percent ?? 0} 100`);
   }
   _renderUsagePanel() {
     const container = this.shadowRoot.getElementById("usage-panel");
@@ -47807,11 +48468,11 @@ var CodexBridgePanel = class extends HTMLElement {
         row.append(this._textElement("span", "", credit.title || "Codex usage reset"));
         row.append(this._textElement("span", "usage-note", credit.expires_at ? `Expires ${this._formatCreditExpiry(credit.expires_at)}` : "No expiry reported"));
         const selected = this._pendingResetCredit?.id === credit.id;
-        const button3 = this._actionButton("text-button", selected ? "confirm-reset-credit" : "select-reset-credit", selected ? "Confirm use of this reset credit" : "Use reset");
-        if (!selected) button3.dataset.creditId = credit.id;
-        button3.textContent = selected ? "Confirm use" : "Use reset";
-        button3.disabled = this._resetCreditBusy;
-        row.append(button3);
+        const button4 = this._actionButton("text-button", selected ? "confirm-reset-credit" : "select-reset-credit", selected ? "Confirm use of this reset credit" : "Use reset");
+        if (!selected) button4.dataset.creditId = credit.id;
+        button4.textContent = selected ? "Confirm use" : "Use reset";
+        button4.disabled = this._resetCreditBusy;
+        row.append(button4);
         if (selected) {
           row.append(this._textElement("p", "usage-note", "This uses one reset credit for your current Codex account. It cannot be undone."));
           const cancel = this._actionButton("text-button", "cancel-reset-credit", "Cancel reset");
@@ -48074,6 +48735,10 @@ var CodexBridgePanel = class extends HTMLElement {
     );
     heading.append(icon, info2);
     bubble.append(heading);
+    if (isInlineImage(artifact)) {
+      const thumbnail = this._inlineImages().card("artifact", artifact);
+      if (thumbnail) bubble.append(thumbnail);
+    }
     if (artifact?.artifact_id) {
       const actions = document.createElement("div");
       actions.className = "artifact-file-actions";
@@ -48322,7 +48987,6 @@ var CodexBridgePanel = class extends HTMLElement {
       if (nextThreadId !== this._selectedThreadId) {
         this._timelineSelectedSequence = null;
         this._timelineTabStopSequence = null;
-        this._timelineMobileOpen = false;
         this._timelinePreviewSequence = null;
         this._conversationTurns = [];
         this._stopDictation({ abort: true });
@@ -48342,6 +49006,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._clearArtifactPreview();
     }
     this._selectedThreadId = nextThreadId;
+    this._inlineImageController?.setThread(nextThreadId || "");
     return this._threadSelectionEpoch;
   }
   _threadSelectionIsCurrent(threadId, selectionEpoch) {
@@ -48922,6 +49587,7 @@ var CodexBridgePanel = class extends HTMLElement {
         currentPercent: 0,
         totalBytes
       };
+      this._inlineImages().setPending(files);
       this._render();
       for (const file of files) {
         const relativePath = useRelativePaths ? file.webkitRelativePath || file.relativePath || file.name : null;
@@ -48946,6 +49612,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._uploadAbortController = null;
       this._pendingUploads = 0;
       this._uploadProgress = null;
+      this._inlineImageController?.clearPending();
       this._render();
     }
   }
@@ -49418,33 +50085,33 @@ var CodexBridgePanel = class extends HTMLElement {
     return "Download";
   }
   _refreshArtifactDownloadUi() {
-    for (const button3 of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
-      const artifactId = button3.dataset.artifactId || "";
+    for (const button4 of this.shadowRoot.querySelectorAll('[data-action="download-artifact"]')) {
+      const artifactId = button4.dataset.artifactId || "";
       const artifact = this._artifacts.find((item) => item.artifact_id === artifactId);
       const filename = artifact?.filename || artifact?.relative_path || "artifact";
-      const generatedImageButton = button3.classList.contains("generated-image-download");
+      const generatedImageButton = button4.classList.contains("generated-image-download");
       const label = this._artifactDownloadActionLabel(
         artifactId,
         filename,
         generatedImageButton ? "generated image" : ""
       );
       const state = this._artifactDownloadState(artifactId);
-      button3.disabled = state === "pending";
-      button3.setAttribute("aria-label", label);
-      this._setTooltipTarget(button3, label);
+      button4.disabled = state === "pending";
+      button4.setAttribute("aria-label", label);
+      this._setTooltipTarget(button4, label);
       const visibleLabel = this._artifactDownloadVisibleLabel(state);
-      if (generatedImageButton || button3.classList.contains("artifact-file-download")) {
-        button3.textContent = visibleLabel;
-      } else if (button3.classList.contains("pdf-preview-download")) {
-        const text3 = button3.querySelector("span");
+      if (generatedImageButton || button4.classList.contains("artifact-file-download")) {
+        button4.textContent = visibleLabel;
+      } else if (button4.classList.contains("pdf-preview-download")) {
+        const text3 = button4.querySelector("span");
         if (text3) text3.textContent = visibleLabel;
-      } else if (button3.classList.contains("download-button")) {
-        const text3 = button3.querySelector(".download-state-label");
+      } else if (button4.classList.contains("download-button")) {
+        const text3 = button4.querySelector(".download-state-label");
         if (text3) {
           text3.textContent = visibleLabel;
           text3.hidden = state === "cached";
         }
-        button3.classList.toggle("has-state-label", state !== "cached");
+        button4.classList.toggle("has-state-label", state !== "cached");
       }
     }
   }
@@ -49525,8 +50192,8 @@ var CodexBridgePanel = class extends HTMLElement {
       this._refreshArtifactDownloadUi();
     }
   }
-  async _copyCodeBlock(button3) {
-    const block = button3.closest(".code-block");
+  async _copyCodeBlock(button4) {
+    const block = button4.closest(".code-block");
     const text3 = block?.querySelector(".code-text")?.textContent || "";
     if (!text3) {
       return;
@@ -50555,24 +51222,24 @@ var CodexBridgePanel = class extends HTMLElement {
     return changed;
   }
   _textElement(tagName, className, value) {
-    const element2 = document.createElement(tagName);
+    const element3 = document.createElement(tagName);
     if (className) {
-      element2.className = className;
+      element3.className = className;
     }
-    element2.textContent = String(value ?? "");
-    return element2;
+    element3.textContent = String(value ?? "");
+    return element3;
   }
   _actionButton(className, action, accessibleLabel) {
-    const button3 = document.createElement("button");
-    button3.type = "button";
-    button3.className = className;
-    button3.dataset.action = action;
+    const button4 = document.createElement("button");
+    button4.type = "button";
+    button4.className = className;
+    button4.dataset.action = action;
     if (accessibleLabel) {
-      button3.title = accessibleLabel;
-      button3.setAttribute("aria-label", accessibleLabel);
-      this._setTooltipTarget(button3, accessibleLabel);
+      button4.title = accessibleLabel;
+      button4.setAttribute("aria-label", accessibleLabel);
+      this._setTooltipTarget(button4, accessibleLabel);
     }
-    return button3;
+    return button4;
   }
   _setTooltipTarget(target, label) {
     if (!(target instanceof HTMLElement)) {
@@ -50672,11 +51339,11 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     return select;
   }
-  _setTrustedButtonContent(button3, iconMarkup, label = "") {
-    button3.replaceChildren();
-    this._appendTrustedIcon(button3, iconMarkup);
+  _setTrustedButtonContent(button4, iconMarkup, label = "") {
+    button4.replaceChildren();
+    this._appendTrustedIcon(button4, iconMarkup);
     if (label) {
-      button3.append(this._textElement("span", "", label));
+      button4.append(this._textElement("span", "", label));
     }
   }
   _sectionTitleLine(chevron, iconMarkup, label) {
