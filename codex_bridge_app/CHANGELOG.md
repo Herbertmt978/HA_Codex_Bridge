@@ -2,6 +2,16 @@
 
 All notable App changes are recorded here.
 
+## 1.8.9
+
+- Keeps chat menu items and submenu hover targets mounted during unrelated live
+  updates, avoiding repeated hover transitions and animation restarts.
+- Refreshes usage details without replacing the model and thinking controls.
+- Shows why the workspace terminal is unavailable, including read-only Observe
+  mode, with an accessible visible explanation. No chat permission changes.
+- Pairs App, Integration and panel `1.8.9` with unchanged Bridge `0.15.0` and
+  the verified Codex runtime `0.157.1`.
+
 ## 1.8.8
 
 - Preserves definite chat-navigation and section revision conflicts through Home
