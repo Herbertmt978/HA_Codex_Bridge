@@ -376,6 +376,40 @@ async def test_start_auth_login_defaults_to_non_destructive_mode() -> None:
     assert connection.results == [(4, {"state": "login_starting"})]
 
 
+@pytest.mark.parametrize(
+    ("remote_code", "expected_code", "expected_message"),
+    [
+        ("assist_policy_invalid", "assist_policy_invalid", "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat."),
+        ("runtime_error", "bridge_error", "Bridge request failed"),
+        ("private-token-sentinel", "bridge_error", "Bridge request failed"),
+    ],
+)
+async def test_prompt_websocket_projects_only_known_assist_rejections(
+    remote_code: str, expected_code: str, expected_message: str
+) -> None:
+    runtime, _broker = _runtime()
+    problem = ProblemRecord.from_payload(
+        409,
+        {"detail": {"code": remote_code, "retryable": False, "message": "private-token-sentinel"}},
+    )
+    runtime.client.async_send_prompt = AsyncMock(side_effect=BridgeApiConflictError(problem=problem))
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_send_prompt(hass, connection, {
+        "id": 40, "type": f"{DOMAIN}/send_prompt",
+        "thread_id": "thr_assist", "prompt": "Keep my draft", "client_request_id": "request-safe",
+    })
+    await hass.finish()
+
+    assert connection.errors == [(40, expected_code, expected_message)]
+    assert connection.results == []
+    runtime.client.async_send_prompt.assert_awaited_once_with(
+        "thr_assist", "Keep my draft", client_request_id="request-safe",
+    )
+    assert "private-token-sentinel" not in repr(connection.errors)
+
+
 async def test_web_search_mode_is_forwarded_server_side_for_prompts_and_manual_runs() -> None:
     runtime, _broker = _runtime()
     runtime.capabilities = ("web_search_v1",)

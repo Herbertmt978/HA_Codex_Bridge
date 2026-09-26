@@ -51,12 +51,14 @@ describe("Codex desktop parity layout", () => {
     expect(root.getElementById("conversation-layout").contains(root.getElementById("message-list"))).toBe(true);
   });
 
-  it("keeps the transcript as the only narrow-screen scrollport", () => {
+  it("keeps the transcript as the narrow-screen scrollport except in short viewports", () => {
     const panel = createPanel();
     const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
 
-    expect(stylesheet).toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*?\n\s+\.main-pane\s*\{[^}]*overflow-y:\s*hidden;/);
-    expect(stylesheet).not.toMatch(/@media\s*\(max-width:\s*880px\)\s*\{[\s\S]*\n\s+\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);
+    const narrowRules = stylesheet.split(/@media\s*\(max-width:\s*880px\)/).at(-1).split("@media")[0];
+    expect(narrowRules).toMatch(/\.main-pane\s*\{[^}]*overflow-y:\s*hidden;/);
+    expect(narrowRules).not.toMatch(/\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);
+    expect(stylesheet).toMatch(/@media\s*\(max-height:\s*600px\)\s*\{\s*\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);
   });
 
   it("keeps create-chat actions intact and uses quiet native-feeling rail controls", () => {

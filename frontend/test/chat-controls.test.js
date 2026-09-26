@@ -100,6 +100,7 @@ describe("desktop chat controls", () => {
     ["no chat", { capabilities: ["workspace_terminal_v1"] }, null, false, "Select an editable chat"],
     ["archived", { capabilities: ["workspace_terminal_v1"] }, { archived_at: "2026-09-26" }, false, "Restore this archived chat"],
     ["observe", { capabilities: ["workspace_terminal_v1"] }, { mode: "observe" }, false, "Observe mode is read-only"],
+    ["Assist", { capabilities: ["workspace_terminal_v1"] }, { mode: "observe", schedule_eligible: false }, false, "Assist conversations do not provide a workspace terminal"],
     ["busy", { capabilities: ["workspace_terminal_v1"] }, {}, true, "Wait for the current Codex turn"],
     ["archived observe", { capabilities: ["workspace_terminal_v1"] }, { archived_at: "2026-09-26", mode: "observe" }, true, "Restore this archived chat"],
   ])("explains the %s terminal gate without opening a session", (_name, config, thread, busy, reason) => {

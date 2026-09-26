@@ -2058,7 +2058,7 @@ for (const width of [390, 1280]) {
   });
 }
 
-test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }) => {
+test("renders a local PDF on canvas without embeds or off-origin requests", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   const requests = [];
   const workerResponses = [];
@@ -2119,6 +2119,50 @@ test("renders a local PDF on canvas without embeds or off-origin requests", asyn
   await expect(preview.getByRole("button", { name: "Zoom in" })).toBeVisible();
   await expect(preview.getByRole("button", { name: "Open PDF in a new tab" })).toBeVisible();
   await expect(preview.getByRole("button", { name: "Download local-preview.pdf" })).toBeVisible();
+  await expect(preview.locator(".pdf-preview-retry")).toBeHidden();
+
+  const checkToolbar = async (toolbar) => {
+    const metrics = await toolbar.evaluate((node) => ({
+      fits: node.scrollWidth <= node.clientWidth + 1,
+      icons: [...node.querySelectorAll("button svg")].filter((icon) => icon.getClientRects().length).map((icon) => {
+        const box = icon.getBoundingClientRect(), style = getComputedStyle(icon);
+        return { width: box.width, height: box.height, fill: style.fill, stroke: style.stroke };
+      }),
+      buttonsFit: [...node.querySelectorAll("button")].filter((button) => button.getClientRects().length)
+        .every((button) => button.scrollWidth <= button.clientWidth + 1),
+    }));
+    expect(metrics.fits).toBe(true);
+    expect(metrics.buttonsFit).toBe(true);
+    expect(metrics.icons.length).toBeGreaterThan(0);
+    for (const icon of metrics.icons) {
+      expect(icon.width).toBeGreaterThan(0); expect(icon.width).toBeLessThanOrEqual(24);
+      expect(icon.height).toBe(icon.width); expect(icon.fill).toBe("none"); expect(icon.stroke).not.toBe("none");
+    }
+  };
+  await checkToolbar(preview.getByRole("toolbar", { name: "PDF preview controls" }));
+  await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).click();
+  const bottom = panel.locator("#bottom-panel");
+  await expect(bottom).toBeVisible();
+  expect((await bottom.boundingBox()).height).toBeGreaterThan(320);
+  const bottomToolbar = bottom.getByRole("toolbar", { name: "PDF preview controls" });
+  await checkToolbar(bottomToolbar);
+  await page.screenshot({ path: testInfo.outputPath("pdf-toolbar-desktop.png"), animations: "disabled" });
+  for (const size of [{ width: 1440, height: 734 }, { width: 390, height: 844 }, { width: 320, height: 568 }]) {
+    await page.setViewportSize(size);
+    await checkToolbar(bottomToolbar);
+    const sendBounds = await panel.locator("#send-button").boundingBox();
+    expect(sendBounds.y).toBeGreaterThanOrEqual(0);
+    expect(sendBounds.y + sendBounds.height).toBeLessThanOrEqual(size.height);
+    const bottomBounds = await bottom.boundingBox();
+    if (size.height >= 600) expect(bottomBounds.y + bottomBounds.height).toBeLessThanOrEqual(size.height + 1);
+    else {
+      await bottom.locator(".bottom-panel-header").scrollIntoViewIfNeeded();
+      const headerBounds = await bottom.locator(".bottom-panel-header").boundingBox();
+      expect(headerBounds.y + headerBounds.height).toBeLessThanOrEqual(size.height + 1);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`pdf-toolbar-${size.width}.png`), animations: "disabled" });
+  }
+  await bottom.getByRole("button", { name: "Hide bottom panel" }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await panel.locator("#mobile-context-toggle").click();
@@ -3669,7 +3713,7 @@ test("coarse pointer tablet keeps chat menu Back reachable", async ({ browser },
   } finally { await context.close(); }
 });
 
-test("conversation timeline previews and jumps at desktop and touch widths", async ({ page }) => {
+test("conversation timeline previews and jumps at desktop and touch widths", async ({ page }, testInfo) => {
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
@@ -3720,7 +3764,7 @@ test("conversation timeline previews and jumps at desktop and touch widths", asy
     }
     expect(await navigation.innerText()).not.toContain("private-run-one");
     await expect(first).toHaveAttribute("aria-current", "location");
-    await page.screenshot({ path: `D:/CodexWork/.tmp/conversation-navigation/conversation-timeline-${width}.png`, animations: "disabled" });
+    await page.screenshot({ path: testInfo.outputPath(`conversation-timeline-${width}.png`), animations: "disabled" });
     const accessibility = await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze();
     expect(accessibility.violations).toEqual([]);
   }
@@ -3884,3 +3928,93 @@ for (const reducedMotion of ["no-preference", "reduce"]) {
     await page.keyboard.press("Escape"); await expect(menu).toBeHidden();
   });
 }
+
+test("sidebar menu labels follow refreshed triggers and every close path", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await selectHarnessThread(page);
+  await panel.evaluate((element) => {
+    element._stopPolling();
+    element._config = { ...element._config, capabilities: [...(element._config.capabilities || []), "chat_operations_v1"] };
+    element._render();
+  });
+  const trigger = panel.locator('[data-chat-thread-id="thr_direct"] .thread-actions-toggle');
+  const menu = panel.locator("#chat-context-menu");
+  for (const close of ["escape", "outside", "resize"]) {
+    await expect(trigger).toHaveAccessibleName("Show actions for Quick bridge note");
+    await trigger.click();
+    await expect(menu).toBeVisible();
+    await expect(trigger).toHaveAccessibleName("Hide actions for Quick bridge note");
+    await panel.evaluate((element) => {
+      window.__previousMenuTrigger = element._chatContextMenu.trigger;
+      element._threads = element._threads.map((thread) => ({ ...thread, navigation_revision: (thread.navigation_revision || 0) + 1 }));
+      element._renderNavigationSections();
+      element._chatContextMenu.sync();
+    });
+    expect(await trigger.evaluate((node) => node !== window.__previousMenuTrigger)).toBe(true);
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    if (close === "escape") await page.keyboard.press("Escape");
+    else if (close === "outside") await panel.locator("#message-list").click({ position: { x: 350, y: 100 } });
+    else await page.setViewportSize({ width: 1430, height: 900 });
+    await expect(menu).toBeHidden();
+    await expect(trigger).toHaveAccessibleName("Show actions for Quick bridge note");
+    await expect(trigger).toHaveAttribute("data-tooltip", "Show actions for Quick bridge note");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+  const header = panel.getByRole("button", { name: "Chat actions", exact: true });
+  await header.click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(header).toHaveAccessibleName("Chat actions");
+  await expect(header).toHaveAttribute("aria-expanded", "false");
+});
+
+test("expanded conversation navigation stays below alerts in a short chat pane", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1000, height: 734 });
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+  const panel = page.locator("codex-bridge-panel");
+  await expect.poll(() => panel.evaluate((element) => Boolean(element._config) && !element._isLoading)).toBe(true);
+  await selectHarnessThread(page);
+  await panel.evaluate((element) => {
+    element._stopPolling(); element._pendingInteractions = [];
+    element._events = [
+      { sequence: 1, event_type: "message.created", payload: { run_id: "short_turn", text: "A short prompt" } },
+      { sequence: 2, event_type: "message.completed", payload: { run_id: "short_turn", text: "A short answer" } },
+      { sequence: 3, event_type: "run.completed", payload: { run_id: "short_turn" } },
+    ];
+    element._forceMessageRebuild = true;
+    element._assignError("A controlled connection warning."); element._render();
+  });
+  await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).click();
+  await expect(panel.locator("#error-strip")).toBeVisible();
+  const disclosure = panel.getByRole("button", { name: "Jump to message" });
+  await disclosure.click();
+  const navigation = panel.getByRole("navigation", { name: "Conversation turns" });
+  const disclosureBox = await disclosure.boundingBox(), scrollBox = await panel.locator("#conversation-scroll").boundingBox();
+  const alertBox = await panel.locator("#error-strip").boundingBox();
+  expect(disclosureBox.y).toBeGreaterThanOrEqual(alertBox.y + alertBox.height - 1);
+  expect(disclosureBox.y).toBeGreaterThanOrEqual(scrollBox.y - 1);
+  expect(disclosureBox.y + disclosureBox.height).toBeLessThanOrEqual(scrollBox.y + scrollBox.height + 1);
+  await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+  await page.screenshot({ path: testInfo.outputPath("short-chat-navigation.png"), animations: "disabled" });
+  await navigation.locator(".timeline-item").click();
+  await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(disclosure).toBeFocused();
+  await expect(panel.locator("#message-list")).toContainText("A short answer");
+  for (const size of [{ width: 390, height: 390 }, { width: 320, height: 400 }, { width: 390, height: 568 }]) {
+    await page.setViewportSize(size);
+    const header = panel.locator("#bottom-panel .bottom-panel-header");
+    await header.scrollIntoViewIfNeeded();
+    const box = await header.boundingBox();
+    expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(size.height + 1);
+    await expect(header.getByRole("button", { name: "Hide bottom panel" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`short-preview-${size.width}-${size.height}.png`), animations: "disabled" });
+    await panel.locator("#send-button").scrollIntoViewIfNeeded();
+    const send = await panel.locator("#send-button").boundingBox();
+    expect(send.y).toBeGreaterThanOrEqual(0); expect(send.y + send.height).toBeLessThanOrEqual(size.height + 1);
+  }
+  await panel.getByRole("button", { name: "Hide bottom panel" }).click();
+  await expect(panel.locator("#bottom-panel")).toBeHidden();
+});

@@ -82,6 +82,71 @@ describe("prompt composer mutation contract", () => {
     expect(send.disabled).toBe(true);
   });
 
+  it("explains Assist-managed messages and blocks ordinary sends without creating a mutation", async () => {
+    const panel = createPanel();
+    panel._activeThread.schedule_eligible = false;
+    panel._setDraftForThread("thread-alpha", "Keep my draft");
+    panel._callWS = vi.fn();
+    panel._render(true);
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    const send = panel.shadowRoot.getElementById("send-button");
+
+    expect(prompt.value).toBe("Keep my draft");
+    expect(prompt.disabled).toBe(true);
+    expect(send.disabled).toBe(true);
+    expect(panel.shadowRoot.getElementById("composer-status").textContent).toMatch(/managed by Assist.*start a new chat/);
+    await panel._sendPrompt();
+    expect(panel._callWS).not.toHaveBeenCalled();
+    expect(panel._promptMutations.size).toBe(0);
+    expect(panel._promptMutation).toBeNull();
+    expect(prompt.value).toBe("Keep my draft");
+    expect(panel._errorRetryable).toBe(false);
+    expect(panel.shadowRoot.querySelector(".composer-shell").classList).not.toContain("retry-ready");
+  });
+
+  it("keeps Stop available in an Assist-managed running conversation", () => {
+    const panel = createPanel();
+    panel._activeThread = { ...panel._activeThread, schedule_eligible: false, status: "running" };
+    panel._setDraftForThread("thread-alpha", "Saved draft");
+    panel._render(true);
+    const send = panel.shadowRoot.getElementById("send-button");
+    expect(send.disabled).toBe(false);
+    expect(send.dataset.action).toBe("stop-run");
+    expect(send.getAttribute("aria-label")).toBe("Stop");
+    expect(panel.shadowRoot.getElementById("prompt-input").disabled).toBe(true);
+  });
+
+  it.each([undefined, true, "false"])("does not infer Assist ownership from schedule_eligible %s", (eligible) => {
+    const panel = createPanel();
+    panel._activeThread.schedule_eligible = eligible;
+    panel._setDraftForThread("thread-alpha", "Regular message");
+    panel._render(true);
+    expect(panel.shadowRoot.getElementById("prompt-input").disabled).toBe(false);
+    expect(panel.shadowRoot.getElementById("send-button").disabled).toBe(false);
+  });
+
+  it("stops local dictation and rejects a stale enabled control when Assist ownership arrives", () => {
+    const instances = [];
+    class Recognition {
+      constructor() { instances.push(this); }
+      start = vi.fn();
+      abort = vi.fn();
+    }
+    Recognition.prototype.processLocally = false;
+    vi.stubGlobal("SpeechRecognition", Recognition);
+    const panel = createPanel();
+    panel._render(true);
+    panel._toggleDictation();
+    expect(instances[0].start).toHaveBeenCalledOnce();
+    panel._activeThread.schedule_eligible = false;
+    panel._renderComposerState(panel._activeThread);
+    expect(instances[0].abort).toHaveBeenCalledOnce();
+    expect(panel.shadowRoot.getElementById("dictation-button").disabled).toBe(true);
+    panel.shadowRoot.getElementById("prompt-input").disabled = false;
+    panel._toggleDictation();
+    expect(instances).toHaveLength(1);
+  });
+
   it("keeps the visible composer action, accessible name, and tooltip in sync", () => {
     const panel = createPanel();
     const send = panel.shadowRoot.getElementById("send-button");
@@ -328,6 +393,45 @@ describe("prompt composer mutation contract", () => {
       payload: { text: "Run the focused tests", client_request_id: requestId },
     });
     expect(panel._promptMutation).toBeNull();
+  });
+
+  it.each([
+    { code: "assist_policy_invalid", message: "private-policy-detail" },
+    { body: { error: { code: "assist_policy_invalid", message: "private-policy-detail" } } },
+  ])("preserves the draft without an uncertain retry after a definite Assist policy rejection", async (error) => {
+    const panel = createPanel();
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    panel._callWS = vi.fn().mockRejectedValue(error);
+    panel._refreshActiveThread = vi.fn().mockImplementation(async () => {
+      panel._activeThread.schedule_eligible = false;
+    });
+    prompt.value = "Keep this draft";
+
+    await panel._sendPrompt();
+
+    expect(panel._promptMutation).toBeNull();
+    expect(panel._promptMutations.size).toBe(0);
+    expect(panel._draftForThread("thread-alpha")).toBe("Keep this draft");
+    expect(prompt.value).toBe("Keep this draft");
+    expect(panel._error).toMatch(/managed by Assist/);
+    expect(panel._error).not.toMatch(/interrupted|private-policy-detail/);
+    expect(panel._errorRetryable).toBe(false);
+    expect(panel.shadowRoot.querySelector(".composer-shell").classList).not.toContain("retry-ready");
+    expect(panel.shadowRoot.getElementById("send-button").disabled).toBe(true);
+    await panel._sendPrompt();
+    expect(panel._callWS).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the same request id for a generic Bridge rejection whose outcome is unknown", async () => {
+    const panel = createPanel();
+    panel._refreshActiveThread = vi.fn().mockResolvedValue(undefined);
+    panel._callWS = vi.fn().mockRejectedValue({ code: "bridge_error", message: "Bridge request failed" });
+    panel.shadowRoot.getElementById("prompt-input").value = "Retain my request";
+    await panel._sendPrompt();
+    const requestId = panel._promptMutation.clientRequestId;
+    expect(panel._promptMutation.state).toBe("retryable");
+    await panel._sendPrompt();
+    expect(panel._callWS.mock.calls[1][1].client_request_id).toBe(requestId);
   });
 
   it("retains an uncertain prompt per chat so retrying after A-to-B-to-A uses its original request id", async () => {

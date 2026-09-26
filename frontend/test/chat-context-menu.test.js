@@ -385,6 +385,44 @@ describe("shared chat context actions", () => {
     document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true })); expect(menu.menu.hidden).toBe(true);
   });
 
+  it.each(["outside", "resize", "escape", "direct"])("restores the current sidebar label after an open-menu poll and %s close", async (close) => {
+    const { panel, menu, show } = setup(); await show();
+    const original = menu.trigger;
+    expect(original.getAttribute("aria-label")).toBe("Hide actions for Chat two");
+    await menu.perform("submenu", "fork"); key(panel.shadowRoot.activeElement, "Escape");
+    expect(menu.page).toBeNull(); expect(menu.menu.hidden).toBe(false);
+    panel._threads[1] = { ...panel._threads[1], title: "Updated chat", updated_at: "later" };
+    panel._renderedNavigationKey = null; panel._renderNavigationSections();
+    const current = panel.shadowRoot.querySelector('[data-thread-id="two"].thread-actions-toggle');
+    expect(current).not.toBe(original); expect(current.getAttribute("aria-label")).toBe("Hide actions for Updated chat");
+    // Closing must find the fresh trigger even before the next menu sync tick.
+    if (close === "outside") document.body.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
+    else if (close === "resize") window.dispatchEvent(new Event("resize"));
+    else if (close === "escape") key(panel.shadowRoot.activeElement, "Escape");
+    else menu.close();
+    expect(menu.menu.hidden).toBe(true); expect(menu.trigger).toBe(current);
+    expect(panel.shadowRoot.querySelector('[data-thread-id="two"].thread-actions-toggle')).toBe(current);
+    expect(current.getAttribute("aria-expanded")).toBe("false");
+    expect(current.getAttribute("aria-label")).toBe("Show actions for Updated chat");
+    expect(current.dataset.tooltip).toBe("Show actions for Updated chat");
+    expect(current.closest(".chat-row").classList.contains("actions-open")).toBe(false);
+    expect(panel._selectedThreadId).toBe("one");
+  });
+
+  it("updates sidebar labels from the fresh title in place and preserves the header label", async () => {
+    const { panel, menu, show } = setup(); await show(); menu.sync(); const trigger = menu.trigger;
+    panel._threads[1] = { ...panel._threads[1], title: '<script>title</script>' }; menu.sync();
+    expect(menu.trigger).toBe(trigger); expect(trigger.getAttribute("aria-label")).toBe("Hide actions for <script>title</script>");
+    expect(trigger.querySelector("script")).toBeNull(); menu.close();
+    expect(trigger.getAttribute("aria-label")).toBe("Show actions for <script>title</script>");
+    const header = panel.shadowRoot.getElementById("chat-menu-button");
+    expect(header.getAttribute("aria-label")).toBe("Chat actions");
+    await menu.show("one", header, null, { header: true });
+    expect(header.getAttribute("aria-label")).toBe("Chat actions"); expect(header.getAttribute("aria-expanded")).toBe("true");
+    menu.close(); expect(header.getAttribute("aria-label")).toBe("Chat actions"); expect(header.getAttribute("aria-expanded")).toBe("false");
+    expect(menu.trigger).toBe(header);
+  });
+
   it("uses touch ellipsis and Back instead of hover-only interaction on a narrow viewport", async () => {
     const original = window.innerWidth; Object.defineProperty(window, "innerWidth", { configurable: true, value: 390 });
     try {

@@ -40,7 +40,8 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.8.9";
+const PANEL_VERSION = "1.8.10";
+const ASSIST_PROMPT_MESSAGE = "Messages in this conversation are managed by Assist. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -931,7 +932,8 @@ template.innerHTML = `
     .copy-button svg,
     .download-button svg,
     .send-button svg,
-    .action-button svg {
+    .action-button svg,
+    .pdf-preview-toolbar button svg {
       width: var(--icon-size);
       height: var(--icon-size);
       stroke: currentColor;
@@ -1257,7 +1259,7 @@ template.innerHTML = `
     .resource-details .resource-chevron { margin-left: auto; color: var(--muted-color); }
     .resource-details[open] .resource-chevron { transform: rotate(180deg); }
     .resource-details p { margin: 2px 0 6px 28px; font-size: var(--font-caption-size); color: var(--muted-color); overflow-wrap: anywhere; }
-    .bottom-panel { flex: 0 0 min(35vh, 320px); min-height: 180px; overflow: auto; border-top: 1px solid var(--border-color); background: var(--surface-bg); }
+    .bottom-panel { flex: 0 1 min(45dvh, 480px); min-height: min(180px, 25dvh); overflow: auto; border-top: 1px solid var(--border-color); background: var(--surface-bg); }
     .bottom-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; position: sticky; top: 0; background: var(--surface-bg); z-index: 1; }
     .bottom-panel-header .row-actions > button { min-height: 32px; padding: 4px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-control-size); }
     .bottom-panel-header button[aria-pressed="true"] { background: var(--surface-muted); color: var(--text-color); }
@@ -2477,6 +2479,10 @@ template.innerHTML = `
     }
 
     .pdf-preview-toolbar button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
       min-width: 30px;
       min-height: 30px;
       padding: 4px 8px;
@@ -2495,6 +2501,8 @@ template.innerHTML = `
       opacity: 0.38;
     }
 
+    .pdf-preview-toolbar button[hidden] { display: none; }
+
     .pdf-preview-control-group {
       display: inline-flex;
       align-items: center;
@@ -2503,6 +2511,8 @@ template.innerHTML = `
     }
 
     .pdf-preview-action-group {
+      flex-wrap: wrap;
+      max-width: 100%;
       margin-left: auto;
     }
 
@@ -3701,8 +3711,8 @@ template.innerHTML = `
 
     .conversation-scroll {
       display: flex;
-      flex: 1 1 auto;
-      min-height: 0;
+      flex: 1 1 0;
+      min-height: min(96px, 12dvh);
       flex-direction: column;
       overflow: auto;
       overscroll-behavior: contain;
@@ -3875,6 +3885,10 @@ template.innerHTML = `
       margin: 0;
       padding: 4px 0;
       background: var(--canvas-bg);
+    }
+
+    .timeline-compact #conversation-timeline.is-open {
+      position: relative;
     }
 
     .timeline-compact .timeline-disclosure {
@@ -5729,6 +5743,14 @@ template.innerHTML = `
 
       .error-action.primary {
         flex: 1 1 auto;
+      }
+    }
+
+    @media (max-height: 600px) {
+      .main-pane {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scroll-padding-block: 8px;
       }
     }
 
@@ -8795,7 +8817,8 @@ class CodexBridgePanel extends HTMLElement {
     const composerShell = this.shadowRoot.querySelector(".composer-shell");
     const isRunning = this._runActivityForThread(activeThread).busy;
     const mutation = this._promptMutationForThread(this._selectedThreadId);
-    const retryable = mutation?.state === "retryable";
+    const assistManaged = activeThread?.schedule_eligible === false;
+    const retryable = !assistManaged && mutation?.state === "retryable";
     composerShell?.classList.toggle("retry-ready", retryable);
     const cancelling = this._cancellingThreads.has(this._selectedThreadId);
     const locked = Boolean(mutation);
@@ -8803,10 +8826,10 @@ class CodexBridgePanel extends HTMLElement {
     if (promptInput.value !== draft) {
       promptInput.value = draft;
     }
-    promptInput.placeholder = isRunning
+    promptInput.placeholder = assistManaged ? "Continue this conversation in Assist" : isRunning
       ? "Steer the running Codex turn"
       : "Message Codex through Home Assistant";
-    promptInput.disabled = !activeThread || locked;
+    promptInput.disabled = !activeThread || locked || assistManaged;
     if (this._speechRecognition && (this._speechThreadId !== this._selectedThreadId || promptInput.disabled)) {
       this._stopDictation({ abort: true });
     }
@@ -8819,8 +8842,8 @@ class CodexBridgePanel extends HTMLElement {
     scheduleButton.classList.toggle("hidden", !this._config?.capabilities?.includes("automation_proposals_v1"));
     scheduleButton.disabled = !activeThread;
     const hasDraft = Boolean(promptInput.value.trim());
-    const stop = isRunning && !hasDraft && !mutation;
-    sendButton.disabled = !activeThread || cancelling || (locked && !retryable) || (!stop && !retryable && !hasDraft);
+    const stop = isRunning && (!hasDraft || assistManaged) && !mutation;
+    sendButton.disabled = !activeThread || cancelling || (assistManaged && !stop) || (locked && !retryable) || (!stop && !retryable && !hasDraft);
     const actionLabel = cancelling ? "Stopping" : retryable ? "Retry" : stop ? "Stop" : isRunning ? "Steer" : "Send";
     const actionTitle = cancelling ? "Stopping the running Codex turn" : retryable
       ? "Retry this message safely"
@@ -8834,7 +8857,9 @@ class CodexBridgePanel extends HTMLElement {
     this._renderContextUsage();
     sendButton.setAttribute("aria-label", actionLabel);
     this._setTooltipTarget(sendButton, actionTitle);
-    if (mutation?.state === "sending") {
+    if (assistManaged) {
+      composerStatus.textContent = ASSIST_PROMPT_MESSAGE;
+    } else if (mutation?.state === "sending") {
       composerStatus.textContent = "Sending through Home Assistant...";
     } else if (mutation?.state === "reconciling") {
       composerStatus.textContent = "Checking whether Home Assistant accepted this message...";
@@ -8860,7 +8885,7 @@ class CodexBridgePanel extends HTMLElement {
       || typeof Recognition !== "function"
       || !Recognition.prototype
       || !("processLocally" in Recognition.prototype);
-    button.disabled = locked;
+    button.disabled = locked || activeThread?.schedule_eligible === false;
     const listening = Boolean(this._speechRecognition);
     button.setAttribute("aria-pressed", String(listening));
     button.setAttribute("aria-label", listening ? "Stop dictation" : "Dictate message");
@@ -8891,7 +8916,7 @@ class CodexBridgePanel extends HTMLElement {
     const Recognition = window.SpeechRecognition;
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     if (typeof Recognition !== "function" || !this._speechAvailable
-      || !this._activeThread || promptInput?.disabled) return;
+      || !this._activeThread || this._activeThread.schedule_eligible === false || promptInput?.disabled) return;
     const lang = this._hass?.language || navigator.language || "en-GB";
     const recognition = new Recognition();
     if (!("processLocally" in recognition)) {
@@ -11006,6 +11031,7 @@ class CodexBridgePanel extends HTMLElement {
     if (track) track.hidden = !open && this._isConversationTimelineCompact();
     disclosure?.setAttribute("aria-expanded", String(open));
     this._renderTimelineMobilePreview(open ? String(this._timelineSelectedSequence) : null);
+    if (open && this._isConversationTimelineCompact()) navigation?.scrollIntoView({ block: "nearest" });
     if (!open) this._renderTimelineDesktopPreview(null);
     if (restoreFocus) disclosure?.focus();
   }
@@ -12404,6 +12430,7 @@ class CodexBridgePanel extends HTMLElement {
     const reason = !supported ? "Update the App to use the workspace terminal."
       : !this._activeThread ? "Select an editable chat to use the workspace terminal."
       : this._activeThread.archived_at ? "Restore this archived chat before opening its terminal."
+      : this._activeThread.schedule_eligible === false ? "Assist conversations do not provide a workspace terminal. Choose a regular editable chat."
       : this._activeThread.mode === "observe" ? "Observe mode is read-only. Choose Edit workspace or Full auto in Chat settings to use the terminal."
       : this._runActivityForThread().busy ? "Wait for the current Codex turn to finish before opening the terminal."
       : "";
@@ -13288,6 +13315,11 @@ class CodexBridgePanel extends HTMLElement {
   async _sendPrompt() {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const threadId = this._selectedThreadId;
+    if (this._activeThread?.thread_id === threadId && this._activeThread.schedule_eligible === false) {
+      this._assignError(ASSIST_PROMPT_MESSAGE, { retryable: false });
+      this._render();
+      return;
+    }
     const existing = this._promptMutationForThread(threadId);
     if (existing && ["sending", "reconciling"].includes(existing.state)) {
       return;
@@ -13328,8 +13360,20 @@ class CodexBridgePanel extends HTMLElement {
         await this._refreshActiveThread();
         this._render();
       }
-    } catch {
+    } catch (error) {
       if (this._promptMutations.get(threadId) !== mutation) {
+        return;
+      }
+      if (this._bridgeErrorCode(error) === "assist_policy_invalid") {
+        this._promptMutations.delete(threadId);
+        if (this._promptMutation === mutation) this._promptMutation = null;
+        if (threadId === this._selectedThreadId) {
+          await this._refreshActiveThread({ reportError: false });
+          if (threadId === this._selectedThreadId) {
+            this._assignError(ASSIST_PROMPT_MESSAGE, { retryable: false });
+            this._render();
+          }
+        }
         return;
       }
       mutation.state = "reconciling";
