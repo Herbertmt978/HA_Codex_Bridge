@@ -122,12 +122,51 @@ def test_thread_list_and_detail_hide_private_runtime_continuity(tmp_path) -> Non
             "pending_prompts",
         }:
             assert private_field not in payload
-
     preserved = app.state.storage.load_thread(thread.thread_id)
     assert preserved.codex_thread_id == "provider-thread-account-a"
     assert preserved.active_turn_id == "provider-turn-account-a"
     assert preserved.active_run_id == "run_private"
 
+
+def test_chat_operations_api_negotiates_sections_and_rejects_stale_navigation(tmp_path) -> None:
+    app = create_app(root_path=tmp_path, auth_token="secret")
+    thread = app.state.storage.create_thread(title="Navigation", mode=RunMode.FULL_AUTO)
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer secret"}
+
+    missing_capability = client.get("/chat-sections", headers=headers)
+    assert missing_capability.status_code == 409
+    app.state.feature_capabilities += ("chat_operations_v1",)
+    section = client.post("/chat-sections", headers=headers, json={"name": "Research"})
+    assert section.status_code == 201
+
+    update = client.patch(
+        f"/threads/{thread.thread_id}",
+        headers=headers,
+        json={
+            "pinned": True,
+            "unread": True,
+            "section_id": section.json()["section_id"],
+            "navigation_revision": thread.navigation_revision,
+        },
+    )
+    stale = client.patch(
+        f"/threads/{thread.thread_id}",
+        headers=headers,
+        json={"unread": False, "navigation_revision": thread.navigation_revision},
+    )
+
+    assert update.status_code == 200
+    assert update.json()["pinned"] is True
+    assert update.json()["unread"] is True
+    assert update.json()["section_id"] == section.json()["section_id"]
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "navigation_revision_conflict"
+    deleted_section = client.delete(
+        f"/chat-sections/{section.json()['section_id']}?revision={section.json()['revision']}",
+        headers=headers,
+    )
+    assert deleted_section.status_code == 204
 
 def test_assist_thread_is_ineligible_to_schedule_in_public_list_and_detail(tmp_path) -> None:
     app = create_app(

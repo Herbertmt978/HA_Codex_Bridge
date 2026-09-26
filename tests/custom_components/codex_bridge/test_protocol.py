@@ -75,6 +75,13 @@ def test_retains_verified_provider_feature_capabilities() -> None:
     assert ready.capabilities[-2:] == ("web_search_v1", "image_generation_v1")
 
 
+def test_chat_operations_capability_is_accepted_only_when_advertised() -> None:
+    payload = _fixture("ready_v1.json")
+    assert "chat_operations_v1" not in ReadyRecord.from_payload(payload).capabilities
+    payload["capabilities"].append("chat_operations_v1")
+    assert "chat_operations_v1" in ReadyRecord.from_payload(payload).capabilities
+
+
 def test_retains_optional_browser_capability_without_enabling_it_for_older_apps() -> None:
     payload = _fixture("ready_v1.json")
     assert "browser_v1" not in ReadyRecord.from_payload(payload).capabilities

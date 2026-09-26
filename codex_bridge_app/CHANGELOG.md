@@ -2,6 +2,25 @@
 
 All notable App changes are recorded here.
 
+## 1.8.7
+
+- Adds one chat actions menu for right-click, sidebar and header controls, with
+  persistent pin/read markers and named sections, authenticated sharing and
+  conversation copies. Existing rename, archive and deletion controls remain.
+- Adds same-account native forks sharing the current workspace and bounded
+  moves into an existing project with copies of chat-owned files and a review
+  for selecting shared project files. Failed copy cleanup retains its storage
+  accounting. Pending native outcomes remain unverified until inspected;
+  definitive rejection leaves other chat actions available. Active work,
+  scheduled references, uncertain identity and unsafe files prevent a move.
+- Adds a conversation tick rail with animated hover previews and keyboard jumps;
+  phones and touch tablets use a compact Jump to message disclosure.
+- Refreshes Scheduled definitions when reading run history while preserving an
+  open edit draft, so completed tasks show their current status and controls.
+- Bundles the Sigstore-verified Codex runtime `0.157.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.15.0` without changing its Integration API compatibility.
+
 ## 1.8.6
 
 - Adds reviewed title and instruction descriptions for a selected scheduled task.

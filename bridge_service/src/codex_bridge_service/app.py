@@ -53,6 +53,7 @@ from .routes import (
     approvals,
     agents,
     artifacts,
+    chat_sections,
     attachments,
     automations,
     capabilities,
@@ -816,6 +817,7 @@ def create_app(
                 "plugins_v1",
                 "agents_v1",
                 "office_preview_v1",
+                "chat_operations_v1",
             ]
         )
         if resolved_account_profile_store is not None:
@@ -1081,6 +1083,7 @@ def create_app(
     app.include_router(events.router)
     app.include_router(health.router)
     app.include_router(projects.router)
+    app.include_router(chat_sections.router)
     app.include_router(prompts.router)
     app.include_router(runtime_events.router)
     app.include_router(status.router)

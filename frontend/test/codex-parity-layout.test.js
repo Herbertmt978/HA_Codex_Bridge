@@ -44,10 +44,11 @@ describe("Codex desktop parity layout", () => {
 
     const scroller = root.getElementById("conversation-scroll");
     expect([...scroller.children]).toEqual(expect.arrayContaining([
-      root.getElementById("message-list"),
+      root.getElementById("conversation-layout"),
       root.getElementById("run-activity"),
       root.getElementById("interaction-region"),
     ]));
+    expect(root.getElementById("conversation-layout").contains(root.getElementById("message-list"))).toBe(true);
   });
 
   it("keeps the transcript as the only narrow-screen scrollport", () => {

@@ -2,9 +2,19 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, 
 from pydantic import BaseModel, Field, field_validator
 
 from ..auth import require_bridge_token
+from ..automations import AutomationConflictError
 from ..models import PublicThreadRecord, RunMode, RuntimeProfile, ThreadViewRecord
-from ..runtime_broker import RuntimeUnavailableError
-from ..storage import ProjectNotFoundError, ThreadNotFoundError
+from ..runtime_broker import (
+    RuntimeThreadOperationUnknownError,
+    RuntimeUnavailableError,
+)
+from ..storage import (
+    ChatNavigationRevisionConflict,
+    DurableMutationPendingError,
+    ProjectMutationError,
+    ProjectNotFoundError,
+    ThreadNotFoundError,
+)
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 from .host_access import validate_host_selection
 
@@ -40,6 +50,10 @@ class UpdateThreadRequest(BaseModel):
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     model_override: str | None = None
     thinking_override: str | None = None
+    pinned: bool | None = Field(default=None, strict=True)
+    unread: bool | None = Field(default=None, strict=True)
+    section_id: str | None = Field(default=None, min_length=1, max_length=128)
+    navigation_revision: int | None = Field(default=None, strict=True, ge=1)
 
     @field_validator("model_override", "thinking_override")
     @classmethod
@@ -47,6 +61,22 @@ class UpdateThreadRequest(BaseModel):
         if value is not None and not value.strip():
             raise ValueError("value must not be blank")
         return value.strip() if value is not None else None
+
+
+class MoveThreadProjectRequest(BaseModel):
+    project_id: str = Field(min_length=1, max_length=128)
+    navigation_revision: int = Field(strict=True, ge=1)
+    workspace_artifact_ids: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("workspace_artifact_ids")
+    @classmethod
+    def validate_workspace_artifact_ids(cls, value: list[str]) -> list[str]:
+        if (
+            len(set(value)) != len(value)
+            or any(not item or len(item) > 128 for item in value)
+        ):
+            raise ValueError("workspace artifact selection is invalid")
+        return value
 
 
 def _compatible_default_thinking(model_record) -> str:
@@ -234,6 +264,11 @@ def update_thread(
         request=request,
         expected_token=request.app.state.auth_token,
     )
+    if any(
+        value is not None
+        for value in (payload.pinned, payload.unread, payload.section_id, payload.navigation_revision)
+    ) and "chat_operations_v1" not in request.app.state.feature_capabilities:
+        raise HTTPException(status_code=409, detail={"code": "chat_operations_unavailable"})
     try:
         current = request.app.state.storage.get_thread(thread_id)
         updates = payload.model_dump(exclude_unset=True)
@@ -270,6 +305,12 @@ def update_thread(
             )
             if repaired_thinking is not None:
                 updates["thinking_override"] = repaired_thinking
+        nav_fields = {"pinned", "unread", "section_id"}
+        if nav_fields.intersection(updates) and "navigation_revision" not in updates:
+            raise HTTPException(
+                status_code=422,
+                detail={"code": "navigation_revision_required"},
+            )
         return _public_thread(
             request.app.state.storage.update_thread(
                 thread_id,
@@ -278,6 +319,16 @@ def update_thread(
         )
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
+    except ChatNavigationRevisionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "navigation_revision_conflict"},
+        ) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "chat_section_not_found"},
+        ) from exc
     except WorkspaceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="workspace path not found") from exc
     except WorkspaceBoundaryError as exc:
@@ -326,6 +377,79 @@ def restore_thread(
         raise HTTPException(status_code=404, detail="workspace path not found") from exc
     except WorkspaceBoundaryError as exc:
         raise HTTPException(status_code=400, detail="invalid workspace path") from exc
+
+
+@router.post("/threads/{thread_id}/fork", response_model=PublicThreadRecord)
+def fork_thread(
+    thread_id: str,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> PublicThreadRecord:
+    require_bridge_token(
+        authorization=authorization,
+        request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    if "chat_operations_v1" not in request.app.state.feature_capabilities:
+        raise HTTPException(status_code=409, detail={"code": "chat_operations_unavailable"})
+    fork = getattr(request.app.state.runner, "fork_thread", None)
+    if not callable(fork):
+        raise HTTPException(status_code=503, detail={"code": "runtime_unavailable"})
+    try:
+        return _public_thread(fork(thread_id))
+    except (DurableMutationPendingError, RuntimeThreadOperationUnknownError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "runtime_thread_operation_unknown"},
+        ) from exc
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+    except ProjectMutationError as exc:
+        raise HTTPException(status_code=409, detail={"code": "runtime_thread_operation_conflict"}) from exc
+
+
+@router.post("/threads/{thread_id}/move-project", response_model=PublicThreadRecord)
+def move_thread_project(
+    thread_id: str,
+    payload: MoveThreadProjectRequest,
+    request: Request,
+    authorization: str | None = Header(default=None),
+) -> PublicThreadRecord:
+    require_bridge_token(
+        authorization=authorization,
+        request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    if "chat_operations_v1" not in request.app.state.feature_capabilities:
+        raise HTTPException(status_code=409, detail={"code": "chat_operations_unavailable"})
+    move = getattr(request.app.state.runner, "move_thread_project", None)
+    if not callable(move):
+        raise HTTPException(status_code=503, detail={"code": "runtime_unavailable"})
+    try:
+        with request.app.state.automations.protect_thread_move(thread_id):
+            return _public_thread(
+                move(
+                    thread_id,
+                    payload.project_id,
+                    payload.navigation_revision,
+                    tuple(payload.workspace_artifact_ids),
+                )
+            )
+    except ThreadNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="thread not found") from exc
+    except AutomationConflictError as exc:
+        raise HTTPException(status_code=409, detail={"code": "thread_has_scheduled_automation"}) from exc
+    except (DurableMutationPendingError, RuntimeThreadOperationUnknownError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "runtime_thread_operation_unknown"},
+        ) from exc
+    except ProjectNotFoundError as exc:
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found"}
+        ) from exc
+    except ProjectMutationError as exc:
+        raise HTTPException(status_code=409, detail={"code": "runtime_thread_operation_conflict"}) from exc
 
 
 @router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -14,6 +14,7 @@ import os
 import re
 import tempfile
 from collections.abc import Callable, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from math import ceil, floor
 from pathlib import Path
@@ -254,6 +255,20 @@ class AutomationStore:
                     key=lambda item: (item["name"].lower(), item["automation_id"]),
                 )
             ]
+
+    @contextmanager
+    def protect_thread_move(self, thread_id: str):
+        """Hold schedule mutations out while a chat workspace is re-bound."""
+        with self._lock:
+            if any(
+                record.get("target", {}).get("kind") == "continue_thread"
+                and record.get("target", {}).get("thread_id") == thread_id
+                for record in self._state["automations"].values()
+            ):
+                raise AutomationConflictError(
+                    "Retarget or remove schedules before moving this chat."
+                )
+            yield
 
     def preview_schedule(
         self, schedule: Mapping[str, Any], *, now: datetime | None = None, count: int = 3

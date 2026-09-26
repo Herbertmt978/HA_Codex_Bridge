@@ -42,6 +42,9 @@ _FEATURE_ERROR_MESSAGES = {
     "capabilities_conflict": "Codex is busy; try this change after the current run finishes",
     "capabilities_invalid": "The capability settings are invalid",
     "capabilities_unavailable": "Codex capabilities are temporarily unavailable",
+    "runtime_thread_operation_conflict": "This chat or destination changed; refresh and try again",
+    "runtime_thread_operation_unknown": "Codex could not confirm the chat operation. Refresh before retrying",
+    "thread_has_scheduled_automation": "Retarget or remove scheduled runs before moving this chat",
     "agents_unavailable": "The selected AGENTS.md file is unavailable",
     "mcp_config_conflict": "Codex is busy or the MCP configuration changed",
     "mcp_restart_required": "MCP configuration could not be restored. Restart the Codex Bridge App before continuing",
@@ -88,12 +91,18 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_browse_paths,
         ws_create_folder,
         ws_list_threads,
+        ws_list_chat_sections,
+        ws_create_chat_section,
+        ws_update_chat_section,
+        ws_delete_chat_section,
         ws_get_thread,
         ws_create_thread,
         ws_update_thread,
         ws_archive_thread,
         ws_restore_thread,
         ws_delete_thread,
+        ws_fork_thread,
+        ws_move_thread_project,
         ws_send_prompt,
         ws_cancel_run,
         ws_get_events,
@@ -667,6 +676,10 @@ async def ws_create_thread(
         vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
         vol.Optional("model_override"): vol.Any(None, str),
         vol.Optional("thinking_override"): vol.Any(None, str),
+        vol.Optional("pinned"): bool,
+        vol.Optional("unread"): bool,
+        vol.Optional("section_id"): vol.Any(None, vol.All(str, vol.Length(min=1, max=128))),
+        vol.Optional("navigation_revision"): vol.All(int, vol.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -677,7 +690,7 @@ async def ws_update_thread(
 ) -> None:
     updates = {
         key: msg[key]
-        for key in ("title", "mode", "model_override", "thinking_override", "host_access_grant")
+        for key in ("title", "mode", "model_override", "thinking_override", "host_access_grant", "pinned", "unread", "section_id", "navigation_revision")
         if key in msg
     }
     await _async_handle(
@@ -686,6 +699,30 @@ async def ws_update_thread(
         msg,
         lambda client: client.async_update_thread(msg["thread_id"], updates),
     )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_chat_sections"})
+@websocket_api.async_response
+async def ws_list_chat_sections(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_list_chat_sections())
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/create_chat_section", vol.Required("name"): vol.All(str, vol.Length(min=1, max=320))})
+@websocket_api.async_response
+async def ws_create_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_create_chat_section(msg["name"]))
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/update_chat_section", vol.Required("section_id"): vol.All(str, vol.Length(min=1, max=128)), vol.Required("name"): vol.All(str, vol.Length(min=1, max=320)), vol.Required("revision"): vol.All(int, vol.Range(min=1))})
+@websocket_api.async_response
+async def ws_update_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_update_chat_section(msg["section_id"], msg["name"], msg["revision"]))
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/delete_chat_section", vol.Required("section_id"): vol.All(str, vol.Length(min=1, max=128)), vol.Required("revision"): vol.All(int, vol.Range(min=1))})
+@websocket_api.async_response
+async def ws_delete_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    await _async_handle(hass, connection, msg, lambda client: client.async_delete_chat_section(msg["section_id"], msg["revision"]))
 
 
 @websocket_api.websocket_command(
@@ -745,6 +782,47 @@ async def ws_delete_thread(
         connection,
         msg,
         lambda client: client.async_delete_thread(msg["thread_id"]),
+    )
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/fork_thread", vol.Required("thread_id"): str})
+@websocket_api.async_response
+async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_fork_thread(msg["thread_id"]),
+        safe_error_messages={
+            "not_found": "The requested chat or project no longer exists"
+        },
+    )
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/move_thread_project",
+    vol.Required("thread_id"): str,
+    vol.Required("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("navigation_revision"): vol.All(int, vol.Range(min=1)),
+    vol.Optional("workspace_artifact_ids", default=[]): vol.All(
+        [vol.All(str, vol.Length(min=1, max=128))], vol.Length(max=100)
+    ),
+})
+@websocket_api.async_response
+async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    await _async_handle(
+        hass,
+        connection,
+        msg,
+        lambda client: client.async_move_thread_project(
+            msg["thread_id"],
+            msg["project_id"],
+            msg["navigation_revision"],
+            msg["workspace_artifact_ids"],
+        ),
+        safe_error_messages={
+            "not_found": "The requested chat or project no longer exists"
+        },
     )
 
 

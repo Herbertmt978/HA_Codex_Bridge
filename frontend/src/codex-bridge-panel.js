@@ -16,6 +16,7 @@ import {
   visiblePdfPageCount,
 } from "./pdf-preview.js";
 import { getRunActivityViewModel, getSafeRunFailureMessage } from "./run-activity.js";
+import { projectConversationTurns } from "./conversation-timeline.js";
 import {
   PDF_MIME_TYPE,
   createPreviewElement,
@@ -37,8 +38,9 @@ import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, cre
 import { readMcpCredential, clearMcpSecrets, validStdioPackage } from "./mcp-setup.js";
 import { proposeAutomationEditDescription, proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
+import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.8.6";
+const PANEL_VERSION = "1.8.7";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
 const SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -1245,10 +1247,7 @@ template.innerHTML = `
     .thread-controls > .icon-button { width: 32px; height: 32px; border: 0; background: transparent; border-radius: 8px; }
     .thread-controls > button:hover, .thread-controls > button[aria-pressed="true"] { background: var(--surface-muted); }
     .thread-share { display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border: 0; background: var(--surface-muted); font-size: var(--font-control-size); }
-    .thread-menu { position: absolute; top: 38px; right: 0; z-index: 8; display: grid; min-width: 200px; padding: 6px; background: var(--surface-bg); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 8px 24px #0002; }
-    .thread-menu[hidden], .bottom-panel[hidden] { display: none; }
-    .thread-menu button { text-align: left; border: 0; background: transparent; padding: 9px; font-weight: 400; }
-    .thread-menu button:hover { background: var(--surface-muted); }
+    .bottom-panel[hidden] { display: none; }
     .resource-row { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 36px; padding: 6px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-color); font-size: var(--font-body-size); font-weight: 400; text-align: left; text-decoration: none; }
     .resource-row:hover { background: var(--surface-muted); }
     .resource-row svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -3724,11 +3723,226 @@ template.innerHTML = `
     .status-banner,
     .error-strip,
     .interaction-region,
-    .message-list,
     .run-activity-region {
       width: min(calc(100% - 32px), var(--conversation-width));
       margin-inline: auto;
     }
+
+    .conversation-layout {
+      display: grid;
+      grid-template-columns: 0 minmax(0, 1fr);
+      align-items: start;
+      gap: 0;
+      width: min(calc(100% - 32px), var(--conversation-width));
+      margin-inline: auto;
+      flex: 0 0 auto;
+    }
+
+    .conversation-layout > .message-list { grid-column: 2; }
+
+    #conversation-timeline[hidden] { display: none; }
+    #conversation-timeline {
+      position: sticky;
+      top: 12px;
+      z-index: 4;
+      width: 24px;
+      transform: translateX(-28px);
+      height: min(380px, calc(100dvh - 220px));
+      min-height: 120px;
+      margin-top: 20px;
+      overflow: visible;
+    }
+
+    .timeline-track {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+      height: 100%;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding-block: 6px;
+      scrollbar-width: thin;
+    }
+
+    .timeline-item {
+      display: flex;
+      flex: 0 0 24px;
+      width: 24px;
+      height: 24px;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-color);
+      cursor: pointer;
+    }
+
+    .timeline-item:focus-visible {
+      outline: 2px solid var(--focus-ring-color);
+      outline-offset: 2px;
+      box-shadow: 0 0 0 2px var(--focus-ring-contrast);
+    }
+
+    .timeline-marker {
+      display: block;
+      width: 4px;
+      height: 2px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--muted-color) 35%, transparent);
+      transition: width 140ms ease, background-color 140ms ease;
+    }
+
+    .timeline-item:hover .timeline-marker,
+    .timeline-item:focus-visible .timeline-marker,
+    .timeline-item[aria-current="location"] .timeline-marker {
+      width: 16px;
+      background: var(--text-color);
+    }
+
+    .timeline-mobile-label { display: none; }
+
+    .timeline-preview {
+      position: absolute;
+      top: var(--timeline-preview-position, 50%);
+      left: calc(100% + 8px);
+      z-index: 5;
+      display: grid;
+      width: min(300px, calc(100vw - 48px));
+      gap: 5px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      text-align: left;
+      box-shadow: 0 8px 28px color-mix(in srgb, var(--text-color) 18%, transparent);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translate(4px, -50%);
+      transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+    }
+
+    .timeline-preview-title { font-size: var(--font-caption-size); font-weight: 600; }
+    .timeline-preview-copy {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--muted-color);
+      font-size: var(--font-caption-size);
+      line-height: 1.4;
+      white-space: normal;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    #conversation-timeline:has(.timeline-item:hover) .timeline-preview-desktop,
+    #conversation-timeline:has(.timeline-item:focus-visible) .timeline-preview-desktop {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(0, -50%);
+    }
+
+    .timeline-preview-inline { display: none; }
+    .timeline-track.is-scrollable { justify-content: flex-start; }
+    .timeline-disclosure { display: none; }
+    .timeline-disclosure[hidden] { display: none; }
+    .timeline-track[hidden],
+    .timeline-preview-inline[hidden],
+    .timeline-preview-desktop[hidden] { display: none; }
+
+
+    .conversation-layout.timeline-compact {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: min(calc(100% - 32px), var(--conversation-width));
+    }
+
+    .timeline-compact #conversation-timeline {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      width: 100%;
+      transform: none;
+      height: auto;
+      min-height: 0;
+      margin: 0;
+      padding: 4px 0;
+      background: var(--canvas-bg);
+    }
+
+    .timeline-compact .timeline-disclosure {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      color: var(--text-color);
+      text-align: left;
+    }
+
+    .timeline-compact .timeline-disclosure:focus-visible {
+      outline: 2px solid var(--focus-ring-color);
+      outline-offset: 2px;
+    }
+
+    .timeline-compact #conversation-timeline:not(.is-open) .timeline-track { display: none; }
+    .timeline-compact .timeline-preview-desktop { display: none; }
+
+    .timeline-compact .timeline-track {
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+      width: 100%;
+      height: auto;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      overscroll-behavior-inline: contain;
+      padding: 2px 2px 6px;
+      scroll-snap-type: x proximity;
+    }
+
+    .timeline-compact .timeline-item {
+      flex: 0 0 auto;
+      width: auto;
+      min-width: 44px;
+      height: 44px;
+      padding: 0 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+      scroll-snap-align: start;
+    }
+
+    .timeline-compact .timeline-item[aria-current="location"] {
+      border-color: color-mix(in srgb, var(--accent-color) 68%, var(--border-color) 32%);
+      background: var(--accent-soft);
+    }
+
+    .timeline-compact .timeline-marker,
+    .timeline-compact .timeline-preview { display: none; }
+    .timeline-compact .timeline-mobile-label { display: block; font-size: var(--font-caption-size); white-space: nowrap; }
+
+    .timeline-compact .timeline-preview-inline:not([hidden]) {
+      display: grid;
+      gap: 5px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      background: var(--surface-bg);
+    }
+
+    .timeline-compact .message-list { padding-top: 12px; }
+
 
     .status-banner.visible,
     .error-strip.visible {
@@ -3815,6 +4029,9 @@ template.innerHTML = `
     }
 
     .message-list {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
       padding: 20px 0 8px;
       gap: 18px;
       flex: 0 0 auto;
@@ -5600,12 +5817,11 @@ template.innerHTML = `
         </div>
         <div class="row-actions thread-controls">
           <div class="status-text" id="thread-status-text"></div>
-          <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="thread-menu" id="chat-menu-button"></button>
+          <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="chat-context-menu" id="chat-menu-button"></button>
           <button class="thread-share" type="button" data-action="share-chat" title="Copy chat link · Home Assistant sign-in required" aria-label="Copy chat link · Home Assistant sign-in required" id="share-chat-button"></button>
           <button class="icon-button" type="button" data-action="toggle-activity" title="Show activity" aria-label="Show activity" aria-pressed="false" id="toggle-activity-button"></button>
           <button class="icon-button" type="button" data-action="toggle-bottom-panel" title="Toggle bottom panel" aria-label="Toggle bottom panel" aria-controls="bottom-panel" aria-expanded="false" id="toggle-bottom-button"></button>
           <button class="icon-button" type="button" data-action="toggle-context" title="Toggle side panel" aria-label="Toggle side panel" aria-controls="context-drawer" aria-expanded="true" id="toggle-context-button"></button>
-          <div class="thread-menu" id="thread-menu" hidden></div>
           <span id="share-status" class="sr-only" role="status"></span>
         </div>
       </div>
@@ -5622,7 +5838,15 @@ template.innerHTML = `
             <div id="onboarding"></div>
           </section>
         </div>
-        <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div class="conversation-layout" id="conversation-layout">
+          <nav id="conversation-timeline" aria-label="Conversation turns" hidden>
+            <button class="timeline-disclosure" id="conversation-timeline-toggle" type="button" data-action="toggle-conversation-timeline" aria-expanded="false" aria-controls="conversation-timeline-track" hidden>Jump to message</button>
+            <div class="timeline-track" id="conversation-timeline-track" role="group" aria-label="Conversation turns" hidden></div>
+            <div class="timeline-preview-inline" id="conversation-timeline-preview" hidden></div>
+            <div class="timeline-preview timeline-preview-desktop" id="conversation-timeline-desktop-preview" aria-hidden="true" hidden></div>
+          </nav>
+          <div class="message-list" id="message-list" role="log" aria-live="polite" aria-relevant="additions"></div>
+        </div>
         <section class="run-activity-region" id="run-activity" role="status" aria-live="polite" aria-atomic="true" aria-label="Codex run activity" hidden></section>
         <section class="interaction-region" id="interaction-region" aria-label="Codex decisions" aria-live="polite" aria-relevant="additions removals"></section>
       </div>
@@ -5766,6 +5990,8 @@ const icons = {
   stop: iconSvg('<rect x="6" y="6" width="12" height="12" rx="2"></rect>'),
   download: iconSvg('<path d="M12 4v12"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path>'),
   folder: iconSvg('<path d="M3 7h6l2 2h10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"></path><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2"></path>'),
+  pin: iconSvg('<path d="m9 3 6 0-1 6 4 4v2H6v-2l4-4Z"></path><path d="M12 15v6"></path>'),
+  eye: iconSvg('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle>'),
   edit: iconSvg('<path d="M12 20h9"></path><path d="m16.5 3.5 4 4L8 20H4v-4Z"></path>'),
   chat: iconSvg('<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"></path>'),
   copy: iconSvg('<rect x="9" y="9" width="10" height="10" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>'),
@@ -5801,6 +6027,10 @@ class CodexBridgePanel extends HTMLElement {
     const terminalStyle = document.createElement("style");
     terminalStyle.textContent = terminalCss;
     this.shadowRoot.append(terminalStyle);
+    const chatMenuStyle = document.createElement("style");
+    chatMenuStyle.textContent = chatMenuCss;
+    this.shadowRoot.append(chatMenuStyle);
+    this._chatContextMenu = new ChatContextMenu(this, icons);
     this._terminal = new WorkspaceTerminalView(
       this.shadowRoot.getElementById("terminal-host"),
       (operation, payload) => this._callWS("terminal", { operation, ...payload }),
@@ -5823,7 +6053,6 @@ class CodexBridgePanel extends HTMLElement {
     this._selectedProjectId = null;
     this._selectedThreadId = null;
     this._sharedThreadChecked = false;
-    this._chatMenuOpen = false;
     this._contextVisible = true;
     this._bottomPanelOpen = false;
     this._activityView = false;
@@ -5837,6 +6066,11 @@ class CodexBridgePanel extends HTMLElement {
     this._speechLastFinalResult = -1;
     this._speechAvailable = true;
     this._events = [];
+    this._conversationTurns = [];
+    this._timelineSelectedSequence = null;
+    this._timelineTabStopSequence = null;
+    this._timelineMobileOpen = false;
+    this._timelinePreviewSequence = null;
     this._artifacts = [];
     this._artifactRefreshState = { status: "idle", message: "" };
     this._artifactRefreshRetryTimer = null;
@@ -5950,7 +6184,6 @@ class CodexBridgePanel extends HTMLElement {
     this._queuedRender = false;
     this._collapsedProjects = {};
     this._expandedProjectActions = {};
-    this._expandedThreadActions = {};
     this._collapsedSections = {
       direct: false,
       archived: true,
@@ -5963,6 +6196,9 @@ class CodexBridgePanel extends HTMLElement {
     this._contextDrawerMedia = null;
     this._contextDrawerMediaListener = null;
     this._contextDrawerMediaListening = false;
+    this._timelineCompactMedia = null;
+    this._timelineCompactMediaListener = null;
+    this._timelineCompactMediaListening = false;
     this._sideTab = "activity";
     this._pendingDeletion = null;
     this._deletionReturnFocus = null;
@@ -5992,6 +6228,7 @@ class CodexBridgePanel extends HTMLElement {
 
   connectedCallback() {
     this._installStaticUi();
+    this._chatContextMenu.connect();
     this._applyPreferences();
     document.addEventListener("fullscreenchange", this._fullscreenChangeListener);
     window.addEventListener("resize", this._viewportResizeListener);
@@ -6005,6 +6242,10 @@ class CodexBridgePanel extends HTMLElement {
       this._contextDrawerMedia.addEventListener("change", this._contextDrawerMediaListener);
       this._contextDrawerMediaListening = true;
     }
+    if (this._timelineCompactMedia && this._timelineCompactMediaListener && !this._timelineCompactMediaListening) {
+      this._timelineCompactMedia.addEventListener("change", this._timelineCompactMediaListener);
+      this._timelineCompactMediaListening = true;
+    }
     if (this._config && this._hass) {
       this._startSystemEventSubscription();
     }
@@ -6016,6 +6257,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._chatContextMenu.disconnect();
     this._stopDictation({ abort: true });
     void this._terminal.close();
     document.removeEventListener("fullscreenchange", this._fullscreenChangeListener);
@@ -6038,6 +6280,8 @@ class CodexBridgePanel extends HTMLElement {
     this._mobileDrawerMediaListening = false;
     this._contextDrawerMedia?.removeEventListener("change", this._contextDrawerMediaListener);
     this._contextDrawerMediaListening = false;
+    this._timelineCompactMedia?.removeEventListener("change", this._timelineCompactMediaListener);
+    this._timelineCompactMediaListening = false;
   }
 
   _syncViewportHeight() {
@@ -6048,6 +6292,11 @@ class CodexBridgePanel extends HTMLElement {
       : window.innerHeight;
     this.style.height = `${Math.max(0, Math.round(viewportBottom - top))}px`;
     if (this._addMenuOpen) this._syncAddMenuHeight();
+    if (this.shadowRoot?.getElementById("conversation-timeline")
+      && this._timelineCompactLayout !== this._isConversationTimelineCompact()) {
+      this._timelineMobileOpen = false;
+      this._renderConversationTimeline();
+    }
   }
 
   _syncAddMenuHeight() {
@@ -6189,6 +6438,12 @@ class CodexBridgePanel extends HTMLElement {
       this._setTooltipTarget(control, control.getAttribute("aria-label") || control.getAttribute("title") || "");
     }
 
+    this.shadowRoot.addEventListener("contextmenu", (event) => {
+      const row = event.target instanceof Element ? event.target.closest(".chat-row[data-chat-thread-id]") : null;
+      if (!row) return;
+      event.preventDefault();
+      void this._chatContextMenu.show(row.dataset.chatThreadId, row.querySelector(".thread-actions-toggle"), event.clientX || event.clientY ? { x: event.clientX, y: event.clientY } : null);
+    });
     this.shadowRoot.addEventListener("click", (event) => this._handleClick(event));
     this.shadowRoot.addEventListener("input", (event) => this._handleInput(event));
     this.shadowRoot.addEventListener("change", (event) => this._handleChange(event));
@@ -6197,6 +6452,7 @@ class CodexBridgePanel extends HTMLElement {
     this.shadowRoot.addEventListener("focusin", (event) => this._handleFocusIn(event));
     this.shadowRoot.addEventListener("focusout", (event) => this._handleFocusOut(event));
     this.shadowRoot.addEventListener("mouseover", (event) => this._handleTooltipPointerOver(event));
+    this.shadowRoot.addEventListener("mouseover", (event) => this._handleTimelinePointerOver(event));
     this.shadowRoot.addEventListener("mouseout", (event) => this._handleTooltipPointerOut(event));
 
     this._mobileDrawerMedia = typeof window.matchMedia === "function"
@@ -6223,6 +6479,15 @@ class CodexBridgePanel extends HTMLElement {
     this._contextDrawerMediaListener = () => this._syncMobileDrawer();
     this._contextDrawerMedia.addEventListener("change", this._contextDrawerMediaListener);
     this._contextDrawerMediaListening = true;
+    this._timelineCompactMedia = typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 880px), (pointer: coarse)")
+      : { matches: false, addEventListener() {}, removeEventListener() {} };
+    this._timelineCompactMediaListener = () => {
+      this._timelineMobileOpen = false;
+      this._renderConversationTimeline();
+    };
+    this._timelineCompactMedia.addEventListener("change", this._timelineCompactMediaListener);
+    this._timelineCompactMediaListening = true;
     this._syncMobileDrawer();
     this._syncComposerDiagnostics();
 
@@ -6359,10 +6624,6 @@ class CodexBridgePanel extends HTMLElement {
     if (this._addMenuOpen && !eventTarget?.closest("#add-menu, #add-menu-button")) {
       this._setAddMenuOpen(false);
     }
-    if (this._chatMenuOpen && !eventTarget?.closest("#thread-menu, #chat-menu-button")) {
-      this._chatMenuOpen = false;
-      this._renderChatControls();
-    }
     if (
       this._appMenuOpen
       && !eventTarget?.closest("#app-menu, #app-menu-toggle")
@@ -6384,10 +6645,6 @@ class CodexBridgePanel extends HTMLElement {
     if (actionTarget.closest("#add-menu")) {
       this._setAddMenuOpen(false, { restoreFocus: action === "upload-file" || action === "upload-folder" });
     }
-    if (actionTarget.closest("#thread-menu")) {
-      this._chatMenuOpen = false;
-      this._renderChatControls();
-    }
     if (
       actionTarget.closest(".rail-pane")
       && !["toggle-project-actions", "toggle-thread-actions"].includes(action)
@@ -6395,6 +6652,12 @@ class CodexBridgePanel extends HTMLElement {
       this._closeRailMenus();
     }
     switch (action) {
+      case "jump-to-conversation-turn":
+        this._jumpToConversationTurn(actionTarget);
+        break;
+      case "toggle-conversation-timeline":
+        this._setConversationTimelineOpen(!this._timelineMobileOpen);
+        break;
       case "toggle-add-menu":
         this._setAddMenuOpen(!this._addMenuOpen);
         break;
@@ -6403,9 +6666,7 @@ class CodexBridgePanel extends HTMLElement {
         this.shadowRoot.getElementById("desktop-feature-surface")?.focus();
         break;
       case "toggle-chat-menu":
-        this._chatMenuOpen = !this._chatMenuOpen;
-        this._renderChatControls();
-        if (this._chatMenuOpen) this.shadowRoot.querySelector("#thread-menu button")?.focus();
+        void this._chatContextMenu.show(this._selectedThreadId, actionTarget, null, { header: true });
         break;
       case "share-chat": void this._shareChat(); break;
       case "toggle-context":
@@ -6490,12 +6751,12 @@ class CodexBridgePanel extends HTMLElement {
         this._openProjectFormForCreate();
         break;
       case "refresh-thread":
-        this._chatMenuOpen = false;
+        this._chatContextMenu.close();
         this._renderChatControls();
         this._refreshActiveThread();
         break;
       case "edit-current-chat":
-        this._chatMenuOpen = false;
+        this._chatContextMenu.close();
         this._renderChatControls();
         this._openThreadFormForEdit(this._selectedThreadId);
         break;
@@ -6545,7 +6806,7 @@ class CodexBridgePanel extends HTMLElement {
         this._toggleProjectActions(actionTarget.dataset.projectId || "");
         break;
       case "toggle-thread-actions":
-        this._toggleThreadActions(actionTarget.dataset.threadId || "");
+        void this._chatContextMenu.show(actionTarget.dataset.threadId || "", actionTarget);
         break;
       case "select-project":
         this._closeMobileDrawer({ restoreFocus: false });
@@ -6727,7 +6988,6 @@ class CodexBridgePanel extends HTMLElement {
     if (target.id === "search-input") {
       this._searchQuery = target.value;
       this._expandedProjectActions = {};
-      this._expandedThreadActions = {};
       this._render();
       return;
     }
@@ -6883,6 +7143,25 @@ class CodexBridgePanel extends HTMLElement {
     if (!(target instanceof HTMLElement)) {
       return;
     }
+    if (this._chatContextMenu.handleKey(event)) return;
+    if (event.key === "Escape" && this._timelineMobileOpen && target.closest("#conversation-timeline")) {
+      event.preventDefault();
+      this._setConversationTimelineOpen(false, { restoreFocus: true });
+      return;
+    }
+    if (target.matches(".timeline-item") && target.closest("#conversation-timeline")) {
+      const items = [...this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")];
+      const currentIndex = items.indexOf(target);
+      if (items.length && ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) {
+        const forward = ["ArrowDown", "ArrowRight"].includes(event.key);
+        const nextIndex = event.key === "Home" ? 0
+          : event.key === "End" ? items.length - 1
+            : (currentIndex + (forward ? 1 : -1) + items.length) % items.length;
+        event.preventDefault();
+        this._focusTimelineItem(items[nextIndex]);
+      }
+      return;
+    }
     if (this._hostAccessDialog) {
       if (event.key === "Escape") { event.preventDefault(); this._closeHostAccess(); }
       else if (event.key === "Tab") this._trapDeletionFocus(event, "host-access-dialog");
@@ -6986,13 +7265,6 @@ class CodexBridgePanel extends HTMLElement {
       this._setAddMenuOpen(false, { restoreFocus: true });
       return;
     }
-    if (event.key === "Escape" && this._chatMenuOpen) {
-      event.preventDefault();
-      this._chatMenuOpen = false;
-      this._renderChatControls();
-      this.shadowRoot.getElementById("chat-menu-button")?.focus();
-      return;
-    }
     if (event.key === "Escape" && this._hasOpenRailMenu()) {
       event.preventDefault();
       this._closeRailMenus({ restoreFocus: true });
@@ -7046,8 +7318,16 @@ class CodexBridgePanel extends HTMLElement {
 
   _handleFocusIn(event) {
     const target = event.target;
-    this._showTooltipForTarget(target);
+    const timelineItem = target instanceof HTMLElement && target.matches(".timeline-item");
+    if (!timelineItem) this._showTooltipForTarget(target);
     this._scrollInteractionTargetIntoView(target);
+    if (timelineItem) {
+      this._timelinePreviewSequence = target.dataset.sequence;
+      this._timelineTabStopSequence = Number(target.dataset.sequence);
+      this._updateTimelineTabStops();
+      this._renderTimelineDesktopPreview(target.dataset.sequence);
+      this._renderTimelineMobilePreview(target.dataset.sequence);
+    }
     if (!this._isRefreshLockTarget(target)) {
       return;
     }
@@ -7958,7 +8238,13 @@ class CodexBridgePanel extends HTMLElement {
       finally { state.loading = false; }
     }
     else if (action === "list-automation-runs") {
-      try { state.data.runs = normalizeDesktopList(await this._callWS("list_automation_runs", { automation_id: dataset.id })); state.notice = `${state.data.runs.length} run${state.data.runs.length === 1 ? "" : "s"} loaded.`; } catch (error) { state.error = normalizeDesktopError(error); }
+      try {
+        state.data.runs = normalizeDesktopList(await this._callWS("list_automation_runs", { automation_id: dataset.id }));
+        // Reading history also refreshes the definition changed by HA's scheduler.
+        // The existing destination refresh preserves an open form and its draft.
+        await this._loadDesktopDestination("scheduled", { force: true });
+        state.notice = `${state.data.runs.length} run${state.data.runs.length === 1 ? "" : "s"} loaded.`;
+      } catch (error) { state.error = normalizeDesktopError(error); }
     }
     else if (action === "delete-automation") await this._desktopMutation("delete_automation", { automation_id: dataset.id, expected_revision: Number(dataset.revision) }, state);
     else if (action === "toggle-skill") await this._desktopMutation("set_skill", { ...this._desktopWorkspace(), name: dataset.id, enabled: dataset.enabled !== "false" }, state);
@@ -8384,7 +8670,7 @@ class CodexBridgePanel extends HTMLElement {
     const pending = this._pendingDeletion;
     if (!pending) {
       layer.hidden = true;
-      if (shell && !this._hostAccessDialog) {
+      if (shell && !this._hostAccessDialog && this._chatContextMenu.dialog.hidden) {
         shell.inert = false;
         shell.removeAttribute("aria-hidden");
       }
@@ -9530,7 +9816,6 @@ class CodexBridgePanel extends HTMLElement {
       this._searchQuery,
       this._collapsedProjects,
       this._expandedProjectActions,
-      this._expandedThreadActions,
       this._collapsedSections,
       this._selectedProjectId,
       this._selectedThreadId,
@@ -9543,6 +9828,7 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     this._renderedNavigationKey = key;
+    this._chatContextMenu.renderNavigation();
     this._renderDirectSection();
     this._renderProjectList();
     this._renderArchivedSection();
@@ -9824,13 +10110,14 @@ class CodexBridgePanel extends HTMLElement {
     const timestamp = this._timeAgo(thread.updated_at || thread.created_at);
     const statusLabel = this._threadStatusLabel(thread, activity) || "Ready";
     const selected = thread.thread_id === this._selectedThreadId;
-    const expanded = Boolean(this._expandedThreadActions[thread.thread_id]);
+    const expanded = !this._chatContextMenu.menu.hidden && this._chatContextMenu.threadId === thread.thread_id;
     const row = document.createElement("div");
-    row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}${expanded ? " actions-open" : ""}`;
+    row.className = `chat-row${selected ? " selected" : ""}${archived ? " archived" : ""}${thread.unread ? " unread" : ""}${expanded ? " actions-open" : ""}`;
+    row.dataset.chatThreadId = String(thread.thread_id || "");
     const select = this._actionButton(
       `chat-select${selected ? " active" : ""}`,
       "select-thread",
-      `Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
+      `${thread.unread ? "Unread, " : ""}Select chat ${thread.title || "Untitled chat"}, ${meta}, ${statusLabel.toLowerCase()}`
     );
     select.dataset.threadId = String(thread.thread_id || "");
     this._setTooltipTarget(select, `${thread.title || "Untitled chat"} · ${meta} · ${timestamp}`);
@@ -9843,7 +10130,7 @@ class CodexBridgePanel extends HTMLElement {
     select.append(this._textElement("span", "thread-name", thread.title || "Untitled chat"), status);
     const rowActions = document.createElement("div");
     rowActions.className = "row-actions";
-    const menuId = `thread-secondary-actions-${thread.thread_id}`;
+    const menuId = "chat-context-menu";
     const more = this._actionButton(
       "icon-button small thread-actions-toggle",
       "toggle-thread-actions",
@@ -9857,22 +10144,7 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(more, icons.more);
     rowActions.append(more);
 
-    const threadActions = document.createElement("div");
-    threadActions.id = menuId;
-    threadActions.className = "rail-action-menu thread-actions";
-    threadActions.setAttribute("aria-label", `Actions for ${thread.title || "chat"}`);
-    threadActions.hidden = !expanded;
-    const archiveAction = archived ? "restore-thread" : "archive-thread";
-    const archiveLabel = archived ? "Restore chat" : "Archive chat";
-    const archiveIcon = archived ? icons.restore : icons.archive;
-    const archiveButton = this._actionButton("rail-menu-item", archiveAction, archiveLabel);
-    archiveButton.dataset.threadId = String(thread.thread_id || "");
-    this._setTrustedButtonContent(archiveButton, archiveIcon, archiveLabel);
-    const deleteButton = this._actionButton("rail-menu-item", "delete-thread", "Delete chat");
-    deleteButton.dataset.threadId = String(thread.thread_id || "");
-    this._setTrustedButtonContent(deleteButton, icons.trash, "Delete chat");
-    threadActions.append(archiveButton, deleteButton);
-    row.append(select, rowActions, threadActions);
+    row.append(select, rowActions);
     return row;
   }
 
@@ -10527,6 +10799,7 @@ class CodexBridgePanel extends HTMLElement {
       this._renderedThreadId = null;
       this._renderedSequence = 0;
       messageList.replaceChildren(this._mainEmptyState());
+      this._renderConversationTimeline();
       return;
     }
 
@@ -10548,6 +10821,7 @@ class CodexBridgePanel extends HTMLElement {
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
       this._syncStreamingMessage(messageList, activity);
+      this._renderConversationTimeline();
       return;
     }
 
@@ -10566,10 +10840,206 @@ class CodexBridgePanel extends HTMLElement {
     }
 
     this._syncStreamingMessage(messageList, activity);
+    this._renderConversationTimeline();
 
     if (shouldStick) {
       this._scrollMessagesToBottom();
     }
+  }
+
+  _isConversationTimelineCompact() {
+    const availableWidth = this.shadowRoot?.getElementById("conversation-scroll")?.clientWidth || 0;
+    return Boolean(this._timelineCompactMedia?.matches || (availableWidth > 0 && availableWidth < 1016));
+  }
+
+  _renderConversationTimeline() {
+    const navigation = this.shadowRoot.getElementById("conversation-timeline");
+    const track = this.shadowRoot.getElementById("conversation-timeline-track");
+    if (!navigation || !track) return;
+
+    const turns = this._selectedThreadId ? projectConversationTurns(this._events) : [];
+    this._conversationTurns = turns;
+    navigation.hidden = turns.length === 0;
+    const compact = this._isConversationTimelineCompact();
+    this._timelineCompactLayout = compact;
+    navigation.closest(".conversation-layout")?.classList.toggle("timeline-compact", compact);
+    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
+    disclosure.hidden = !compact;
+    disclosure.setAttribute("aria-expanded", String(compact && this._timelineMobileOpen));
+    navigation.classList.toggle("is-open", this._timelineMobileOpen);
+    track.hidden = compact && !this._timelineMobileOpen;
+    const visibleCapacity = Math.max(1, Math.floor((Math.min(380, window.innerHeight - 220) - 12) / 24));
+    track.classList.toggle("is-scrollable", turns.length > visibleCapacity);
+    if (!turns.length) {
+      track.replaceChildren();
+      this._timelineSelectedSequence = null;
+      this._timelineTabStopSequence = null;
+      this._timelineMobileOpen = false;
+      this._timelinePreviewSequence = null;
+      navigation.classList.remove("is-open");
+      disclosure.setAttribute("aria-expanded", "false");
+      track.hidden = compact;
+      this._renderTimelineMobilePreview(null);
+      this._renderTimelineDesktopPreview(null);
+      return;
+    }
+
+    const keys = new Set(turns.map((turn) => turn.key));
+    if (!keys.has(String(this._timelineSelectedSequence))) {
+      this._timelineSelectedSequence = turns.at(-1).anchorSequence;
+    }
+    if (!keys.has(String(this._timelineTabStopSequence))) {
+      this._timelineTabStopSequence = this._timelineSelectedSequence;
+    }
+
+    const existing = new Map([...track.querySelectorAll(".timeline-item")].map((button) => [button.dataset.turnKey, button]));
+    turns.forEach((turn, index) => {
+      let button = existing.get(turn.key);
+      if (!button) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "timeline-item";
+        button.dataset.action = "jump-to-conversation-turn";
+        const marker = this._textElement("span", "timeline-marker", "");
+        marker.setAttribute("aria-hidden", "true");
+        const mobileLabel = this._textElement("span", "timeline-mobile-label", `Turn ${turn.index}`);
+        mobileLabel.setAttribute("aria-hidden", "true");
+        button.append(marker, mobileLabel);
+      }
+
+      const label = this._timelineTurnLabel(turn);
+      const signature = `${turn.index}|${turn.prompt}|${turn.response}|${turn.queued}|${turn.pending}|${turn.outcomeLabel}|${turn.anchorSequence}`;
+      if (button.dataset.renderSignature !== signature) {
+        button.setAttribute("aria-label", label);
+        button.dataset.renderSignature = signature;
+        button.dataset.turnKey = turn.key;
+        button.dataset.sequence = String(turn.anchorSequence);
+        button.querySelector(".timeline-mobile-label").textContent = `Turn ${turn.index}`;
+      }
+      button.toggleAttribute("aria-current", turn.anchorSequence === this._timelineSelectedSequence);
+      if (button.hasAttribute("aria-current")) button.setAttribute("aria-current", "location");
+      button.tabIndex = turn.anchorSequence === this._timelineTabStopSequence ? 0 : -1;
+      const atPosition = track.children[index];
+      if (atPosition !== button) track.insertBefore(button, atPosition || null);
+      existing.delete(turn.key);
+    });
+    for (const button of existing.values()) button.remove();
+
+    const activePreview = this._timelinePreviewSequence;
+    this._renderTimelineDesktopPreview(activePreview, turns);
+    this._renderTimelineMobilePreview(this._timelineMobileOpen ? String(this._timelineSelectedSequence) : null, turns);
+  }
+
+  _timelineTurnLabel(turn) {
+    if (typeof turn.label === "string") return turn.label.slice(0, 120);
+    const parts = [`Turn ${turn.index}`];
+    if (turn.prompt) parts.push(`You: ${turn.prompt}`);
+    if (turn.response) parts.push(`Codex: ${turn.response}`);
+    else if (turn.pending) parts.push("Codex response in progress");
+    if (turn.queued) parts.push("Queued");
+    return parts.join(". ");
+  }
+
+  _timelinePreviewChildren(turn) {
+    const children = [this._textElement("span", "timeline-preview-title", `Turn ${turn.index}${turn.queued ? " · Queued" : ""}`)];
+    if (turn.prompt) children.push(this._textElement("span", "timeline-preview-copy", `You: ${turn.prompt}`));
+    if (turn.response) children.push(this._textElement("span", "timeline-preview-copy", `Codex: ${turn.response}`));
+    else if (turn.pending) children.push(this._textElement("span", "timeline-preview-copy", "Codex response in progress"));
+    else if (turn.outcomeLabel) children.push(this._textElement("span", "timeline-preview-copy", turn.outcomeLabel));
+    return children;
+  }
+
+  _renderTimelineMobilePreview(sequence, turns = this._conversationTurns) {
+    const preview = this.shadowRoot.getElementById("conversation-timeline-preview");
+    if (!preview) return;
+    const turn = turns.find((item) => item.key === String(sequence));
+    preview.hidden = !turn;
+    if (!turn) {
+      preview.replaceChildren();
+      return;
+    }
+    preview.replaceChildren(...this._timelinePreviewChildren(turn));
+  }
+
+  _renderTimelineDesktopPreview(sequence, turns = this._conversationTurns) {
+    const preview = this.shadowRoot.getElementById("conversation-timeline-desktop-preview");
+    const navigation = this.shadowRoot.getElementById("conversation-timeline");
+    const button = [...this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")]
+      .find((item) => item.dataset.sequence === String(sequence ?? ""));
+    const turn = turns.find((item) => item.key === String(sequence));
+    if (!preview || !navigation || !button || !turn) {
+      if (preview) preview.hidden = true;
+      return;
+    }
+    preview.hidden = false;
+    preview.replaceChildren(...this._timelinePreviewChildren(turn));
+    const navRect = navigation.getBoundingClientRect();
+    const buttonRect = button.getBoundingClientRect();
+    const previewHeight = preview.getBoundingClientRect().height || 96;
+    const center = buttonRect.top - navRect.top + buttonRect.height / 2;
+    const y = Math.max(previewHeight / 2, Math.min(navRect.height - previewHeight / 2, center));
+    navigation.style.setProperty("--timeline-preview-position", `${y}px`);
+  }
+
+  _handleTimelinePointerOver(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest("#conversation-timeline .timeline-item");
+    if (!button || button.matches(":focus-visible")) return;
+    this._timelinePreviewSequence = button.dataset.sequence;
+    this._renderTimelineDesktopPreview(this._timelinePreviewSequence);
+  }
+
+  _setConversationTimelineOpen(open, { restoreFocus = false } = {}) {
+    this._timelineMobileOpen = open;
+    const navigation = this.shadowRoot.getElementById("conversation-timeline");
+    const disclosure = this.shadowRoot.getElementById("conversation-timeline-toggle");
+    const track = this.shadowRoot.getElementById("conversation-timeline-track");
+    navigation?.classList.toggle("is-open", open);
+    if (track) track.hidden = !open && this._isConversationTimelineCompact();
+    disclosure?.setAttribute("aria-expanded", String(open));
+    this._renderTimelineMobilePreview(open ? String(this._timelineSelectedSequence) : null);
+    if (!open) this._renderTimelineDesktopPreview(null);
+    if (restoreFocus) disclosure?.focus();
+  }
+
+  _updateTimelineTabStops() {
+    for (const button of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
+      button.tabIndex = Number(button.dataset.sequence) === this._timelineTabStopSequence ? 0 : -1;
+    }
+  }
+
+  _focusTimelineItem(button) {
+    if (!button) return;
+    this._timelineTabStopSequence = Number(button.dataset.sequence);
+    this._updateTimelineTabStops();
+    button.focus();
+  }
+
+  _jumpToConversationTurn(button) {
+    if (!(button instanceof HTMLElement)) return;
+    const sequence = Number(button.dataset.sequence);
+    if (!Number.isSafeInteger(sequence) || sequence <= 0) return;
+    const list = this.shadowRoot.getElementById("message-list");
+    const scroller = this.shadowRoot.getElementById("conversation-scroll");
+    const target = [...(list?.querySelectorAll("[data-sequence]") || [])]
+      .find((node) => Number(node.dataset.sequence) === sequence);
+    if (!target || !scroller) return;
+
+    this._timelineSelectedSequence = sequence;
+    this._timelineTabStopSequence = sequence;
+    this._updateTimelineTabStops();
+    for (const item of this.shadowRoot.querySelectorAll("#conversation-timeline .timeline-item")) {
+      if (Number(item.dataset.sequence) === sequence) item.setAttribute("aria-current", "location");
+      else item.removeAttribute("aria-current");
+    }
+    const compact = this._isConversationTimelineCompact();
+    if (compact) this._setConversationTimelineOpen(false, { restoreFocus: true });
+    else this._renderTimelineDesktopPreview(String(sequence));
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    scroller.scrollTop += targetRect.top - scrollerRect.top - scroller.clientTop - 16;
   }
 
   _syncStreamingMessage(messageList, activity) {
@@ -11936,22 +12406,8 @@ class CodexBridgePanel extends HTMLElement {
     root.getElementById("toggle-activity-button").setAttribute("aria-pressed", String(this._activityView && this._sideTab === "activity"));
     root.getElementById("share-chat-button").disabled = !this._selectedThreadId;
     root.getElementById("chat-menu-button").disabled = !this._selectedThreadId;
-    root.getElementById("chat-menu-button").setAttribute("aria-expanded", String(this._chatMenuOpen));
-    const menu = root.getElementById("thread-menu");
-    menu.hidden = !this._chatMenuOpen;
-    if (!this._chatMenuOpen) return;
-    const menuKey = `${this._selectedThreadId}:${this._activeThread?.archived_at || ""}`;
-    if (this._chatMenuKey === menuKey) return;
-    this._chatMenuKey = menuKey;
-    menu.replaceChildren();
-    for (const [action, label] of [["edit-current-chat", "Chat settings"], ["refresh-thread", "Refresh"], [this._activeThread?.archived_at ? "restore-thread" : "archive-thread", this._activeThread?.archived_at ? "Restore chat" : "Archive chat"], ["delete-thread", "Delete chat"]]) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.dataset.action = action;
-      button.textContent = label;
-      button.dataset.threadId = this._selectedThreadId;
-      menu.append(button);
-    }
+    root.getElementById("chat-menu-button").setAttribute("aria-controls", "chat-context-menu");
+    this._chatContextMenu.sync();
   }
 
   async _shareChat() {
@@ -12522,46 +12978,22 @@ class CodexBridgePanel extends HTMLElement {
     }
     const expanded = !this._expandedProjectActions[projectId];
     this._expandedProjectActions = expanded ? { [projectId]: true } : {};
-    this._expandedThreadActions = {};
     this._syncRailMenus();
     this.shadowRoot.getElementById(`project-actions-toggle-${projectId}`)?.focus();
   }
 
-  _toggleThreadActions(threadId) {
-    if (!threadId) {
-      return;
-    }
-    const expanded = !this._expandedThreadActions[threadId];
-    this._expandedThreadActions = expanded ? { [threadId]: true } : {};
-    this._expandedProjectActions = {};
-    this._syncRailMenus();
-    this.shadowRoot.getElementById(`thread-actions-toggle-${threadId}`)?.focus();
-  }
-
   _hasOpenRailMenu() {
-    return Object.values(this._expandedProjectActions).some(Boolean)
-      || Object.values(this._expandedThreadActions).some(Boolean);
+    return Object.values(this._expandedProjectActions).some(Boolean);
   }
 
   _closeRailMenus({ restoreFocus = false } = {}) {
     const projectId = Object.keys(this._expandedProjectActions).find(
       (candidate) => this._expandedProjectActions[candidate]
     );
-    const threadId = Object.keys(this._expandedThreadActions).find(
-      (candidate) => this._expandedThreadActions[candidate]
-    );
-    if (!projectId && !threadId) {
-      return;
-    }
+    if (!projectId) return;
     this._expandedProjectActions = {};
-    this._expandedThreadActions = {};
     this._syncRailMenus();
-    if (restoreFocus) {
-      const toggleId = projectId
-        ? `project-actions-toggle-${projectId}`
-        : `thread-actions-toggle-${threadId}`;
-      this.shadowRoot.getElementById(toggleId)?.focus();
-    }
+    if (restoreFocus) this.shadowRoot.getElementById(`project-actions-toggle-${projectId}`)?.focus();
   }
 
   _syncRailMenus() {
@@ -12572,16 +13004,6 @@ class CodexBridgePanel extends HTMLElement {
       toggle.setAttribute("aria-expanded", String(expanded));
       toggle.setAttribute("aria-label", label);
       this._setTooltipTarget(toggle, label);
-      this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
-    }
-    for (const toggle of this.shadowRoot.querySelectorAll('[data-action="toggle-thread-actions"]')) {
-      const expanded = Boolean(this._expandedThreadActions[toggle.dataset.threadId]);
-      const threadName = toggle.closest(".chat-row")?.querySelector(".thread-name")?.textContent || "chat";
-      const label = `${expanded ? "Hide" : "Show"} actions for ${threadName}`;
-      toggle.setAttribute("aria-expanded", String(expanded));
-      toggle.setAttribute("aria-label", label);
-      this._setTooltipTarget(toggle, label);
-      toggle.closest(".chat-row")?.classList.toggle("actions-open", expanded);
       this.shadowRoot.getElementById(toggle.getAttribute("aria-controls"))?.toggleAttribute("hidden", !expanded);
     }
   }
@@ -12614,6 +13036,8 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _selectThread(threadId) {
+    this._chatContextMenu.close();
+    void this._chatContextMenu.markOpened(threadId);
     if (!threadId) {
       return;
     }
@@ -12630,10 +13054,15 @@ class CodexBridgePanel extends HTMLElement {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
       if (nextThreadId !== this._selectedThreadId) {
+        this._timelineSelectedSequence = null;
+        this._timelineTabStopSequence = null;
+        this._timelineMobileOpen = false;
+        this._timelinePreviewSequence = null;
+        this._conversationTurns = [];
         this._stopDictation({ abort: true });
         if (this._threadForm.threadId) this._showThreadForm = false;
         void this._terminal.close();
-        this._chatMenuOpen = false;
+        this._chatContextMenu.close();
       }
       this._stopPolling();
       this._clearArtifactRefreshRetry();
@@ -14749,6 +15178,7 @@ class CodexBridgePanel extends HTMLElement {
       (thread) =>
         thread.project_kind === "direct" &&
         (includeArchived || !thread.archived_at) &&
+        (includeArchived || !this._chatContextMenu.isGrouped(thread)) &&
         this._threadMatchesQuery(thread)
     );
   }
@@ -14758,6 +15188,7 @@ class CodexBridgePanel extends HTMLElement {
       (thread) =>
         thread.project_id === projectId &&
         (includeArchived || !thread.archived_at) &&
+        (includeArchived || !this._chatContextMenu.isGrouped(thread)) &&
         this._threadMatchesQuery(thread)
     );
   }
@@ -15192,6 +15623,10 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _showTooltipForTarget(target) {
+    if (!this._chatContextMenu.menu.hidden || !this._chatContextMenu.dialog.hidden) {
+      this._hideTooltip();
+      return;
+    }
     // Touch browsers retain focus after a tap, which can strand this floating
     // label over the conversation. Controls still have accessible names.
     if (window.matchMedia?.("(hover: none)").matches) {
