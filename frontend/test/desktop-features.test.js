@@ -7,6 +7,31 @@ import { getNativeToolsViewModel, normalizeDesktopError, normalizeDesktopList, n
 describe("desktop feature surfaces", () => {
   beforeEach(() => document.body.replaceChildren());
 
+  it("renders safe run details and Home Assistant times with existing responsive table labels", () => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, { destination: "scheduled", timezone: "Europe/London", state: { data: { automations: [], runs: [
+      { status: "skipped_overlap", due_at: "2026-09-25T08:00:00Z", error: "private-error", prompt: "private-prompt", automation_run_id: "private-id" },
+      { status: "skipped_misfire", due_at: "2026-09-25T09:00:00Z" },
+    ] } } });
+    const table = host.querySelector(".schedule-run-history");
+    expect(table.textContent).toContain("Skipped · already running");
+    expect(table.textContent).toContain("No second run started");
+    expect(table.textContent).toContain("Skipped · missed window");
+    expect(table.textContent).toContain("25 Sept 2026, 09:00 BST");
+    expect(table.textContent).not.toContain("private-");
+    expect(table.querySelector('td[data-label="Details"]')).not.toBeNull();
+    expect(table.querySelector('td[data-label="Status"].is-attention')).not.toBeNull();
+    expect(host.textContent).toContain("Home Assistant's Europe/London time zone");
+  });
+
+  it.each([undefined, ""])("labels a missing HA time zone as a UTC fallback", (timezone) => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, { destination: "scheduled", timezone, state: { data: { automations: [], runs: [{ status: "completed", due_at: "2026-09-25T08:00:00Z" }] } } });
+    expect(host.textContent).toContain("Times shown in UTC because the Home Assistant time zone is unavailable.");
+    expect(host.textContent).toContain("25 Sept 2026, 08:00 UTC");
+    expect(host.textContent).not.toContain("Home Assistant's UTC time zone");
+  });
+
   it("uses getRandomValues for UUIDs when an HTTP origin lacks randomUUID", () => {
     const panel = document.createElement("codex-bridge-panel");
     let counter = 0;

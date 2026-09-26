@@ -33462,6 +33462,58 @@ function collectUserInputAnswers(container, model) {
   return answers;
 }
 
+// frontend/src/schedule-run-history.js
+var OUTCOMES = Object.freeze({
+  queued: ["Queued", "Waiting for Codex to start this run.", "is-attention"],
+  running: ["Running", "Codex is working on this task.", "is-attention"],
+  completed: ["Completed", "This task finished. Its response is in the task's chat.", "is-positive"],
+  failed: ["Failed", "This run could not finish. Check its chat and the Bridge connection.", "is-negative"],
+  cancelled: ["Cancelled", "This run was cancelled.", ""],
+  blocked: ["Needs attention", "This run was blocked. Review its chat and permissions before trying again.", "is-attention"],
+  interrupted_restart: ["Interrupted", "This run was interrupted before it completed.", "is-attention"],
+  skipped_overlap: ["Skipped · already running", "An earlier run of this task was still active. No second run started.", "is-attention"],
+  skipped_capacity: ["Skipped · at capacity", "Codex had no capacity for this run. No work started.", "is-attention"],
+  skipped_misfire: ["Skipped · missed window", "Home Assistant reached this occurrence after its allowed start window. No catch-up run started.", "is-attention"],
+  skipped_paused: ["Skipped · paused", "The task was paused when this run was requested. No work started.", ""]
+});
+var UNKNOWN = ["Status unavailable", "Refresh the run history to check this run.", ""];
+var INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/u;
+function formatInstant(value, formatter) {
+  if (value == null || value === "") return "—";
+  if (typeof value !== "string" || !INSTANT.test(value)) return "Unavailable";
+  const instant = new Date(value);
+  const date = /* @__PURE__ */ new Date(`${value.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(instant.getTime()) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value.slice(0, 10)) return "Unavailable";
+  return formatter.format(instant);
+}
+function scheduleRunHistory(runs, timezone) {
+  const options = { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" };
+  let formatter;
+  let timezoneUnavailable = false;
+  try {
+    if (typeof timezone !== "string" || !timezone || timezone.length > 100) throw new RangeError();
+    formatter = new Intl.DateTimeFormat("en-GB", { ...options, timeZone: timezone });
+  } catch {
+    timezoneUnavailable = true;
+    formatter = new Intl.DateTimeFormat("en-GB", { ...options, timeZone: "UTC" });
+  }
+  return {
+    timezone: formatter.resolvedOptions().timeZone,
+    timezoneUnavailable,
+    rows: runs.map((run) => {
+      const [status, explanation, tone] = typeof run.status === "string" && Object.hasOwn(OUTCOMES, run.status) ? OUTCOMES[run.status] : UNKNOWN;
+      return {
+        status,
+        explanation,
+        tone,
+        due_at: formatInstant(run.due_at, formatter),
+        started_at: formatInstant(run.started_at, formatter),
+        completed_at: formatInstant(run.completed_at, formatter)
+      };
+    })
+  };
+}
+
 // frontend/src/mcp-setup.js
 var HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
 function validStdioPackage(item) {
@@ -34071,7 +34123,7 @@ function renderLoading(documentRef, destinationLabel) {
   loading.append(spinner, text2(documentRef, "span", `Loading ${destinationLabel.toLowerCase()}…`, "desktop-feature-loading-label"));
   return loading;
 }
-function renderTable(documentRef, rows, columns, actions = null) {
+function renderTable(documentRef, rows, columns, actions = null, cellTone = null) {
   if (!rows.length) return renderEmpty(documentRef, "Nothing here yet.");
   const table = documentRef.createElement("table");
   table.className = "desktop-table";
@@ -34088,7 +34140,7 @@ function renderTable(documentRef, rows, columns, actions = null) {
     for (const [key, label] of columns) {
       const td = text2(documentRef, "td", displayValue(row[key], key));
       td.dataset.label = label;
-      const tone = statusClass(row[key]);
+      const tone = cellTone ? cellTone(row, key) : statusClass(row[key]);
       if (tone) td.classList.add(tone);
       tr2.append(td);
     }
@@ -34104,7 +34156,8 @@ function renderTable(documentRef, rows, columns, actions = null) {
   table.append(body);
   return table;
 }
-function renderScheduled(documentRef, state, defaultTimezone = "UTC", proposalsSupported = false) {
+function renderScheduled(documentRef, state, timezone, proposalsSupported = false) {
+  const defaultTimezone = timezone || "UTC";
   const section2 = documentRef.createElement("div");
   section2.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
@@ -34148,8 +34201,12 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC", proposalsS
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
+    const history = scheduleRunHistory(runs, timezone);
     section2.append(text2(documentRef, "h3", "Run history", "desktop-subheading"));
-    section2.append(renderTable(documentRef, runs, [["status", "Status"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]]));
+    section2.append(text2(documentRef, "p", history.timezoneUnavailable ? "Times shown in UTC because the Home Assistant time zone is unavailable." : `Times shown in Home Assistant's ${history.timezone} time zone.`, "desktop-note"));
+    const table = renderTable(documentRef, history.rows, [["status", "Status"], ["explanation", "Details"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]], null, (row, key) => key === "status" ? row.tone : "");
+    table.classList.add("schedule-run-history");
+    section2.append(table);
   }
   return section2;
 }
@@ -34435,7 +34492,7 @@ function syncDesktopFeatureDrafts(container, state) {
   const rendered = renderedFeatureInputs.get(container);
   if (rendered) rendered.drafts = featureDraftInputs(state);
 }
-function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
+function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.onclick = (event) => {
@@ -34603,7 +34660,7 @@ function proposeScheduleDescription(description, { timezone = "UTC", now = Date.
 }
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.8.3";
+var PANEL_VERSION = "1.8.5";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
 var SYSTEM_EVENT_SCOPES = Object.freeze(["auth", "runtime"]);
@@ -37731,6 +37788,11 @@ template.innerHTML = `
       letter-spacing: 0.06em;
       text-transform: uppercase;
     }
+
+    .schedule-run-history td { overflow-wrap: anywhere; }
+    .schedule-run-history td[data-label="Details"] { color: var(--muted-color); }
+    .schedule-run-history td.is-positive { color: color-mix(in srgb, var(--brand-emerald) 56%, var(--text-color) 44%); }
+    .schedule-run-history td.is-negative { color: color-mix(in srgb, var(--danger-color) 56%, var(--text-color) 44%); }
 
     .desktop-table td button {
       margin: 4px 8px 4px 0;
@@ -42578,7 +42640,7 @@ var CodexBridgePanel = class extends HTMLElement {
         state.loaded = false;
         void this._loadDesktopDestination("settings", { force: true });
       }
-      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone || "UTC", hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
+      renderDesktopFeatureSurface(container, { destination: this._activeDestination, state, timezone: this._hass?.config?.time_zone, hasActiveProject: Boolean(activeProjectId), activeProjectId, status: this._status, config: this._config, settings: { ...this._scheduleContext(), ownerKey: this._preferenceKey, preferences: this._preferences, onPreferenceChange: (value) => this._savePreferences(value) }, onAction: (action, dataset, target) => this._handleDesktopAction(action, dataset, target) });
     } else container?.removeAttribute("aria-label");
   }
   _handleTooltipPointerOver(event) {

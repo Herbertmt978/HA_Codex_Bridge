@@ -1,6 +1,9 @@
 # TASK-01: Scheduling through chat
 
-Status: Included in the paired 1.6.0 release.
+Status: Schedule proposal creation shipped in paired 1.6.0. Paired 1.8.4 adds
+readable run history and Home Assistant time-zone display. Conversational
+editing, pause and cancellation, and the remaining native acceptance checks,
+are still open.
 
 Tracking issue: [#112](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/112).
 

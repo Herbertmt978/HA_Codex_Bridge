@@ -30,8 +30,8 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.8.3`, Integration and panel `1.8.3`, Bridge `0.14.3` and
-  Codex `0.157.0`. App images support `amd64` Home Assistant OS. Historical
+- This release pairs App `1.8.5`, Integration and panel `1.8.5`, Bridge `0.14.3` and
+  Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV
   and production checks on 19 September 2026: retained sign-in and chat history,
@@ -41,6 +41,10 @@ to the App or Bridge.
   Scheduled task forms accept a title, instructions, chat destination and
   frequency in HA's time zone; the panel translates this into the existing
   once/interval/RRULE API. Revisions and target IDs are internal details.
+- Scheduled run history shows readable outcomes and fixed explanations in HA's
+  configured time zone, with a labelled UTC fallback when it is unavailable.
+  This presentation change preserves scheduler behaviour; conversational edits,
+  pause and cancellation remain part of the open TASK-01 roadmap.
 - Home Assistant owns automation timing. The Bridge owns durable definitions,
   claims, run history, admission and unattended execution. Preserve exact saved
   timing when editing unrelated fields. Do not add a browser-owned timer.

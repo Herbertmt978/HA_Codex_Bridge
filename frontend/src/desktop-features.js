@@ -1,4 +1,5 @@
 import { renderScheduleForm, scheduleSummary } from "./scheduled-tasks.js";
+import { scheduleRunHistory } from "./schedule-run-history.js";
 import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
@@ -202,7 +203,7 @@ function renderLoading(documentRef, destinationLabel) {
   return loading;
 }
 
-function renderTable(documentRef, rows, columns, actions = null) {
+function renderTable(documentRef, rows, columns, actions = null, cellTone = null) {
   if (!rows.length) return renderEmpty(documentRef, "Nothing here yet.");
   const table = documentRef.createElement("table");
   table.className = "desktop-table";
@@ -219,7 +220,7 @@ function renderTable(documentRef, rows, columns, actions = null) {
     for (const [key, label] of columns) {
       const td = text(documentRef, "td", displayValue(row[key], key));
       td.dataset.label = label;
-      const tone = statusClass(row[key]);
+      const tone = cellTone ? cellTone(row, key) : statusClass(row[key]);
       if (tone) td.classList.add(tone);
       tr.append(td);
     }
@@ -236,7 +237,8 @@ function renderTable(documentRef, rows, columns, actions = null) {
   return table;
 }
 
-function renderScheduled(documentRef, state, defaultTimezone = "UTC", proposalsSupported = false) {
+function renderScheduled(documentRef, state, timezone, proposalsSupported = false) {
+  const defaultTimezone = timezone || "UTC";
   const section = documentRef.createElement("div");
   section.className = "desktop-feature-content";
   const toolbar = documentRef.createElement("div");
@@ -276,8 +278,14 @@ function renderScheduled(documentRef, state, defaultTimezone = "UTC", proposalsS
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
+    const history = scheduleRunHistory(runs, timezone);
     section.append(text(documentRef, "h3", "Run history", "desktop-subheading"));
-    section.append(renderTable(documentRef, runs, [["status", "Status"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]]));
+    section.append(text(documentRef, "p", history.timezoneUnavailable
+      ? "Times shown in UTC because the Home Assistant time zone is unavailable."
+      : `Times shown in Home Assistant's ${history.timezone} time zone.`, "desktop-note"));
+    const table = renderTable(documentRef, history.rows, [["status", "Status"], ["explanation", "Details"], ["due_at", "Due"], ["started_at", "Started"], ["completed_at", "Completed"]], null, (row, key) => key === "status" ? row.tone : "");
+    table.classList.add("schedule-run-history");
+    section.append(table);
   }
   return section;
 }
@@ -517,7 +525,7 @@ export function syncDesktopFeatureDrafts(container, state) {
   if (rendered) rendered.drafts = featureDraftInputs(state);
 }
 
-export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone = "UTC", hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
+export function renderDesktopFeatureSurface(container, { destination = "scheduled", state = createDesktopFeatureState(), onAction, timezone, hasActiveProject = false, activeProjectId = null, status = {}, config = {}, settings = {} } = {}) {
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.onclick = (event) => {

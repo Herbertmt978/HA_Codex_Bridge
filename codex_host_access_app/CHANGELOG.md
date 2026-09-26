@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.5
+
+- Keeps the optional Host Access App version aligned with Codex Bridge `1.8.5`.
+  Host-access permissions and the separate grant are unchanged.
+
 ## 1.8.4
 
 - Bundles the Sigstore-verified Codex runtime `0.157.1`.
