@@ -17,3 +17,26 @@ Parent Linux Integration qualification reported 478 passes and five omitted-mode
 No publication or external deployment performed. Temporary logs and qualification evidence are in `D:/CodexTemp/bridge-enhancements-20260926`. Local delivery is complete and committed for parent qualification; no release-ready claim is made before those gates.
 
 The clean Linux lifecycle failure was traced to the new queue preservation shutdown branch: an activated worker could skip native start on a closed broker and wait on its preserved queued completion event. Close now removes/signals that in-memory event while retaining durable queue state. A deterministic regression verifies exit and later dispatch once; all eight relevant Windows tests pass with no runtime workers after any teardown. Full Ruff and compilation pass. Legacy lifecycle waits/assertions and gate ownership are unchanged; parent qualifies the final corrected Bridge and image inputs.
+
+## Native qualification corrections
+
+PR #236 and paired 1.10.0 are released after full local and GitHub checks, signed
+image, provenance and SBOM verification. Exact paired DEV installation passed.
+Native Markdown, transcript search and scoped Git patches passed, but two defects
+prevented complete acceptance: Plan capability was checked before constructing
+the runner, and Git freshness errors lost their safe message at the Integration
+protocol boundary.
+
+Branch `Herb/fix-plan-capability` prepares paired 1.10.1 with Bridge 0.17.1.
+Capability negotiation now follows runner construction and retains all native
+support gates. The Integration recognises the three existing bounded Git error
+codes. Regressions exercise app construction, readiness, Plan submission and
+unsupported native contracts, plus actual HTTP error parsing through the HA
+websocket handler. The focused 117-test run, Ruff and diff checks pass; full
+patch release qualification and resumed native Plan/queue acceptance remain open.
+
+Parent owns publication and DEV qualification. Production stays at 1.9.2 with
+automatic App updates paused until separate rollout approval. Existing owned DEV
+fixtures and the stale Git token are retained for patch verification. VM 103
+remains running as found; CT105 has been restored stopped. Disposable test output
+and live receipts remain under `D:/CodexTemp/bridge-enhancements-20260926`.

@@ -245,6 +245,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         "transcript_search_v1",
         "git_review_v1",
         "prompt_queue_v1",
+        "plan_mode_v1",
         *(("account_profiles_v1", "account_profile_details_v1") if os.name != "nt" else ()),
         "host_access_v1",
         "workspace_terminal_v1",

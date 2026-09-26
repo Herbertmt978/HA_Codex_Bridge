@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.10.1
+
+- Restores native Plan availability by negotiating its capability after the
+  runtime runner is constructed. Unsupported runtimes still refuse Plan.
+- Preserves safe Git review errors through Home Assistant, including the
+  refresh guidance when the repository changes while a diff is opening.
+- Pairs App, Integration and panel `1.10.1` with Bridge `0.17.1` and unchanged
+  Codex `0.157.1`.
+
 ## 1.10.0
 
 - Renders assistant Markdown safely, including headings, lists, tables and exact
