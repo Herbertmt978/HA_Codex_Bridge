@@ -34156,7 +34156,7 @@ function renderTable(documentRef, rows, columns, actions = null, cellTone = null
   table.append(body);
   return table;
 }
-function renderScheduled(documentRef, state, timezone, proposalsSupported = false) {
+function renderScheduled(documentRef, state, timezone, proposalsSupported = false, textEditsSupported = false) {
   const defaultTimezone = timezone || "UTC";
   const section2 = documentRef.createElement("div");
   section2.className = "desktop-feature-content";
@@ -34170,7 +34170,7 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     section2.append(renderScheduleForm(documentRef, state, defaultTimezone, { ...state.scheduleContext, proposalsSupported }));
     return section2;
   }
-  if (state.form === "automation-edit-description") {
+  if (state.form === "automation-edit-description" && textEditsSupported) {
     const form = documentRef.createElement("form");
     form.className = "schedule-description";
     form.dataset.desktopForm = "automation-edit-description";
@@ -34240,7 +34240,7 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button2(documentRef, "Run", "run-automation", common), button2(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button2(documentRef, "Runs", "list-automation-runs", common), button2(documentRef, "Update", "update-automation", common), button2(documentRef, "Delete", "delete-automation", common));
-    if (proposalsSupported) td.append(button2(documentRef, "Describe change", "describe-automation-edit", common));
+    if (textEditsSupported) td.append(button2(documentRef, "Describe change", "describe-automation-edit", common));
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
@@ -34564,6 +34564,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     settingsModels: destination === "settings" ? settings.models : null,
     settingsCapabilities: destination === "settings" ? config?.capabilities : null,
     scheduledProposals: destination === "scheduled" ? config?.capabilities?.includes("automation_proposals_v1") : null,
+    scheduledTextEdits: destination === "scheduled" ? config?.capabilities?.includes("automation_text_edits_v1") : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null
   });
   const drafts = featureDraftInputs(state);
@@ -34602,7 +34603,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     confirm2.append(text2(documentRef, "span", state.confirmAction.action === "rollback-stdio" ? "Restore the previously packaged revision? The server stays paused while you review its tools." : "This action is destructive. Confirm to continue."), button2(documentRef, "Confirm", "confirm-desktop"), button2(documentRef, "Cancel", "cancel-desktop-confirm"));
     container.append(confirm2);
   }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1"), config?.capabilities?.includes("automation_text_edits_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 
@@ -42295,7 +42296,8 @@ var CodexBridgePanel = class extends HTMLElement {
       return;
     }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
-    if (["open-schedule-description", "review-schedule-description", "describe-automation-edit", "refresh-automation-edit", "review-automation-edit", "revise-automation-edit", "save-automation-edit"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (["describe-automation-edit", "refresh-automation-edit", "review-automation-edit", "revise-automation-edit", "save-automation-edit"].includes(action) && !this._config?.capabilities?.includes("automation_text_edits_v1")) return;
     let automationEditOpened = false;
     if (action === "open-schedule-description") {
       this._clearDesktopFormDraft(state);
@@ -42308,7 +42310,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const generation = state.previewGeneration;
       const sourceForm = state.form;
       state.automationEditPending = request;
-      const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && state.form === sourceForm && this._activeDestination === "scheduled";
+      const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && state.form === sourceForm && this._activeDestination === "scheduled" && this._config?.capabilities?.includes("automation_text_edits_v1");
       try {
         state.loading = true;
         this._renderDesktopSurface();
@@ -42642,14 +42644,14 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   async _saveDescribedAutomationEdit(state) {
-    if (state.form !== "automation-edit-description" || state.loading || state.automationEditRefreshRequired) return;
+    if (!this._config?.capabilities?.includes("automation_text_edits_v1") || state.form !== "automation-edit-description" || state.loading || state.automationEditRefreshRequired) return;
     const editing = state.editingAutomation;
     const fields = Object.entries(state.automationEditProposal || {});
     if (!editing || fields.length !== 1 || !["name", "prompt"].includes(fields[0][0]) || typeof fields[0][1] !== "string") return;
     const request = {};
     const generation = state.previewGeneration;
     state.automationEditPending = request;
-    const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && this._activeDestination === "scheduled" && state.form === "automation-edit-description";
+    const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && this._activeDestination === "scheduled" && state.form === "automation-edit-description" && this._config?.capabilities?.includes("automation_text_edits_v1");
     try {
       state.loading = true;
       state.formError = "";

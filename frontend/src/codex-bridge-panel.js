@@ -7734,7 +7734,8 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (destructive.has(action) && !confirmed) { state.confirmAction = { action, dataset: { ...dataset } }; this._renderDesktopSurface(); return; }
     if (action === "retry-desktop" || action === "refresh-settings-capabilities") return this._loadDesktopDestination(destination, { force: true, refreshCapabilities: destination === "settings" });
-    if (["open-schedule-description", "review-schedule-description", "describe-automation-edit", "refresh-automation-edit", "review-automation-edit", "revise-automation-edit", "save-automation-edit"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (["open-schedule-description", "review-schedule-description"].includes(action) && !this._config?.capabilities?.includes("automation_proposals_v1")) return;
+    if (["describe-automation-edit", "refresh-automation-edit", "review-automation-edit", "revise-automation-edit", "save-automation-edit"].includes(action) && !this._config?.capabilities?.includes("automation_text_edits_v1")) return;
     let automationEditOpened = false;
     if (action === "open-schedule-description") { this._clearDesktopFormDraft(state); state.editingAutomation = null; state.scheduleContext = this._scheduleContext(); state.form = "schedule-description"; }
     else if (["describe-automation-edit", "refresh-automation-edit"].includes(action)) {
@@ -7743,7 +7744,7 @@ class CodexBridgePanel extends HTMLElement {
       const generation = state.previewGeneration;
       const sourceForm = state.form;
       state.automationEditPending = request;
-      const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && state.form === sourceForm && this._activeDestination === "scheduled";
+      const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && state.form === sourceForm && this._activeDestination === "scheduled" && this._config?.capabilities?.includes("automation_text_edits_v1");
       try {
         state.loading = true; this._renderDesktopSurface();
         const automation = await this._callWS("get_automation", { automation_id: dataset.id });
@@ -8017,14 +8018,14 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _saveDescribedAutomationEdit(state) {
-    if (state.form !== "automation-edit-description" || state.loading || state.automationEditRefreshRequired) return;
+    if (!this._config?.capabilities?.includes("automation_text_edits_v1") || state.form !== "automation-edit-description" || state.loading || state.automationEditRefreshRequired) return;
     const editing = state.editingAutomation;
     const fields = Object.entries(state.automationEditProposal || {});
     if (!editing || fields.length !== 1 || !["name", "prompt"].includes(fields[0][0]) || typeof fields[0][1] !== "string") return;
     const request = {};
     const generation = state.previewGeneration;
     state.automationEditPending = request;
-    const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && this._activeDestination === "scheduled" && state.form === "automation-edit-description";
+    const ownsRequest = () => state.automationEditPending === request && state.previewGeneration === generation && this._activeDestination === "scheduled" && state.form === "automation-edit-description" && this._config?.capabilities?.includes("automation_text_edits_v1");
     try {
       state.loading = true; state.formError = ""; this._renderDesktopSurface();
       const current = await this._callWS("get_automation", { automation_id: editing.automation_id });

@@ -237,7 +237,7 @@ function renderTable(documentRef, rows, columns, actions = null, cellTone = null
   return table;
 }
 
-function renderScheduled(documentRef, state, timezone, proposalsSupported = false) {
+function renderScheduled(documentRef, state, timezone, proposalsSupported = false, textEditsSupported = false) {
   const defaultTimezone = timezone || "UTC";
   const section = documentRef.createElement("div");
   section.className = "desktop-feature-content";
@@ -251,7 +251,7 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     section.append(renderScheduleForm(documentRef, state, defaultTimezone, { ...state.scheduleContext, proposalsSupported }));
     return section;
   }
-  if (state.form === "automation-edit-description") {
+  if (state.form === "automation-edit-description" && textEditsSupported) {
     const form = documentRef.createElement("form");
     form.className = "schedule-description";
     form.dataset.desktopForm = "automation-edit-description";
@@ -314,7 +314,7 @@ function renderScheduled(documentRef, state, timezone, proposalsSupported = fals
     const id = row.id || row.automation_id || "";
     const common = { id, revision: row.revision || "0" };
     td.append(button(documentRef, "Run", "run-automation", common), button(documentRef, row.enabled === false ? "Resume" : "Pause", row.enabled === false ? "resume-automation" : "pause-automation", common), button(documentRef, "Runs", "list-automation-runs", common), button(documentRef, "Update", "update-automation", common), button(documentRef, "Delete", "delete-automation", common));
-    if (proposalsSupported) td.append(button(documentRef, "Describe change", "describe-automation-edit", common));
+    if (textEditsSupported) td.append(button(documentRef, "Describe change", "describe-automation-edit", common));
   }));
   const runs = normalizeDesktopList(state.data.runs);
   if (runs.length) {
@@ -594,6 +594,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     settingsModels: destination === "settings" ? settings.models : null,
     settingsCapabilities: destination === "settings" ? config?.capabilities : null,
     scheduledProposals: destination === "scheduled" ? config?.capabilities?.includes("automation_proposals_v1") : null,
+    scheduledTextEdits: destination === "scheduled" ? config?.capabilities?.includes("automation_text_edits_v1") : null,
     settingsOwner: destination === "settings" ? settings.ownerKey || "codex-bridge:preferences:local" : null,
   });
   const drafts = featureDraftInputs(state);
@@ -612,7 +613,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (state.error) { const error = text(documentRef, "p", state.error, "desktop-error"); error.setAttribute("role", "alert"); container.append(error); container.append(button(documentRef, "Retry", "retry-desktop")); return; }
   if (state.notice) { const notice = text(documentRef, "p", state.notice, "desktop-notice"); notice.setAttribute("role", "status"); container.append(notice); }
   if (state.confirmAction) { const confirm = documentRef.createElement("div"); confirm.className = "desktop-notice"; confirm.setAttribute("role", "alert"); confirm.append(text(documentRef, "span", state.confirmAction.action === "rollback-stdio" ? "Restore the previously packaged revision? The server stays paused while you review its tools." : "This action is destructive. Confirm to continue."), button(documentRef, "Confirm", "confirm-desktop"), button(documentRef, "Cancel", "cancel-desktop-confirm")); container.append(confirm); }
-  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
+  const content = destination === "scheduled" ? renderScheduled(documentRef, state, timezone, config?.capabilities?.includes("automation_proposals_v1"), config?.capabilities?.includes("automation_text_edits_v1")) : destination === "skills" ? renderSkills(documentRef, state) : destination === "plugins" ? renderPlugins(documentRef, state) : renderSettings(documentRef, state, hasActiveProject, activeProjectId, status, config, settings);
   container.append(content);
 }
 

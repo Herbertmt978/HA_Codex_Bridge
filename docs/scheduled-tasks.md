@@ -67,8 +67,9 @@ model, reasoning, notifications and permissions stay as saved.
 If the task changes elsewhere, or a save response cannot be confirmed, choose
 **Refresh task** and review it again. The flow checks whether the reviewed
 value is already saved before issuing another update. Use the normal editor
-for timing or other settings. Older Apps without schedule proposals keep the
-normal editor and hide this action.
+for timing or other settings. Apps must advertise `automation_text_edits_v1`
+to expose this flow. Older Apps keep the normal editor and any existing task
+proposals, and hide this action.
 
 ## Frequency and time zone
 

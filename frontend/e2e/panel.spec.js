@@ -492,7 +492,7 @@ for (const width of [390, 1440]) {
     await selectHarnessThread(page);
     await page.evaluate(async () => {
       const panel = document.querySelector("codex-bridge-panel");
-      panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_proposals_v1"] };
+      panel._config = { ...panel._config, capabilities: [...(panel._config?.capabilities || []), "automation_proposals_v1", "automation_text_edits_v1"] };
       const definition = {
         prompt: "Original instructions", target: { kind: "standalone", project_id: "prj_vba" },
         schedule: { kind: "interval", seconds: 300, anchor_at: "2026-01-01T00:00:37Z" },

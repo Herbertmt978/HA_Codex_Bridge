@@ -15,7 +15,7 @@ describe("reviewed conversational automation edits", () => {
     };
     const panel = document.createElement("codex-bridge-panel"); document.body.append(panel);
     panel._activeDestination = "scheduled";
-    panel._config = { capabilities: ["automations_v1", "automation_proposals_v1"] };
+    panel._config = { capabilities: ["automations_v1", "automation_proposals_v1", "automation_text_edits_v1"] };
     const state = panel._desktopFeatures.scheduled;
     state.loaded = true; state.data = { automations: [current] };
     const updates = [];
@@ -132,14 +132,47 @@ describe("reviewed conversational automation edits", () => {
     expect(fixture.updates).toEqual([]);
   });
 
-  it("hides and refuses conversational editing without the proposal capability", async () => {
+  it("keeps legacy proposals but hides and refuses text edits on an older App", async () => {
     const fixture = setup();
-    fixture.panel._config = { capabilities: ["automations_v1"] };
+    fixture.panel._config = { capabilities: ["automations_v1", "automation_proposals_v1"] };
     fixture.panel._render(true);
     expect(fixture.panel.shadowRoot.querySelector('[data-desktop-action="describe-automation-edit"]')).toBeNull();
+    expect(fixture.panel.shadowRoot.querySelector('[data-desktop-action="open-schedule-description"]')).not.toBeNull();
     fixture.panel._callWS.mockClear();
     await fixture.panel._handleDesktopAction("describe-automation-edit", { id: "selected" }, null);
     expect(fixture.panel._callWS).not.toHaveBeenCalled();
+  });
+
+  it("refuses a direct save if text edit support disappears after review", async () => {
+    const fixture = setup();
+    await review(fixture, "Rename to New title");
+    fixture.panel._config.capabilities = ["automations_v1", "automation_proposals_v1"];
+    fixture.panel._callWS.mockClear();
+    await fixture.panel._saveDescribedAutomationEdit(fixture.state);
+    expect(fixture.panel._callWS).not.toHaveBeenCalled();
+    expect(fixture.updates).toEqual([]);
+  });
+
+  it("refreshes the action when the backend advertises text edits", () => {
+    const fixture = setup();
+    fixture.panel._config.capabilities = ["automations_v1", "automation_proposals_v1"];
+    fixture.panel._renderDesktopSurface();
+    expect(fixture.panel.shadowRoot.querySelector('[data-desktop-action="describe-automation-edit"]')).toBeNull();
+    fixture.panel._config.capabilities.push("automation_text_edits_v1");
+    fixture.panel._renderDesktopSurface();
+    expect(fixture.panel.shadowRoot.querySelector('[data-desktop-action="describe-automation-edit"]')).not.toBeNull();
+  });
+
+  it("abandons a save preflight if the backend loses text edit support", async () => {
+    const fixture = setup();
+    await review(fixture, "Rename to New title");
+    const pending = deferred();
+    fixture.panel._callWS.mockImplementationOnce(() => pending.promise);
+    const saving = fixture.panel._saveDescribedAutomationEdit(fixture.state);
+    fixture.panel._config.capabilities = ["automations_v1", "automation_proposals_v1"];
+    pending.resolve(structuredClone(fixture.current()));
+    await saving;
+    expect(fixture.updates).toEqual([]);
   });
 
   function deferred() {

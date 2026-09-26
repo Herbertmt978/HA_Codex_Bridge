@@ -33,9 +33,16 @@ Opening, reviewing and revising changes now assign keyboard focus.
 A second independent review found no remaining verified defect in this scope.
 This advisory review does not substitute for release or native acceptance.
 
+GitHub review found that the older proposal capability did not guarantee the
+fixed update semantics. The flow now requires the separate
+`automation_text_edits_v1` capability, advertised by the fixed Bridge and
+retained by the Integration. Older Apps keep their existing proposal creation
+and manual editor. Direct saves and in-flight preflights also stop if the new
+capability is absent. Compatibility regressions cover both versions.
+
 ## Release checks
 
-Fresh panel lint, 537 unit tests and 96 browser cases passed. Phone and desktop
+Fresh panel lint, 540 unit tests and 96 browser cases passed. Phone and desktop
 screenshots were inspected. The browser cases include the selected-task partial
 payload, retained draft during HA updates, keyboard transitions, narrow-screen
 layout and WCAG checks. Generated assets were rebuilt through the owning build.
@@ -52,7 +59,7 @@ excluded. Git connectivity and the saved source passed recovery checks. D: is
 healthy; Windows still reports the previously recorded C: repair warning.
 The remaining checks moved to the approved Proxmox worker, started from stopped.
 Its isolated, pinned test environment passed 2,213 Bridge tests with 27 skips,
-eight root restore checks and all 417 Integration tests. The runner's temporary
+eight root restore checks and all 418 Integration tests. The runner's temporary
 directory and detached interrupt handling were corrected without product changes.
 
 Publication, signed-image verification and managed HA acceptance remain pending.

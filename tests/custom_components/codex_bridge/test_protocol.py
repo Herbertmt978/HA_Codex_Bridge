@@ -82,6 +82,16 @@ def test_retains_optional_browser_capability_without_enabling_it_for_older_apps(
     assert "browser_v1" in ReadyRecord.from_payload(payload).capabilities
 
 
+def test_text_edits_require_explicit_support_separate_from_legacy_proposals() -> None:
+    payload = _fixture("ready_v1.json")
+    payload["capabilities"].append("automation_proposals_v1")
+    assert "automation_text_edits_v1" not in ReadyRecord.from_payload(payload).capabilities
+    payload["capabilities"].append("automation_text_edits_v1")
+    ready = ReadyRecord.from_payload(payload)
+    assert "automation_proposals_v1" in ready.capabilities
+    assert "automation_text_edits_v1" in ready.capabilities
+
+
 def test_retains_isolated_stdio_capability_only_when_advertised() -> None:
     payload = _fixture("ready_v1.json")
     assert "mcp_stdio_v1" not in ReadyRecord.from_payload(payload).capabilities
