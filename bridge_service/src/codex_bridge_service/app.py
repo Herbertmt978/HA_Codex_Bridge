@@ -825,8 +825,6 @@ def create_app(
                 "prompt_queue_v1",
             ]
         )
-        if getattr(resolved_runner, "supports_plan_mode", False) is True:
-            feature_capabilities.append("plan_mode_v1")
         if resolved_account_profile_store is not None:
             feature_capabilities.append("account_profiles_v1")
             feature_capabilities.append("account_profile_details_v1")
@@ -960,6 +958,18 @@ def create_app(
             "Home Assistant runtime."
         )
     app.state.runner = resolved_runner
+    if (
+        resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
+        and getattr(resolved_runner, "supports_plan_mode", False) is True
+        and getattr(resolved_app_server, "enable_experimental_api", False) is True
+        and getattr(resolved_app_server, "supports_collaboration_mode", False) is True
+    ):
+        negotiated_capabilities = list(app.state.feature_capabilities)
+        negotiated_capabilities.insert(
+            negotiated_capabilities.index("prompt_queue_v1") + 1,
+            "plan_mode_v1",
+        )
+        app.state.feature_capabilities = tuple(negotiated_capabilities)
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         resolved_discord = DiscordChannelManager(app, Path(root_path))
         app.state.discord_channel = resolved_discord

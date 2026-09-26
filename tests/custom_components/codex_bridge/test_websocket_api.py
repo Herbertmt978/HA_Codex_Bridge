@@ -8,10 +8,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
+import aiohttp
 import pytest
 import voluptuous as vol
+from aiohttp import web
 
 from custom_components.codex_bridge.bridge_api import (
+    BridgeApiClient,
     BridgeApiConflictError,
     BridgeApiError,
     BridgeApiGoneError,
@@ -32,6 +35,7 @@ from custom_components.codex_bridge.websocket_api import (
     ws_get_events,
     ws_get_automation,
     ws_get_status,
+    ws_git_review,
     ws_consume_reset_credit,
     ws_create_automation,
     ws_login_mcp,
@@ -53,6 +57,8 @@ from custom_components.codex_bridge.websocket_api import (
     ws_update_chat_section,
     ws_delete_chat_section,
 )
+
+FIXTURES = Path(__file__).parents[2] / "fixtures"
 
 
 def _event(
@@ -119,6 +125,74 @@ def _runtime(*, queue_size: int = 256) -> tuple[CodexBridgeRuntime, EventBroker]
         CodexBridgeRuntime("entry", "Codex", client, "supervisor", "a" * 32, 1, broker),
         broker,
     )
+
+
+@pytest.mark.parametrize(
+    ("error_code", "status", "safe_message"),
+    [
+        (
+            "git_base_ref_required",
+            400,
+            "Choose a base branch before reviewing branch changes",
+        ),
+        (
+            "git_state_changed",
+            409,
+            "Git changed while you were opening the diff. Refresh the file list and try again",
+        ),
+        (
+            "git_unavailable",
+            503,
+            "Git review is unavailable in this App",
+        ),
+    ],
+)
+async def test_git_review_preserves_known_bridge_problem_through_websocket(
+    error_code: str,
+    status: int,
+    safe_message: str,
+    bridge_server_factory,
+) -> None:
+    ready = json.loads((FIXTURES / "ready_v1.json").read_text(encoding="utf-8"))
+    if "git_review_v1" not in ready["capabilities"]:
+        ready["capabilities"].append("git_review_v1")
+
+    async def handler(request: web.Request) -> web.Response:
+        if request.path == "/ready":
+            return web.json_response(ready)
+        return web.json_response(
+            {"detail": {"code": error_code, "message": "private-token-sentinel"}},
+            status=status,
+        )
+
+    server = await bridge_server_factory(handler)
+    runtime, _broker = _runtime()
+    async with aiohttp.ClientSession() as session:
+        client = BridgeApiClient(
+            session,
+            str(server.make_url("")),
+            "bridge-token-0123456789abcdef0123456789",
+        )
+        await client.async_ready()
+        runtime.client = client
+        hass = _Hass(runtime)
+        connection = _Connection()
+
+        ws_git_review(
+            hass,
+            connection,
+            {
+                "id": 98,
+                "type": f"{DOMAIN}/git_review",
+                "thread_id": "thread-safe",
+                "scope": "unstaged",
+            },
+        )
+        await hass.finish()
+
+    assert connection.errors == [(98, error_code, safe_message)]
+    assert connection.results == []
+    assert "private-token-sentinel" not in repr(connection.errors)
 
 
 @pytest.mark.parametrize(

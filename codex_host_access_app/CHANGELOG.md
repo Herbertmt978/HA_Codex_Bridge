@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.10.1
+
+- Aligns the companion version with App and Integration `1.10.1`, Bridge `0.17.1`
+  and unchanged Codex `0.157.1`. Host Access permissions are unchanged.
+
 ## 1.10.0
 
 - Aligns the companion version with App and Integration `1.10.0`, Bridge `0.17.0`
