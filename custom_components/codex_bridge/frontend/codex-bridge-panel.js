@@ -35394,7 +35394,7 @@ var COPY = Object.freeze({
 });
 var supportsCommunityMcp = (capabilities = []) => Array.isArray(capabilities) && ["community_mcp_quick_connect_v1", "mcp_local_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"].every((key) => capabilities.includes(key));
 function normalizeCommunityMcp(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.state !== "string" || !Object.hasOwn(COPY, value.state) || typeof value.reused !== "boolean" || value.server_name !== null && (typeof value.server_name !== "string" || !/^[a-z][a-z0-9_-]{0,63}$/u.test(value.server_name)) || value.version !== null && (typeof value.version !== "string" || !/^\d+(?:\.\d+){1,3}(?:[a-z0-9.-]{0,24})$/iu.test(value.version)) || value.consent_revision !== null && (typeof value.consent_revision !== "string" || !/^[a-f0-9]{64}$/u.test(value.consent_revision))) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.state !== "string" || !Object.hasOwn(COPY, value.state) || typeof value.reused !== "boolean" || value.server_name !== null && (typeof value.server_name !== "string" || !/^[a-z][a-z0-9_-]{0,63}$/u.test(value.server_name)) || value.version !== null && (typeof value.version !== "string" || !/^[0-9]{1,5}(?:\.[0-9]{1,5}){0,3}(?![\s\S])/u.test(value.version)) || value.consent_revision !== null && (typeof value.consent_revision !== "string" || !/^[a-f0-9]{64}$/u.test(value.consent_revision))) return null;
   if (value.destination !== null) {
     if (typeof value.destination !== "string" || value.destination.length > 300) return null;
     try {

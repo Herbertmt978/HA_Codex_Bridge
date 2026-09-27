@@ -75,4 +75,13 @@ describe("community HA-MCP quick connect", () => {
     expect(normalizeCommunityMcp(status({ destination: "http://user:private-fixture@ha.local:9583" }))).toBeNull();
     expect(normalizeCommunityMcp(status({ state: "private-fixture" }))).toBeNull();
   });
+  it.each(["1", "1.2", "1.2.3", "1.2.3.4", "00001.00002.3.4"])("accepts backend-compatible version %s", (version) => {
+    expect(normalizeCommunityMcp(status({ version }))?.version).toBe(version);
+  });
+  it.each(["", "v1", "1.123456", "1.2.3.4.5", "1.2-beta", "1.2 ", "1\n", "١.2"])("rejects malformed version %j", (version) => {
+    expect(normalizeCommunityMcp(status({ version }))).toBeNull();
+  });
+  it("accepts a null version when discovery cannot provide a valid version", () => {
+    expect(normalizeCommunityMcp(status({ version: null }))?.version).toBeNull();
+  });
 });
