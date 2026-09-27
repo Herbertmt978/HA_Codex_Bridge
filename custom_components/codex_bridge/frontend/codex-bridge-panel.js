@@ -32688,11 +32688,19 @@ function projectTranscriptMessages(events = []) {
   const removedQueuedRuns = /* @__PURE__ */ new Set();
   const messages = /* @__PURE__ */ new Map();
   const queuedByRun = /* @__PURE__ */ new Map();
+  const queueBoundaries = /* @__PURE__ */ new Map();
+  for (const event of events) {
+    const runId = event?.payload?.run_id;
+    if (event?.event_type === "run.queued" && typeof runId === "string" && runId && Number.isSafeInteger(event.sequence) && event.sequence > 0) {
+      queueBoundaries.set(runId, Math.min(queueBoundaries.get(runId) ?? Infinity, event.sequence));
+    }
+  }
+  const isQueuedDraft = (event) => event?.event_type === "message.created" && (event.payload?.queued === true || event.sequence < queueBoundaries.get(event.payload?.run_id));
   for (const event of events) {
     if (!["message.created", "message.completed"].includes(event?.event_type)) continue;
     messages.set(event.sequence, event);
     const runId = event.payload?.run_id;
-    if (event.event_type === "message.created" && event.payload?.queued === true && typeof runId === "string" && runId) {
+    if (isQueuedDraft(event) && typeof runId === "string" && runId) {
       queuedByRun.set(runId, queuedByRun.has(runId) ? null : event);
     }
   }
@@ -32714,7 +32722,7 @@ function projectTranscriptMessages(events = []) {
     if (event.event_type === "message.removed") {
       removed.add(sequence2);
       const target = messages.get(sequence2);
-      if (target?.event_type === "message.created" && target.payload?.queued === true && typeof target.payload?.run_id === "string") {
+      if (isQueuedDraft(target) && typeof target.payload?.run_id === "string") {
         removedQueuedRuns.add(target.payload.run_id);
       }
     }
@@ -37043,7 +37051,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.11.0";
+var PANEL_VERSION = "1.11.1";
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -48178,7 +48186,7 @@ var CodexBridgePanel = class extends HTMLElement {
         "user",
         payload.text,
         event.sequence,
-        payload.queued ? "Queued steer" : "",
+        payload.queued ? "Queued message" : "",
         event.timestamp
       );
     }
@@ -48196,13 +48204,13 @@ var CodexBridgePanel = class extends HTMLElement {
       return null;
     }
     if (event.event_type === "run.queued") {
-      return this._textElement("div", "event-row", "Steer queued");
+      return this._textElement("div", "event-row", "Message queued");
     }
     if (event.event_type === "run.dequeued") {
-      return this._textElement("div", "event-row", "Steer applied");
+      return this._textElement("div", "event-row", "Queued message started");
     }
     if (event.event_type === "run.queue_cleared") {
-      return this._textElement("div", "event-row", "Steer queue cleared");
+      return this._textElement("div", "event-row", "Queued messages cleared");
     }
     if (event.event_type === "run.failed") {
       return this._textElement(
@@ -48500,21 +48508,21 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (event.event_type === "run.queued") {
       return {
-        title: "Steer queued",
+        title: "Message queued",
         meta: `${payload.pending_count || 1} pending`,
         state: "active"
       };
     }
     if (event.event_type === "run.dequeued") {
       return {
-        title: "Steer applied",
+        title: "Queued message started",
         meta: this._timeAgo(event.timestamp),
         state: "active"
       };
     }
     if (event.event_type === "run.queue_cleared") {
       return {
-        title: "Steer queue cleared",
+        title: "Queued messages cleared",
         meta: payload.reason || "Run stopped",
         state: "error"
       };

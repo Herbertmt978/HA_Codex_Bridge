@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.11.1
+
+- Projects native queued-message edits and removals into the transcript and
+  conversation rail, including retained history after an App restart or page reload.
+  Matches the recorded queue ownership and preserves unrelated turns and answers.
+- Labels queued work as messages rather than claiming it steered the active turn.
+- Pairs App, Integration and panel `1.11.1` with unchanged Bridge `0.18.0`
+  and Codex `0.157.1`.
+
 ## 1.11.0
 
 - Applies accepted settings when resuming an idle Codex conversation, including

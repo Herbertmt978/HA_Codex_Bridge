@@ -4881,8 +4881,10 @@ for (const width of [1440, 390]) {
       panel._events = [...panel._events,
         { sequence: 201, event_type: "message.created", payload: { run_id: "active-plan", text: "Plan still waiting" } },
         { sequence: 202, event_type: "run.started", payload: { run_id: "active-plan" } },
-        { sequence: 204, event_type: "message.created", payload: { run_id: "keep-draft", queued: true, text: "Original queued draft" } },
-        { sequence: 205, event_type: "message.created", payload: { run_id: "remove-draft", queued: true, text: "Remove this queued draft" } },
+        { sequence: 204, event_type: "message.created", payload: { run_id: "keep-draft", text: "Original queued draft" } },
+        { sequence: 205, event_type: "message.created", payload: { run_id: "remove-draft", text: "Remove this queued draft" } },
+        { sequence: 206, event_type: "run.queued", payload: { run_id: "keep-draft" } },
+        { sequence: 207, event_type: "run.queued", payload: { run_id: "remove-draft" } },
       ];
       panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "active-plan" };
       panel._forceMessageRebuild = true;
@@ -4893,9 +4895,9 @@ for (const width of [1440, 390]) {
       const panel = document.querySelector("codex-bridge-panel");
       panel.shadowRoot.getElementById("conversation-scroll").scrollTop = 120;
       panel._events = [...panel._events,
-        { sequence: 206, event_type: "message.updated", payload: { run_id: "keep-draft", message_sequence: 4, text: "Edited queued draft" } },
-        { sequence: 207, event_type: "message.removed", payload: { run_id: "remove-draft", message_sequence: 5 } },
-        { sequence: 208, event_type: "run.cancelled", payload: { run_id: "remove-draft" } },
+        { sequence: 208, event_type: "message.updated", payload: { run_id: "keep-draft", message_sequence: 4, text: "Edited queued draft" } },
+        { sequence: 209, event_type: "message.removed", payload: { run_id: "remove-draft", message_sequence: 5 } },
+        { sequence: 210, event_type: "run.cancelled", payload: { run_id: "remove-draft" } },
       ];
       panel._forceMessageRebuild = true;
       panel._render(true);
@@ -4904,6 +4906,8 @@ for (const width of [1440, 390]) {
     await expect(panel.locator("#message-list")).not.toContainText("Original queued draft");
     await expect(panel.locator("#message-list")).not.toContainText("Remove this queued draft");
     await expect(panel.locator("#message-list")).not.toContainText("Run cancelled");
+    await expect(panel.locator("#message-list")).toContainText("Message queued");
+    await expect(panel.locator("#message-list")).not.toContainText("Steer queued");
     expect(await panel.evaluate((element) => element._events.some((event) => event.event_type === "run.cancelled" && event.payload.run_id === "remove-draft"))).toBe(true);
     expect(await panel.evaluate((element) => element._runActivityForThread().runId)).toBe("active-plan");
     expect(await panel.evaluate((element) => element._runActivityForThread().busy)).toBe(true);

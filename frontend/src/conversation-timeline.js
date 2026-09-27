@@ -40,11 +40,24 @@ export function projectTranscriptMessages(events = []) {
   const removedQueuedRuns = new Set();
   const messages = new Map();
   const queuedByRun = new Map();
+  // The runtime broker records queue ownership in run.queued; the older
+  // runner also marks message.created.queued. Both use the same run identity.
+  const queueBoundaries = new Map();
+  for (const event of events) {
+    const runId = event?.payload?.run_id;
+    if (event?.event_type === "run.queued" && typeof runId === "string" && runId
+      && Number.isSafeInteger(event.sequence) && event.sequence > 0) {
+      queueBoundaries.set(runId, Math.min(queueBoundaries.get(runId) ?? Infinity, event.sequence));
+    }
+  }
+  // Later active-turn steers share the run ID but cannot own its queued draft.
+  const isQueuedDraft = (event) => event?.event_type === "message.created"
+    && (event.payload?.queued === true || event.sequence < queueBoundaries.get(event.payload?.run_id));
   for (const event of events) {
     if (!["message.created", "message.completed"].includes(event?.event_type)) continue;
     messages.set(event.sequence, event);
     const runId = event.payload?.run_id;
-    if (event.event_type === "message.created" && event.payload?.queued === true && typeof runId === "string" && runId) {
+    if (isQueuedDraft(event) && typeof runId === "string" && runId) {
       queuedByRun.set(runId, queuedByRun.has(runId) ? null : event);
     }
   }
@@ -70,7 +83,7 @@ export function projectTranscriptMessages(events = []) {
     if (event.event_type === "message.removed") {
       removed.add(sequence);
       const target = messages.get(sequence);
-      if (target?.event_type === "message.created" && target.payload?.queued === true && typeof target.payload?.run_id === "string") {
+      if (isQueuedDraft(target) && typeof target.payload?.run_id === "string") {
         removedQueuedRuns.add(target.payload.run_id);
       }
     }

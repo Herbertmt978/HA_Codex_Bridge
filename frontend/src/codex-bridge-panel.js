@@ -44,7 +44,7 @@ import { proposeAutomationEditDescription, proposeScheduleDescription } from "./
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.11.0";
+const PANEL_VERSION = "1.11.1";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -11464,7 +11464,7 @@ class CodexBridgePanel extends HTMLElement {
         "user",
         payload.text,
         event.sequence,
-        payload.queued ? "Queued steer" : "",
+        payload.queued ? "Queued message" : "",
         event.timestamp
       );
     }
@@ -11486,13 +11486,13 @@ class CodexBridgePanel extends HTMLElement {
       return null;
     }
     if (event.event_type === "run.queued") {
-      return this._textElement("div", "event-row", "Steer queued");
+      return this._textElement("div", "event-row", "Message queued");
     }
     if (event.event_type === "run.dequeued") {
-      return this._textElement("div", "event-row", "Steer applied");
+      return this._textElement("div", "event-row", "Queued message started");
     }
     if (event.event_type === "run.queue_cleared") {
-      return this._textElement("div", "event-row", "Steer queue cleared");
+      return this._textElement("div", "event-row", "Queued messages cleared");
     }
     if (event.event_type === "run.failed") {
       return this._textElement(
@@ -11826,21 +11826,21 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (event.event_type === "run.queued") {
       return {
-        title: "Steer queued",
+        title: "Message queued",
         meta: `${payload.pending_count || 1} pending`,
         state: "active",
       };
     }
     if (event.event_type === "run.dequeued") {
       return {
-        title: "Steer applied",
+        title: "Queued message started",
         meta: this._timeAgo(event.timestamp),
         state: "active",
       };
     }
     if (event.event_type === "run.queue_cleared") {
       return {
-        title: "Steer queue cleared",
+        title: "Queued messages cleared",
         meta: payload.reason || "Run stopped",
         state: "error",
       };

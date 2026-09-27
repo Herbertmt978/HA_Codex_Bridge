@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.11.1
+
+- Bundles the Sigstore-verified Codex runtime `0.157.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.18.0` without changing its Integration API compatibility.
+
 ## 1.11.0
 
 - Bundles the Sigstore-verified Codex runtime `0.157.1`.
