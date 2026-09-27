@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from .workspace import WorkspaceBoundary, WorkspaceNotFoundError
+from .workspace import WorkspaceBoundary, WorkspaceBoundaryError, WorkspaceNotFoundError
 
 MAX_RUNS = 1024
 MAX_SCOPES = 2048
@@ -131,7 +131,7 @@ class UsageHistory:
         except UsageHistoryError:
             self._boundary.close()
             raise
-        except (ValidationError, OSError, ValueError):
+        except (ValidationError, WorkspaceBoundaryError, OSError, ValueError):
             self._boundary.close()
             raise UsageHistoryError("Usage history could not be read.") from None
 

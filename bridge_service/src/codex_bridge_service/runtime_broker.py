@@ -671,8 +671,14 @@ class RuntimeBroker:
         self.child_agents = ChildAgents(storage.root, app_server,
                                         request=self._request_child_agents_locked,
                                         active_authority=self._child_control_authority_locked)
-        self.usage_history = UsageHistory(storage.root)
+        self.usage_history: UsageHistory | None = None
         self._usage_unavailable = False
+        try:
+            self.usage_history = UsageHistory(storage.root)
+        except (UsageHistoryError, WorkspaceBoundaryError, OSError):
+            # Optional observations must not prevent execution. Preserve the
+            # original confined file; no empty replacement or inferred zero.
+            self._usage_unavailable = True
         self._leases: dict[str, RuntimeLease] = {}
         self._pending_prompt_admissions: dict[str, PromptAdmission] = {}
         self._completion_events: dict[str, Event] = {}
@@ -2121,6 +2127,8 @@ class RuntimeBroker:
             else:
                 run.stop_reason = "elapsed_time_limit"
                 try:
+                    if self._usage_unavailable or self.usage_history is None:
+                        raise UsageHistoryError("Usage history is unavailable.")
                     self.usage_history.request_budget_stop(
                         run.run_id, elapsed_seconds=run.max_duration_seconds or 0,
                         requested_at=_now(),
@@ -2183,7 +2191,7 @@ class RuntimeBroker:
     def get_usage_history(self, *, thread_id: str | None = None,
                           project_id: str | None = None) -> dict[str, object]:
         with self._lock:
-            if self._usage_unavailable:
+            if self._usage_unavailable or self.usage_history is None:
                 raise UsageHistoryError("Usage history is unavailable.")
             view = self.usage_history.view(thread_id=thread_id, project_id=project_id)
             for item in view["items"]:
@@ -2546,7 +2554,8 @@ class RuntimeBroker:
                 browser_broker.close()
             except BaseException:
                 pass
-        self.usage_history.close()
+        if self.usage_history is not None:
+            self.usage_history.close()
 
     def _run_worker(self, run_id: str) -> None:
         try:
@@ -2673,6 +2682,18 @@ class RuntimeBroker:
                         ),
                     )
         except Exception as start_error:
+            with self._lock:
+                expired = self._state.runs.get(run_id)
+                elapsed_expired = (
+                    expired is not None
+                    and expired.status not in _TERMINAL_RUN_STATES
+                    and self._elapsed_budget_remaining_locked(expired) <= 0
+                    and (expired.turn_start_dispatched or expired.run_id not in self._assist_loading_runs)
+                )
+            if elapsed_expired:
+                self._stop_expired_start(run_id)
+                self._watch_turn(run_id)
+                return
             generation_to_abort: int | None = None
             with self._lock:
                 failed = self._state.runs.get(run_id)
@@ -2855,10 +2876,6 @@ class RuntimeBroker:
                     "The queued turn was cancelled before it started.",
                 )
                 return
-            thread_request_timeout = min(
-                self.control_request_timeout_seconds,
-                self._remaining_total_budget_locked(run),
-            )
             run.status = "starting"
             run.started_at = _now()
             if run.max_duration_seconds is not None:
@@ -2868,6 +2885,7 @@ class RuntimeBroker:
             run.last_activity_at = run.started_at
             run.generation = self.app_server.generation
             generation = run.generation
+            thread_request_timeout = self._start_request_timeout_locked(run)
             self._activity[run_id] = monotonic()
             self._persist_locked()
             thread = self.storage.get_thread(run.thread_id)
@@ -2969,11 +2987,6 @@ class RuntimeBroker:
                     # and consent this process did not witness.
                     run.codex_thread_id = None
         browser_tools_advertised = False
-        if thread.assist_origin and thread.assist_mcp_servers is not None:
-            with self._lock:
-                if run.status in _TERMINAL_RUN_STATES or generation != self.app_server.generation:
-                    return
-                self._assist_loading_runs.add(run.run_id)
         fresh_usage_thread = run.codex_thread_id is None
         if run.codex_thread_id:
             # Codex 0.157.1 ignores resume settings while the thread is loaded.
@@ -2984,10 +2997,7 @@ class RuntimeBroker:
             with self._lock:
                 if generation != self.app_server.generation or run.status != "starting":
                     raise RuntimeUnavailableError()
-                thread_request_timeout = min(
-                    self.control_request_timeout_seconds,
-                    self._remaining_total_budget_locked(run),
-                )
+                thread_request_timeout = self._start_request_timeout_locked(run)
             self._unload_provider_thread(
                 run.codex_thread_id, generation,
                 timeout_seconds=thread_request_timeout,
@@ -2996,10 +3006,9 @@ class RuntimeBroker:
             with self._lock:
                 if generation != self.app_server.generation or run.status != "starting":
                     raise RuntimeUnavailableError()
-                thread_request_timeout = min(
-                    self.control_request_timeout_seconds,
-                    self._remaining_total_budget_locked(run),
-                )
+                thread_request_timeout = self._start_request_timeout_locked(run)
+                if thread.assist_origin and thread.assist_mcp_servers is not None:
+                    self._assist_loading_runs.add(run.run_id)
             thread_params["threadId"] = run.codex_thread_id
             thread_result = self.app_server.request(
                 "thread/resume",
@@ -3017,6 +3026,14 @@ class RuntimeBroker:
                 browser_tools_advertised = True
             if host_lease is not None:
                 thread_params.setdefault("dynamicTools", []).append(host_dynamic_tool_spec())
+            with self._lock:
+                if self._closed or run.status in _TERMINAL_RUN_STATES:
+                    return
+                if generation != self.app_server.generation or run.status != "starting":
+                    raise RuntimeUnavailableError()
+                thread_request_timeout = self._start_request_timeout_locked(run)
+                if thread.assist_origin and thread.assist_mcp_servers is not None:
+                    self._assist_loading_runs.add(run.run_id)
             thread_result = self.app_server.request(
                 "thread/start",
                 thread_params,
@@ -3081,10 +3098,7 @@ class RuntimeBroker:
                     return
                 if generation != self.app_server.generation:
                     raise RuntimeUnavailableError()
-                turn_request_timeout = min(
-                    self.control_request_timeout_seconds,
-                    self._remaining_total_budget_locked(run),
-                )
+                turn_request_timeout = self._start_request_timeout_locked(run, elapsed_cap=True)
                 # Pause/cancel after this boundary affects future starts. The
                 # existing Stop action still owns this dispatched bounded turn.
                 run.turn_start_dispatched = True
@@ -3134,6 +3148,8 @@ class RuntimeBroker:
                 raise RuntimeProtocolMismatchError()
             run.codex_turn_id = turn_id
             try:
+                if self._usage_unavailable or self.usage_history is None:
+                    raise UsageHistoryError("Usage history is unavailable.")
                 self.usage_history.start(UsageRun(
                     run_id=run.run_id, thread_id=run.thread_id,
                     project_id=self.storage.load_thread(run.thread_id).project_id,
@@ -3150,9 +3166,11 @@ class RuntimeBroker:
             # private checkpoint only needs it while queued or pre-dispatch.
             run.workspace_context = ()
             run.chat_context = ()
-            self._authorize_browser_turn_locked(run)
+            elapsed_expired = self._elapsed_budget_remaining_locked(run) <= 0
+            if not elapsed_expired:
+                self._authorize_browser_turn_locked(run)
             pending_host = self._host_pending.pop(run.run_id, None)
-            if pending_host is not None and self._host_access.active(pending_host):
+            if pending_host is not None and not elapsed_expired and self._host_access.active(pending_host):
                 self._host_turns[run.run_id] = (
                     BrowserInvocationContext(
                         run_id=run.run_id, thread_id=run.thread_id,
@@ -3189,6 +3207,10 @@ class RuntimeBroker:
                 )
             self._callback_replays_in_progress.add(run_id)
 
+        if elapsed_expired and turn_status == "inProgress":
+            # Bind only the authoritative response identity, and latch/revoke
+            # before replaying callbacks which may be slow or request tools.
+            self._stop_expired_start(run_id, callbacks=buffered_callbacks)
         self._replay_pre_response_callbacks(
             run_id,
             expected_turn_id=turn_id,
@@ -3198,8 +3220,11 @@ class RuntimeBroker:
             current = self._state.runs.get(run_id)
             if current is None or current.status in _TERMINAL_RUN_STATES:
                 return
-            interrupt_after_start = current.status == "cancelling"
-        if interrupt_after_start:
+            elapsed_expired = current.stop_reason is None and self._elapsed_budget_remaining_locked(current) <= 0
+            interrupt_after_start = current.status == "cancelling" and current.stop_reason != "elapsed_time_limit"
+        if elapsed_expired:
+            self._stop_expired_start(run_id)
+        elif interrupt_after_start:
             try:
                 self.app_server.request(
                     "turn/interrupt",
@@ -3322,6 +3347,66 @@ class RuntimeBroker:
         if deadline is None:
             raise RuntimeStateError("The runtime deadline is missing or invalid.")
         return (deadline - datetime.now(UTC)).total_seconds()
+
+    def _elapsed_budget_remaining_locked(self, run: RuntimeRunState) -> float:
+        deadline = _parse_time(run.budget_deadline_at)
+        return (deadline - datetime.now(UTC)).total_seconds() if deadline else float("inf")
+
+    def _start_request_timeout_locked(self, run: RuntimeRunState, *, elapsed_cap: bool = False) -> float:
+        total_remaining = self._remaining_total_budget_locked(run)
+        elapsed_remaining = self._elapsed_budget_remaining_locked(run)
+        if elapsed_remaining <= 0:
+            raise TimeoutError("The elapsed-time limit expired before turn dispatch.")
+        timeout = min(self.control_request_timeout_seconds, total_remaining)
+        # Thread preparation can load an Assist/MCP session whose identity is
+        # unknown until the response. Keep its existing control/global bound;
+        # only actual model dispatch uses the additional elapsed response cap.
+        return min(timeout, elapsed_remaining) if elapsed_cap else timeout
+
+    def _stop_expired_start(self, run_id: str, *, callbacks: list[AppServerNotification | AppServerRequest] | None = None) -> None:
+        """Reuse cancellation/terminal owners without guessing a native turn."""
+        with self._lock:
+            run = self._state.runs.get(run_id)
+            if run is None or run.status in _TERMINAL_RUN_STATES or self._closed:
+                return
+            if run.generation != self.app_server.generation:
+                self._reconcile_generation_locked(self.app_server.generation, reason="app-server generation changed")
+                return
+            if not run.turn_start_dispatched:
+                run.stop_reason = "elapsed_time_limit"
+                self._terminalize_locked(run, "cancelled", None)
+                return
+            if not run.codex_turn_id:
+                # An RPC timeout can mean native work started. Keep its lease
+                # and queue authority until existing generation/global recovery;
+                # buffered callbacks are not an authoritative start response.
+                run.stop_reason = "elapsed_time_limit"
+                run.status = "cancelling"
+                run.cancellation_requested_at = run.cancellation_requested_at or _now()
+                run.budget_stop_unconfirmed = True
+                self._revoke_browser_turn_locked(run.run_id)
+                events = self._expire_run_interactions_locked(run)
+                self._persist_locked(events=events)
+                self._set_thread_projection_locked(run)
+                return
+            if any(
+                isinstance(callback, AppServerNotification)
+                and callback.method == "turn/completed"
+                and isinstance(callback.params, dict)
+                and isinstance(callback.params.get("turn"), dict)
+                and callback.params["turn"].get("status") in {"completed", "failed", "interrupted"}
+                and self._correlated_run_locked(callback.generation, callback.params.get("threadId"), callback.params["turn"].get("id")) is run
+                for callback in [*(callbacks or []), *self._pre_response_callbacks.get(run_id, [])]
+            ):
+                # Replay already received output and definitive completion in
+                # order; the validated response has now authorised correlation.
+                return
+            thread_id = run.thread_id
+        try:
+            self.cancel_run(thread_id, run_id=run_id, budget_stop=True)
+        except TurnChangedError:
+            # Concurrent definitive completion already owns terminal cleanup.
+            pass
 
     def _remaining_total_budget_locked(self, run: RuntimeRunState) -> float:
         remaining = self._total_budget_remaining_locked(run)
@@ -3798,6 +3883,8 @@ class RuntimeBroker:
         if method == "thread/tokenUsage/updated":
             usage = params.get("tokenUsage")
             try:
+                if self._usage_unavailable or self.usage_history is None:
+                    raise UsageHistoryError("Usage history is unavailable.")
                 self.usage_history.observe(
                     run.run_id, native_thread_id=run.codex_thread_id or "",
                     native_turn_id=run.codex_turn_id or "",
@@ -4659,6 +4746,8 @@ class RuntimeBroker:
             run.terminal_message = message
         run.last_activity_at = _now()
         try:
+            if self._usage_unavailable or self.usage_history is None:
+                raise UsageHistoryError("Usage history is unavailable.")
             self.usage_history.finish(run.run_id, status=status, finished_at=run.last_activity_at)
         except (UsageHistoryError, WorkspaceBoundaryError, OSError):
             self._usage_unavailable = True

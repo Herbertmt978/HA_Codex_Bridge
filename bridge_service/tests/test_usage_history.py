@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from codex_bridge_service.usage_history import DurationBudget, UsageHistory, UsageHistoryError, UsageRun
 import codex_bridge_service.usage_history as usage_module
+from codex_bridge_service.workspace import WorkspaceTypeError
 
 START = "2026-09-27T10:00:00+00:00"
 LATER = "2026-09-27T10:00:10+00:00"
@@ -166,7 +167,7 @@ def test_duration_deadline_and_timezone():
     assert datetime.fromisoformat(budget.deadline(START)).tzinfo == UTC
 
 
-@pytest.mark.parametrize("failure", ["oversized", "excessive_scopes", "excessive_accounts", "invalid_json"])
+@pytest.mark.parametrize("failure", ["oversized", "excessive_scopes", "excessive_accounts", "invalid_json", "non_file", "unreadable"])
 def test_constructor_rejections_close_owned_boundary(tmp_path, monkeypatch, failure):
     boundaries = []
     monkeypatch.setattr(usage_module, "MAX_SCOPES", 1)
@@ -176,6 +177,8 @@ def test_constructor_rejections_close_owned_boundary(tmp_path, monkeypatch, fail
         "excessive_scopes": json.dumps({"scopes": {"one": {"run_id": "one"}, "two": {"run_id": "two"}}}).encode(),
         "excessive_accounts": json.dumps({"accounts": {"one": 1, "two": 2}}).encode(),
         "invalid_json": b"invalid-json",
+        "non_file": None,
+        "unreadable": None,
     }[failure]
 
     class Boundary:
@@ -184,6 +187,10 @@ def test_constructor_rejections_close_owned_boundary(tmp_path, monkeypatch, fail
             boundaries.append(self)
 
         def open_regular_file(self, _relative):
+            if failure == "non_file":
+                raise WorkspaceTypeError()
+            if failure == "unreadable":
+                raise PermissionError("private path must not enter public errors")
             return BytesIO(payload)
 
         def close(self):

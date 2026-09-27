@@ -36,6 +36,11 @@ Deleting a chat removes it from visible history. Child work is not independently
 aggregated into the parent's reported counter: the pinned protocol does not prove
 that those meters are disjoint. No pre-feature history or billing is invented.
 
+If the optional private ledger is malformed, oversized, unreadable or not a
+regular file, the Bridge preserves it and reports usage history as unavailable.
+It does not replace the evidence with empty history or zero counters. Ordinary
+chat and elapsed-time enforcement continue independently of this projection.
+
 ## Optional elapsed-time limit
 
 Choose an **Elapsed-time limit** before sending a new turn, or keep **No extra
@@ -50,6 +55,13 @@ The existing runtime watcher requests an interrupt for the exact current native
 turn when the elapsed-time limit is reached. Notification/request latency and
 in-flight work can overshoot it; this is interrupt-trigger timing, not a provider
 hard cap. Token telemetry is not needed to enforce this elapsed-time trigger.
+Native thread preparation keeps its existing control/global request ceiling;
+after preparation the Bridge rechecks the accepted elapsed deadline before
+dispatching any new turn. An expired undispatched turn stops locally. The
+`turn/start` response wait also uses the remaining elapsed budget. A valid running
+response establishes the exact turn identity for a targeted interrupt before
+buffered callbacks are replayed; a definitive terminal response retains its
+actual outcome.
 Partial transcript output, files and results remain available. An elapsed-time
 stop does not imply goal completion or change manually recorded progress.
 
@@ -62,6 +74,14 @@ queued records and cancellation ownership; it does not kill a shared runtime to
 enforce an early per-turn limit. The existing global safety ceiling remains owned
 by the existing runtime lifecycle. A restart records the interrupted outcome and
 revalidates undispatched queued work with its original authority.
+
+A start request can time out after native work was dispatched but before its
+turn identity was acknowledged. The Bridge records an unconfirmed elapsed stop,
+retains the run's lease and queued authority, and blocks new admission. Buffered
+callback IDs do not substitute for the missing authoritative response. Confirmed
+generation recovery or the existing global safety ceiling resolves this state;
+the Bridge does not guess an interrupt target or replay the start. Acknowledgement
+and interrupt latency can therefore overshoot the selected limit.
 
 Capabilities `usage_history_v1` and `elapsed_time_limit_v1` gate the private API,
 Home Assistant proxy and panel. Older Apps do not receive unsupported requests.
