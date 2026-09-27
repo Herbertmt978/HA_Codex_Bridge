@@ -190,3 +190,13 @@ Preserve the original inventory, powers, paused DEV updates and temporary fourth
 backup until acceptance permits restoration. Continue native acceptance without
 replaying completed requests, then frozen qualification, signed publication,
 served DEV checks and only actually delivered scoped issue closure.
+
+The owned manual goal has now completed after its context proof; replay retained
+completed state and added no provider turn. Served response, code and both maths
+source copies, attributed editable quote and Unicode retained search pass.
+The broader browser journeys now follow the actual menus while retaining exact
+source, draft isolation, owner invalidation and no-send assertions. All eight
+corrected aggregate journeys pass on Linux. The archive exporter now disables
+Windows newline conversion and verifies every file against its Git object.
+Failed preliminary gate receipts are retained. Fresh frozen full gates, native
+passage selection, queue/duration, child control and scoped cleanup remain owed.

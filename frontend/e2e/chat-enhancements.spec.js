@@ -173,19 +173,22 @@ test("real Shadow DOM passage selection copies and quotes only the selected publ
   expect(await page.evaluate(() => typeof window.getSelection()?.getComposedRanges)).toBe("function");
 
   await paragraph.selectText();
-  await article.getByRole("button", { name: "Copy passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await article.getByRole("menuitem", { name: "Copy passage", exact: true }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(response);
   expect(await page.evaluate(() => window.__composedRangeCalls)).toBeGreaterThan(0);
 
   const input = panel.locator("#prompt-input");
   await input.fill("Existing editable draft");
   await paragraph.selectText();
-  await article.getByRole("button", { name: "Quote passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await article.getByRole("menuitem", { name: "Quote passage", exact: true }).click();
   await expect(input).toHaveValue(`Existing editable draft\n\nAssistant response in “Fixture chat”:\n> ${response}`);
   expect(await panel.evaluate((element) => element._draftForThread(element._selectedThreadId))).toContain(response);
   expect(await page.evaluate(() => window.__codexHarness.calls.filter((call) => call.type === "codex_bridge/send_prompt").length)).toBe(0);
 
-  const quoteButton = article.getByRole("button", { name: "Quote message", exact: true });
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  const quoteButton = article.getByRole("menuitem", { name: "Quote message", exact: true });
   await quoteButton.focus();
   await quoteButton.press("Enter");
   await expect(input).toHaveValue(`Existing editable draft\n\nAssistant response in “Fixture chat”:\n> ${response}\n\nAssistant response in “Fixture chat”:\n> ${response}`);
@@ -217,10 +220,15 @@ for (const width of [390, 1280]) {
       });
 
       const search = panel.getByRole("combobox", { name: "Web search" });
-      if (width === 390) await panel.locator("#composer-diagnostics > summary").click();
+      await panel.getByRole("button", { name: /^Turn options/ }).click();
       await expect(search).toBeVisible();
       await expect(panel.getByRole("button", { name: "Discard draft", exact: true })).toBeVisible();
-      const actionButtons = article.locator(".message-actions button");
+      const searchBox = await search.boundingBox();
+      expect(searchBox.height).toBe(width === 390 ? 44 : 32);
+      expect(searchBox.x + searchBox.width).toBeLessThanOrEqual(width);
+      await page.keyboard.press("Escape");
+      await article.getByRole("button", { name: "Message actions", exact: true }).click();
+      const actionButtons = article.getByRole("menuitem");
       await expect(actionButtons).toHaveCount(4);
       for (const button of await actionButtons.all()) {
         const box = await button.boundingBox();
@@ -228,9 +236,7 @@ for (const width of [390, 1280]) {
         expect(box.x).toBeGreaterThanOrEqual(0);
         expect(box.x + box.width).toBeLessThanOrEqual(width);
       }
-      const searchBox = await search.boundingBox();
-      expect(searchBox.height).toBe(width === 390 ? 44 : 32);
-      expect(searchBox.x + searchBox.width).toBeLessThanOrEqual(width);
+      await page.keyboard.press("Escape");
 
       const codeBlock = article.locator(".code-block");
       const code = codeBlock.locator(".code-text");
@@ -275,7 +281,8 @@ test("touch users can operate per-message actions at a narrow viewport", async (
     await setHaUser(panel, "e2e-user-touch");
     await selectChat(panel);
     const article = await addMessage(panel, { key: 99003, text: "Touch copy stays inside this message." });
-    await article.getByRole("button", { name: "Copy message", exact: true }).tap();
+    await article.getByRole("button", { name: "Message actions", exact: true }).tap();
+    await article.getByRole("menuitem", { name: "Copy message", exact: true }).tap();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Touch copy stays inside this message.");
     expect(await article.locator(".message-actions").evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   } finally {
@@ -335,7 +342,9 @@ test("IndexedDB draft recovery survives reload and isolates user/chat, send, dis
 
   await setHaUser(reloadedPanel, "e2e-user-drafts-a");
   await selectChat(reloadedPanel, "thr_vba_1");
+  await reloadedPanel.getByRole("button", { name: /^Turn options/ }).click();
   await reloadedPanel.getByRole("button", { name: "Discard draft", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(reloadedPanel.locator("#prompt-input")).toHaveValue("");
   await expect(reloadedPanel.locator("#draft-recovery-status")).toHaveText("Saved draft text removed.");
   expect(await readOwnedDraftRows(page, "codex-bridge:preferences:e2e-user-drafts-a")).not.toEqual(expect.arrayContaining([

@@ -207,8 +207,9 @@ test("owner away-and-back and disconnect reject late read and action replies", a
   await expect(section.locator('[name="goal-progress"]')).toHaveValue("Newer server progress");
   // A pending mutation has applied on the server; its late readback must not
   // populate the other account or resurrect retry state after disconnection.
-  await panel.getByRole("button", { name: /Chat actions/ }).click();
-  await panel.getByRole("menuitem", { name: "Goal", exact: true }).click();
+  await expect(section).toBeVisible();
+  await expect(section.locator(".goal-disclosure")).toHaveJSProperty("open", false);
+  await section.locator(".goal-disclosure > summary").click();
   await page.evaluate(() => { window.goalFixture.holdNext = "goal_action"; });
   await section.getByRole("button", { name: "Resume for manual turns", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.goalFixture.delayed.length)).toBe(1);
