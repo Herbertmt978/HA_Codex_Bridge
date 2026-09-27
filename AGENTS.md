@@ -68,6 +68,12 @@ changing product language or architecture.
   include keyboard/touch and reduced-motion checks where interaction changes.
   Follow [Panel design language](docs/panel-design-language.md) for canonical
   source examples, dimensions, control states and rendered verification.
+  Keep the default composer to a writing area and one bottom toolbar. Secondary
+  settings/help/context tools belong in the existing anchored menus. Goal and
+  Find belong in header actions, with no inactive rows or reserved height.
+  Use one labelled overflow trigger per message, preserve exact passage selection before menu focus moves, and remove unused action-row height. Verify the full header-to-
+  composer viewport, selected context/non-default summaries and every relocated
+  keyboard/touch operation; do not shrink readable type to recover space.
 - Edit `frontend/src/`, then regenerate the panel and bundled PDF worker below
   `custom_components/codex_bridge/frontend/` with `npm run build`; do not
   hand-edit generated frontend assets.
@@ -101,3 +107,12 @@ Windows workstation can run only the plugin-independent slices.
   Home Assistant behavior before publishing acceptance evidence.
 - Never commit or print ChatGPT credentials, Home Assistant tokens, OAuth state,
   cookies, private keys, or complete authorization headers.
+
+- Bottom File preview/Terminal sizing belongs to the existing pane owner. Use a
+  thin accessible top-edge separator, visit-scoped height, viewport bounds and
+  complete pointer cleanup. Verify actual terminal fit and preview state, not
+  only resize callback counts.
+
+Specialised message copy actions, including ordered maths sources, belong inside
+the same per-message overflow menu. Preserve exact source identity and do not
+reintroduce persistent copy-action rows.

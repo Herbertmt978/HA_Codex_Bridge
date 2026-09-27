@@ -1,13 +1,14 @@
 import { createReadStream } from "node:fs";
 import { mkdir, stat } from "node:fs/promises";
 import { createServer } from "node:http";
+import { tmpdir } from "node:os";
 import { extname, resolve, sep } from "node:path";
 import { build } from "esbuild";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const root = resolve(process.cwd());
-const evidence = "D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb063/browser";
+const evidence = process.env.CODEX_BRIDGE_MATH_EVIDENCE_DIR || resolve(tmpdir(), "codex-bridge-maths", String(process.pid));
 const bundle = resolve(evidence, "panel-source.js");
 let server;
 let origin;
@@ -82,11 +83,13 @@ for (const width of [390, 1280]) {
       expect(dimensions.displayWidth).toBeLessThanOrEqual(dimensions.contentWidth + 1);
       expect(dimensions.contentOverflow).toBeLessThan(2);
       expect(await article.locator("annotation, [aria-hidden], img, a[href], script").count()).toBe(0);
-      const sourceCopy = article.getByRole("button", { name: "Copy maths source 2", exact: true });
+      await article.getByRole("button", { name: "Message actions", exact: true }).click();
+      const sourceCopy = article.getByRole("menuitem", { name: "Copy maths source 2", exact: true });
       await sourceCopy.focus(); await sourceCopy.press("Enter");
       expect(await page.evaluate(() => window.__mathClipboardPayload)).toBe(equation);
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(equation);
-      await article.getByRole("button", { name: "Copy message", exact: true }).click();
+      await article.getByRole("button", { name: "Message actions", exact: true }).click();
+      await article.getByRole("menuitem", { name: "Copy message", exact: true }).click();
       expect(await page.evaluate(() => window.__mathClipboardPayload)).toBe(source);
       // Windows' native clipboard normalises mixed line endings. Assert exact
       // API input above, then verify the native roundtrip with that conversion.

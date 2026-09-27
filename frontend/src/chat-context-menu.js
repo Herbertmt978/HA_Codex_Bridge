@@ -254,7 +254,7 @@ export class ChatContextMenu {
       control("Share", "copy-link", "upload"), control("Copy", "submenu", "copy", "", "copy"), null,
       ...(this.supported ? [control("Fork", "submenu", "pullRequest", "", "fork"), null] : []),
       control("Open in new window", "open", "external"),
-      ...(this.header ? [null, control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : []),
+      ...(this.header ? [null, control("Goal", "compact-goal", "chat"), control("Find in chat", "compact-search", "search"), control("Repository review", "compact-review", "file"), control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : []),
       ...((this.uncertain.has(this.threadId) || this.notice) && !this.header ? [null, control("Refresh", "refresh", "refresh")] : []),
     ];
   }
@@ -428,6 +428,12 @@ export class ChatContextMenu {
     const thread = this.thread();
     if (!thread) { this.close(); return; }
     if (this.busy.has(thread.thread_id)) return;
+    if (action.startsWith("compact-") && this.header) {
+      const trigger = this.trigger;
+      this.close();
+      this.panel._compactComposer.open(action.slice(8), trigger);
+      return;
+    }
     if (action === "submenu" || action === "back" || action === "manage-sections" || action === "manage-section") {
       window.clearTimeout(this.hoverTimer);
       const previous = this.page;

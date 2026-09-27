@@ -16,7 +16,7 @@ function makePanel() {
 }
 
 function action(article, name) {
-  return [...article.querySelectorAll(".message-actions button")].find((button) => button.textContent === name);
+  return [...article.querySelectorAll(".message-actions button")].find((button) => button.getAttribute("aria-label") === name);
 }
 
 describe("public message actions", () => {
@@ -174,5 +174,22 @@ describe("passage boundary hardening", () => {
     button.click();
     expect(panel._writeClipboardText).not.toHaveBeenCalled();
     expect(panel._setError).toHaveBeenCalledWith("Select a passage inside this message first.");
+  });
+});
+
+
+describe('overflow passage activation',()=>{
+  it('retains the pointer snapshot when trigger focus collapses selection',async()=>{
+    const panel=makePanel();panel._writeClipboardText=vi.fn(async()=>{});
+    const article=panel._renderMessage('assistant','Exact selected text',10);
+    panel.shadowRoot.getElementById('message-list').append(article);
+    const range=document.createRange();range.selectNodeContents(article.querySelector('.message-content'));
+    const selection={isCollapsed:false,rangeCount:1,getRangeAt:()=>range};
+    vi.spyOn(window,'getSelection').mockReturnValue(selection);
+    const trigger=article.querySelector('.message-actions-trigger');
+    trigger.dispatchEvent(new Event('pointerdown'));selection.isCollapsed=true;
+    trigger.dispatchEvent(new Event('focus'));trigger.click();
+    const copy=action(article,'Copy passage');expect(copy.disabled).toBe(false);copy.click();
+    await Promise.resolve();expect(panel._writeClipboardText).toHaveBeenCalledWith('Exact selected text');
   });
 });

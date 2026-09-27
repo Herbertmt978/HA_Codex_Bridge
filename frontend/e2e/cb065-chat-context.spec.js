@@ -2,12 +2,13 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 
 import { build } from "esbuild";
 import { expect, test } from "@playwright/test";
 
 const repositoryRoot = resolve(process.cwd());
-const evidenceDirectory = "D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb065/browser";
+const evidenceDirectory = resolve(process.env.CODEX_BRIDGE_COMPACT_EVIDENCE_DIR || tmpdir(), "compact-previous-context", String(process.pid));
 const bundlePath = resolve(evidenceDirectory, "codex-bridge-panel-source.js");
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -113,7 +114,8 @@ async function openContext(page, width, theme) {
     p._render();
   }, preview);
   const section = panel.locator("#chat-context");
-  await section.locator(":scope > summary").click();
+  await panel.getByRole("button", { name: "Add to chat", exact: true }).click();
+  await panel.getByRole("button", { name: "Previous chat context", exact: true }).click();
   return { panel, section };
 }
 
@@ -136,10 +138,10 @@ for (const width of [1280, 390]) for (const theme of ["light", "dark"]) {
     expect(style.font).toBeTruthy();
     const layout = await section.evaluate((el) => ({
       width: el.getBoundingClientRect().width,
-      composerWidth: el.closest(".composer-shell").getBoundingClientRect().width,
+      surfaceWidth: el.closest(".compact-surface").getBoundingClientRect().width,
       contentWidth: el.scrollWidth, availableWidth: el.clientWidth,
     }));
-    expect(layout.width).toBeGreaterThanOrEqual(layout.composerWidth - 32);
+    expect(layout.width).toBeLessThanOrEqual(layout.surfaceWidth);
     expect(layout.contentWidth).toBeLessThanOrEqual(layout.availableWidth + 1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `${evidenceDirectory}/context-${width}-${theme}.png` });

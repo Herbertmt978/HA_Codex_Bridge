@@ -3,6 +3,25 @@
 Compare each new control with its adjacent established controls in the rendered
 panel. The reference implementations are in `frontend/src/codex-bridge-panel.js`:
 
+The default composer follows the Codex Windows proportions: a clear writing
+area and one compact bottom toolbar. Secondary Follow-up, Collaboration,
+elapsed-time limit and Web search controls/help open in Turn options. The plus
+surface groups Files/workspace context and Previous chat context. Model/thinking
+and allowance remain reachable together towards the right; microphone and
+send/stop keep their existing meaning. Repository status/review is on demand.
+Never add a permanent full-width option or help row for a new feature.
+
+Goal and Find in chat open from the header overflow. Closing them removes their
+layout height, not just their contents. Active context and non-default sending
+choices retain concise summaries; approvals, pending questions and blocking
+validation stay visible. Permission labels describe actual Bridge grants.
+Message actions use one labelled ⋯ trigger per message, with copy/quote actions in its menu and no separate action row. Capture validated passage selection before menu focus moves; show unavailable-selection guidance visibly.
+Keep exact copy/quote behaviour, including passage selection on touch/keyboard.
+Opening or closing any surface must preserve drafts, choices and selected context
+and must never submit, grant access or start work. Compare full header-to-composer
+views on desktop and narrow screens, including actual regained conversation
+height, every submenu, focus return, Escape and viewport placement.
+
 | Use | Existing implementation |
 | --- | --- |
 | Composer setting | `_composerUtility`, Model and Thinking selectors |
@@ -36,3 +55,13 @@ check clipping and horizontal overflow. Capture focused before/after evidence.
 Use behavioural/computed-style browser assertions for defects rather than source
 string assertions or an unexplained screenshot baseline replacement. Regenerate
 assets with the normal build; never edit the generated bundle by hand.
+
+The bottom File preview/Terminal pane uses a thin top-edge drag separator. Keep
+its idle height small, support touch and keyboard resizing, preserve visit height
+across tabs/open-close, and clamp against both visual viewport edges. Verify real
+terminal host dimensions and fitted rows, preview scroll/zoom, and cleanup after
+pointer cancellation, close and disconnect. Do not add a permanent resize toolbar.
+
+Specialised message copy actions, including ordered maths sources, belong inside
+the same per-message overflow menu. Preserve exact source identity and do not
+reintroduce persistent copy-action rows.
