@@ -171,7 +171,7 @@ describe("selected-chat find controller", () => {
     expect(article.querySelectorAll(".code-text mark").length).toBeGreaterThan(0);
     article.querySelector('[aria-label="Copy original code"]').click();
     await vi.waitFor(() => expect(copy).toHaveBeenCalledWith("needle = 'needle'\n  print(needle)\n"));
-    [...article.querySelectorAll(".message-actions button")].find((button) => button.textContent === "Copy message").click();
+    [...article.querySelectorAll(".message-actions button")].find((button) => button.getAttribute("aria-label") === "Copy message").click();
     await vi.waitFor(() => expect(copy).toHaveBeenCalledWith(text));
   });
   it("cancels debounce and pending search on input clearing", async () => {

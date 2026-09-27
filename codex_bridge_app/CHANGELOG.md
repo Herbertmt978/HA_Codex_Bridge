@@ -2,6 +2,17 @@
 
 All notable App changes are recorded here.
 
+## 1.13.1
+
+- Keeps the composer to one toolbar, with secondary settings and context tools
+  in anchored menus. Goal, Find and repository review open on demand.
+- Groups message copy, attributed quotes and exact maths sources in one menu.
+- Adds an accessible draggable top edge to resize File preview and Terminal,
+  preserving visit height and respecting the visible viewport.
+- Preserves Assistant Chats below Projects and collapsed by default.
+- Pairs App, Integration and panel `1.13.1` with unchanged Bridge `0.20.0`
+  and Codex `0.157.1`.
+
 ## 1.13.0
 
 - Adds message copy and attributed quotes, opt-in local draft recovery, retained

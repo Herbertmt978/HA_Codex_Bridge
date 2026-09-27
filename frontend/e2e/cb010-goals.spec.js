@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 
 import { build } from "esbuild";
 import AxeBuilder from "@axe-core/playwright";
@@ -9,7 +10,7 @@ import { installGoalFixture } from "./cb010-goals-fixture.js";
 import { expect, test } from "@playwright/test";
 
 const repositoryRoot = resolve(process.cwd());
-const evidenceDirectory = "D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb010/browser";
+const evidenceDirectory = resolve(process.env.CODEX_BRIDGE_COMPACT_EVIDENCE_DIR || tmpdir(), "compact-goals", String(process.pid));
 const bundlePath = resolve(evidenceDirectory, "codex-bridge-panel-source.js");
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -95,7 +96,8 @@ async function openGoals(page, width, theme) {
   await panel.evaluate(installGoalFixture);
   const section = panel.locator("#goal-controls");
   await expect(section.locator('[data-goal-action="create"]')).toHaveCount(1);
-  await section.locator(".goal-disclosure > summary").click();
+  await panel.getByRole("button", { name: /Chat actions/ }).click();
+  await panel.getByRole("menuitem", { name: "Goal", exact: true }).click();
   return { panel, section };
 }
 
@@ -205,6 +207,8 @@ test("owner away-and-back and disconnect reject late read and action replies", a
   await expect(section.locator('[name="goal-progress"]')).toHaveValue("Newer server progress");
   // A pending mutation has applied on the server; its late readback must not
   // populate the other account or resurrect retry state after disconnection.
+  await expect(section).toBeVisible();
+  await expect(section.locator(".goal-disclosure")).toHaveJSProperty("open", false);
   await section.locator(".goal-disclosure > summary").click();
   await page.evaluate(() => { window.goalFixture.holdNext = "goal_action"; });
   await section.getByRole("button", { name: "Resume for manual turns", exact: true }).click();

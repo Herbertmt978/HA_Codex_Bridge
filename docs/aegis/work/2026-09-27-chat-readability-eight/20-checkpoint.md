@@ -160,3 +160,53 @@ complete changed local gates and image builds are still required before a
 cohesive follow-up push. Release and served DEV acceptance remain unclaimed;
 CB-011 remains partial and CB-037 excluded. Production and the pending MCP/phone
 decisions are unchanged.
+
+## Signed release and compact follow-up — 27 September 2026
+
+Paired 1.13.0 / Bridge 0.20.0 / Codex 0.157.1 is published, signed-qualified
+and installed on DEV. Original chats, projects, sign-in and settings are
+preserved. Assistant Chats is below Projects and collapsed by default in the
+served panel. Native feature acceptance remains separate from release checks.
+Fresh owned fixtures prove manual goal controls without automatic turns,
+repository and exact Unicode file context, exactly-once rendering, and an
+exactly-once combined file/earlier-response/goal turn with the saved goal unchanged.
+Further native journeys and owned-fixture cleanup remain pending.
+
+The authorised compact follow-up is integrated on
+Herb/compact-ui-integration-20260927 with paired 1.13.1 metadata, unchanged
+Bridge/Codex, and regenerated assets. Secondary composer controls, Goal/Find,
+message copy/quote/maths and repository review use anchored menus; the bottom
+preview/terminal pane has an accessible resize edge. Independent source reviews
+found a hidden Find shortcut and a relocated upload close/focus caller. Both
+are corrected through their existing owners. The five affected browser journeys
+pass after correction. Full local gates and final frozen-source review remain
+required before any follow-up push or publication; served compact acceptance
+is unclaimed. Exact machine receipts are in the acceptance matrix and D records.
+
+Scope and initial resources are unchanged. CB-011 remains partial because direct
+v2 child follow-up is unsupported; CB-037 stays excluded. No issue closures or
+production installation. Local-MCP consent and phone readiness remain unanswered.
+Preserve the original inventory, powers, paused DEV updates and temporary fourth
+backup until acceptance permits restoration. Continue native acceptance without
+replaying completed requests, then frozen qualification, signed publication,
+served DEV checks and only actually delivered scoped issue closure.
+
+The owned manual goal has now completed after its context proof; replay retained
+completed state and added no provider turn. Served response, code and both maths
+source copies, attributed editable quote and Unicode retained search pass.
+The broader browser journeys now follow the actual menus while retaining exact
+source, draft isolation, owner invalidation and no-send assertions. All eight
+corrected aggregate journeys pass on Linux. The archive exporter now disables
+Windows newline conversion and verifies every file against its Git object.
+Failed preliminary gate receipts are retained. Fresh frozen full gates, native
+passage selection, queue/duration, child control and scoped cleanup remain owed.
+
+
+## Final compact browser correction
+
+The third frozen compact candidate passed all 1,107 frontend unit tests, lint, builds, generated-file equality and syntax checks. Its full Linux browser run passed 210 of 213 cases. Two duration-control tests toggled an already-open menu after keyboard submission; opening now follows the actual expanded state. The minimum-pane test now restores the real viewport descriptor, waits for rendered geometry and proves pointer capture before dragging. It retains the height-growth assertion and adds cleanup evidence. These changes affect tests only. All five affected duration/pane journeys pass on Linux. Full frozen qualification and independent review remain required before publication. Earlier failed receipts remain intact.
+
+
+## Hosted compatibility review correction
+
+PR #243's hosted review identified unavailable Find and Repository Review entries on older App pairings. Causal Linux coverage failed four of six capability cases before correction. Header and Add menu availability now use the compact surface owner's capability predicate; direct/stale surface opening is guarded, and capability loss closes an open surface. Either advertised Git context or Git review keeps the useful repository surface available. Hidden links explicitly retain hidden CSS behaviour. Six desktop/narrow capability cases and four existing viewport journeys pass on Linux; the Windows frontend suite passed 1,108 tests. Generated assets are rebuilt. The new source still requires a fresh frozen review and local qualification before the single verified PR update. Original candidate4 gates and public CI remain evidence of the preceding source only.

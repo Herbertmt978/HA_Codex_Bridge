@@ -115,8 +115,15 @@ async function openDesignPanel(page, width, theme) {
     element._config = { ...element._config, capabilities: ["plan_mode_v1", "git_review_v1"] };
     element._render(true);
   });
-  if (width === 390) await panel.locator(".composer-diagnostics > summary").click();
+  await panel.getByRole("button", { name: /^Turn options/ }).click();
   return panel;
+}
+
+async function openReview(panel) {
+  await panel.getByRole('button',{name:'Add to chat',exact:true}).click();
+  await panel.getByRole('button',{name:'Repository review',exact:true}).click();
+  await panel.getByRole('button',{name:'Review changes',exact:true}).click();
+  await panel.getByRole('button',{name:'Close Repository review',exact:true}).click();
 }
 
 for (const width of [390, 1280]) {
@@ -136,14 +143,14 @@ for (const width of [390, 1280]) {
       expect(focus.width).toBeGreaterThan(0);
       expect(focus.motion).toBeLessThan(0.001);
       await collaboration.selectOption("default");
-      await panel.getByRole("button", { name: "Review changes", exact: true }).click();
+      await openReview(panel);
       const results = panel.locator("#git-review-results");
       await expect(results).toHaveText("No changes in this scope.");
       const scope = panel.getByRole("combobox", { name: "Scope", exact: true });
       const reference = panel.getByRole("textbox", { name: "Reference", exact: true });
       const refresh = panel.getByRole("button", { name: "Refresh diff", exact: true });
       await page.screenshot({ path: testInfo.outputPath(`git-${width}-${theme}-before-check.png`), animations: "disabled" });
-      for (const control of [collaboration, scope, reference, refresh]) {
+      for (const control of [scope, reference, refresh]) {
         await expect(control).toBeVisible();
         const box = await control.boundingBox();
         expect(box.height, await control.getAttribute("id") || "Refresh diff").toBeGreaterThanOrEqual(width === 390 ? 44 : 32);
@@ -193,86 +200,38 @@ test("design language: narrow touch Git actions", async ({ browser }) => {
   try {
     const page = await context.newPage();
     const panel = await openDesignPanel(page, 390, "dark");
-    await panel.getByRole("button", { name: "Review changes", exact: true }).tap();
+    await openReview(panel);
     await expect(panel.locator("#git-review-results")).toHaveText("No changes in this scope.");
     await panel.getByRole("button", { name: "Refresh diff", exact: true }).tap();
     await expect(panel.locator("#git-review-results")).toHaveText("No changes in this scope.");
   } finally { await context.close(); }
 });
 
-for (const theme of ["light", "dark"]) {
-  test(`design language: empty narrow conversation scroll is keyboard accessible in ${theme}`, async ({ page }, testInfo) => {
-    const panel = await openDesignPanel(page, 390, theme);
-    await panel.getByRole("button", { name: "Review changes", exact: true }).click();
-    await expect(panel.locator("#git-review-results")).toHaveText("No changes in this scope.");
-    const scroll = panel.getByRole("region", { name: "Conversation", exact: true });
-    await expect(scroll).toHaveAttribute("tabindex", "0");
-    // The real empty layout overflows when expanded settings and Git review
-    // share the narrow viewport; do not inject content or force its dimensions.
-    const geometry = await scroll.evaluate((node) => ({ height: node.clientHeight, content: node.scrollHeight }));
-    expect(geometry.height).toBeGreaterThan(0);
-    expect(geometry.content).toBeGreaterThan(geometry.height);
-    await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).focus();
-    await page.keyboard.press("Tab");
-    const goalSummary = panel.locator("#goal-controls summary");
-    await expect(goalSummary).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(scroll).toBeFocused();
-    await expect.poll(() => scroll.evaluate((node) => parseFloat(getComputedStyle(node).outlineOffset))).toBe(-2);
-    const focus = await scroll.evaluate((node) => {
-      const css = getComputedStyle(node);
-      return { outline: css.outlineStyle, width: parseFloat(css.outlineWidth), offset: parseFloat(css.outlineOffset), shadow: css.boxShadow };
-    });
-    expect(focus.outline).not.toBe("none");
-    expect(focus.width).toBeGreaterThan(0);
-    expect(focus.offset).toBeLessThan(0);
-    expect(focus.shadow).toContain("inset");
-    await scroll.evaluate((node) => { node.scrollTop = 0; });
-    await page.keyboard.press("PageDown");
-    await expect.poll(() => scroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-    await page.keyboard.press("Tab");
-    await expect(panel.getByRole("button", { name: "Add to chat", exact: true })).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(scroll).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(goalSummary).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(panel.getByRole("button", { name: "Toggle bottom panel", exact: true })).toBeFocused();
-    await expect.poll(async () => (await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
-    await scroll.focus();
-    await page.screenshot({ path: testInfo.outputPath(`conversation-focus-${theme}.png`), animations: "disabled" });
+for (const theme of ['light','dark']) {
+  test(`design language: compact empty conversation is keyboard accessible in ${theme}`,async({page},testInfo)=>{
+    const panel=await openDesignPanel(page,390,theme);
+    await panel.getByRole('button',{name:'Close Turn options',exact:true}).click();
+    const scroll=panel.getByRole('region',{name:'Conversation',exact:true});
+    await expect(scroll).toHaveAttribute('tabindex','0');
+    await expect(panel.locator('#goal-controls')).toBeHidden();
+    await page.keyboard.press("Tab"); await scroll.focus();
+    await expect.poll(()=>scroll.evaluate(n=>parseFloat(getComputedStyle(n).outlineOffset))).toBe(-2);
+    const focus=await scroll.evaluate(n=>{const s=getComputedStyle(n);return {style:s.outlineStyle,width:parseFloat(s.outlineWidth),offset:parseFloat(s.outlineOffset)};});
+    expect(focus.style).not.toBe('none');expect(focus.width).toBeGreaterThan(0);expect(focus.offset).toBeLessThan(0);
+    await expect.poll(async()=>(await new AxeBuilder({page}).include('codex-bridge-panel').withTags(['wcag2a','wcag2aa']).analyze()).violations).toEqual([]);
+    await page.screenshot({path:testInfo.outputPath(`conversation-focus-${theme}.png`)});
   });
 }
 
-test("design language: non-empty conversation scroll keeps native keys and tab order", async ({ page }) => {
-  const panel = await openDesignPanel(page, 390, "light");
-  await panel.getByRole("button", { name: "Review changes", exact: true }).click();
-  await expect(panel.locator("#git-review-results")).toHaveText("No changes in this scope.");
-  await panel.evaluate((element) => {
-    const list = element.shadowRoot.getElementById("message-list");
-    list.replaceChildren(element._renderMessage("user", Array.from({ length: 100 }, (_, index) => `Transcript line ${index + 1}`).join("\n"), 99010));
-  });
-  const scroll = panel.getByRole("region", { name: "Conversation", exact: true });
-  await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).focus();
-  await page.keyboard.press("Tab");
-  const goalSummary = panel.locator("#goal-controls summary");
-  await expect(goalSummary).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(scroll).toBeFocused();
-  await scroll.evaluate((node) => { node.scrollTop = 0; });
-  await page.keyboard.press("PageDown");
-  await expect.poll(() => scroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await page.keyboard.press("Home");
-  await expect.poll(() => scroll.evaluate((node) => node.scrollTop)).toBe(0);
-  await page.keyboard.press("ArrowDown");
-  await expect.poll(() => scroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
-  await page.keyboard.press("Tab");
-  const copy = panel.locator('.message[data-sequence="99010"]').getByRole("button", { name: "Copy message", exact: true });
-  await expect(copy).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(scroll).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(goalSummary).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(panel.getByRole("button", { name: "Toggle bottom panel", exact: true })).toBeFocused();
+test('design language: long conversation keeps native scrolling and compact message tab order',async({page})=>{
+  const panel=await openDesignPanel(page,390,'light');
+  await panel.getByRole('button',{name:'Close Turn options',exact:true}).click();
+  await panel.evaluate(p=>p.shadowRoot.getElementById('message-list').replaceChildren(p._renderMessage('user',Array.from({length:100},(_,i)=>`Transcript line ${i+1}`).join('\n'),99010)));
+  const scroll=panel.getByRole('region',{name:'Conversation',exact:true});
+  await scroll.focus();await scroll.press('PageDown');
+  await expect.poll(()=>scroll.evaluate(n=>n.scrollTop)).toBeGreaterThan(0);
+  await scroll.press('Home');await expect.poll(()=>scroll.evaluate(n=>n.scrollTop)).toBe(0);
+  await scroll.press('Tab');
+  await expect(panel.locator('.message[data-sequence="99010"]').getByRole('button',{name:'Message actions',exact:true})).toBeFocused();
+  await page.keyboard.press('Shift+Tab');await expect(scroll).toBeFocused();
 });

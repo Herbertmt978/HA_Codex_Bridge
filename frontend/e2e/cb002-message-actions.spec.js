@@ -29,9 +29,10 @@ test.afterAll(async () => { if (server) await new Promise((done) => server.close
 async function setup(page) {
   await page.goto(origin);
   await page.waitForFunction(() => customElements.get("codex-bridge-panel"));
+  await page.evaluate(() => document.body.append(document.createElement("codex-bridge-panel")));
+  await page.waitForFunction(() => !document.querySelector("codex-bridge-panel")._isLoading);
   await page.evaluate(() => {
-    const panel = document.createElement("codex-bridge-panel");
-    document.body.append(panel);
+    const panel = document.querySelector("codex-bridge-panel");
     panel._selectedThreadId = "cb002";
     panel._activeThread = { thread_id: "cb002", title: "Passage chat", status: "idle", mode: "edit", attachments: [] };
     panel._status = { auth: { state: "ok", auth_required: false }, account: { available: true } };
@@ -86,7 +87,9 @@ for (const touch of [false, true]) {
       const article = await setup(page);
       const selected = await selectPassage(page);
       expect(selected).toBe("café 👩🏽‍💻 and é\n\n第二段 end");
-      const copy = article.getByRole("button", { name: "Copy passage", exact: true });
+      const trigger = article.getByRole("button", { name: "Message actions", exact: true });
+      if (touch) await trigger.tap(); else { await trigger.focus(); await trigger.press("Enter"); }
+      const copy = article.getByRole("menuitem", { name: "Copy passage", exact: true });
       if (touch) await copy.tap();
       else { await copy.focus(); await copy.press("Enter"); }
       expect(await page.evaluate(() => window.cb002ClipboardWrites)).toEqual([selected]);
@@ -98,7 +101,8 @@ for (const touch of [false, true]) {
       const input = page.locator("codex-bridge-panel #prompt-input");
       await input.fill("Draft stays editable");
       await selectPassage(page);
-      const quote = article.getByRole("button", { name: "Quote passage", exact: true });
+      if (touch) await trigger.tap(); else { await trigger.focus(); await trigger.press("Enter"); }
+      const quote = article.getByRole("menuitem", { name: "Quote passage", exact: true });
       if (touch) await quote.tap();
       else { await quote.focus(); await quote.press("Space"); }
       await expect(input).toHaveValue(`Draft stays editable\n\nAssistant response in “Passage chat”:\n${selected.split("\n").map((line) => `> ${line}`).join("\n")}`);
@@ -113,16 +117,20 @@ for (const touch of [false, true]) {
 test("original public source copy excludes adjacent turns; invalid cross-message passage leaves clipboard and draft unchanged", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const article = await setup(page);
-  await article.getByRole("button", { name: "Copy message", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await article.getByRole("menuitem", { name: "Copy message", exact: true }).click();
   const original = "café **👩🏽‍💻** and é\n\n第二段  end";
   expect(await page.evaluate(() => window.cb002ClipboardWrites)).toEqual([original]);
   await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/gu, "\n"))).toBe(original);
   await selectPassage(page, true);
-  await article.getByRole("button", { name: "Copy passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await expect(article.getByRole("menuitem", { name: "Copy passage", exact: true })).toBeDisabled();
+  await article.getByRole("button", { name: "Message actions", exact: true }).press("Escape");
   expect(await page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/gu, "\n"))).toBe(original);
   expect(await page.evaluate(() => window.cb002ClipboardWrites)).toEqual([original]);
   await selectPassage(page, true);
-  await article.getByRole("button", { name: "Quote passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await expect(article.getByRole("menuitem", { name: "Quote passage", exact: true })).toBeDisabled();
   await expect(page.locator("codex-bridge-panel #prompt-input")).toHaveValue("");
   expect(await page.evaluate(() => window.cb002Calls)).toEqual([]);
 });
@@ -151,7 +159,8 @@ test("maths passages use captured source, preserve native block separators and r
     selection.removeAllRanges(); selection.addRange(range);
     return { nativePrefix, nativeSuffix, nativeThrough, nativeInner, nativeMath, full: selection.toString() };
   });
-  await article.getByRole("button", { name: "Copy passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await article.getByRole("menuitem", { name: "Copy passage", exact: true }).click();
   // Native selection has a newline after the display expression that a suffix
   // range beginning after that node omits. Keep it from the full selected text.
   const expected = "x before\n\n$$x$$\nafter x café é";
@@ -175,7 +184,8 @@ test("maths passages use captured source, preserve native block separators and r
   expect(expected).toContain("x before");
   expect(expected).toContain("after x café é");
   expect(expected).not.toContain("annotation");
-  await article.getByRole("button", { name: "Quote passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await article.getByRole("menuitem", { name: "Quote passage", exact: true }).click();
   await expect(page.locator("codex-bridge-panel #prompt-input")).toHaveValue(`Assistant response in “Passage chat”:\n${expected.split("\n").map((line) => `> ${line}`).join("\n")}`);
   await page.evaluate(() => {
     const root = document.querySelector("codex-bridge-panel").shadowRoot;
@@ -183,8 +193,62 @@ test("maths passages use captured source, preserve native block separators and r
     const range = document.createRange(); range.selectNodeContents(glyph);
     const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
   });
-  await article.getByRole("button", { name: "Copy passage", exact: true }).click();
+  await article.getByRole("button", { name: "Message actions", exact: true }).click();
+  await expect(article.getByRole("menuitem", { name: "Copy passage", exact: true })).toBeDisabled();
   expect(await page.evaluate(() => window.cb002ClipboardWrites)).toEqual([expected]);
-  await expect(page.getByText("Select the entire mathematical expression, or select a passage outside it.", { exact: true })).toBeVisible();
+  await expect(article.getByRole("status")).toHaveText("Select the entire mathematical expression, or select a passage outside it.");
   expect(await page.evaluate(() => window.cb002Calls)).toEqual([]);
 });
+
+test('message menu closes against the matching replacement on streaming and history rebuild',async({page})=>{
+  const article=await setup(page);
+  await article.getByRole('button',{name:'Message actions',exact:true}).click();
+  await page.evaluate(()=>{const p=document.querySelector('codex-bridge-panel');p._forceMessageRebuild=true;p._renderMessages();});
+  await expect(article.getByRole('button',{name:'Message actions',exact:true})).toBeFocused();
+  await expect(article.getByRole('menu')).toBeHidden();
+  await page.evaluate(()=>{const p=document.querySelector('codex-bridge-panel');p._runActivityForThread=()=>({assistantState:'streaming'});p._streamingPlanText=()=>'';p._streamingAssistantProjection=()=>({text:'First streamed text'});p._syncStreamingMessage(p.shadowRoot.getElementById('message-list'),{assistantState:'streaming'});});
+  const streaming=page.locator('codex-bridge-panel .message[data-sequence="streaming"]');
+  await streaming.getByRole('button',{name:'Message actions',exact:true}).click();
+  await page.evaluate(()=>{const p=document.querySelector('codex-bridge-panel');p._streamingAssistantProjection=()=>({text:'Updated streamed text'});p._syncStreamingMessage(p.shadowRoot.getElementById('message-list'),{assistantState:'streaming'});});
+  await expect(streaming.getByRole('button',{name:'Message actions',exact:true})).toBeFocused();
+  await expect(streaming.getByRole('menu')).toBeHidden();
+  await streaming.getByRole('button',{name:'Message actions',exact:true}).click();
+  await expect(streaming.getByRole('menuitem',{name:'Copy passage',exact:true})).toBeDisabled();
+  await streaming.getByRole('menuitem',{name:'Copy message',exact:true}).click();
+  expect(await page.evaluate(()=>window.cb002ClipboardWrites)).toEqual(['Updated streamed text']);
+  expect(await article.locator('.message-actions > button').count()).toBe(1);
+  await streaming.getByRole('button',{name:'Message actions',exact:true}).click();
+  await page.evaluate(()=>{const p=document.querySelector('codex-bridge-panel');p._streamingAssistantProjection=()=>({text:''});p._syncStreamingMessage(p.shadowRoot.getElementById('message-list'),{assistantState:'completed'});});
+  await expect(streaming).toHaveCount(0);
+  await expect(page.getByRole('region',{name:'Conversation',exact:true})).toBeFocused();
+  expect(await page.evaluate(()=>document.querySelector('codex-bridge-panel')._openMessageActions)).toBe(null);
+});
+
+for (const touch of [false,true]) {
+  test(`ordered maths source menu validates message identity with ${touch?'touch':'keyboard'}`,async({browser})=>{
+    const context=await browser.newContext({hasTouch:touch,viewport:{width:touch?390:1280,height:900}});
+    try {
+      const page=await context.newPage();await setup(page);
+      await page.evaluate(()=>{
+        const p=document.querySelector('codex-bridge-panel');p._clearError=()=>{};p._writeClipboardText=async text=>window.cb002ClipboardWrites.push(text);
+        p.shadowRoot.getElementById('message-list').replaceChildren(p._renderMessage('assistant','No formula',201),p._renderMessage('assistant','$x$',202),p._renderMessage('assistant','$y$ and\n\n$$\nz^2\n$$',203));
+      });
+      const article=id=>page.locator(`codex-bridge-panel .message[data-sequence="${id}"]`);
+      const open=async id=>{if(await page.locator('codex-bridge-panel .message-actions-trigger[aria-expanded="true"]').count()){if(touch)await page.locator('codex-bridge-panel #prompt-input').tap();else await page.keyboard.press('Escape');}const trigger=article(id).getByRole('button',{name:'Message actions',exact:true});if(touch)await trigger.tap();else{await trigger.focus();await trigger.press('Enter');}};
+      await open(201);await expect(article(201).getByRole('menuitem',{name:/Copy maths source/})).toHaveCount(0);
+      await open(202);const single=article(202).getByRole('menuitem',{name:'Copy maths source',exact:true});if(touch)await single.tap();else await single.press('Enter');
+      await open(203);const second=article(203).getByRole('menuitem',{name:'Copy maths source 2',exact:true});if(touch)await second.tap();else await second.press('Enter');
+      expect(await page.evaluate(()=>window.cb002ClipboardWrites)).toEqual(['$x$','$$\nz^2\n$$']);
+      await open(203);
+      await page.evaluate(()=>{
+        const p=document.querySelector('codex-bridge-panel');const old=p.shadowRoot.querySelector('.message[data-sequence="203"]');const stale=old.querySelector('[aria-label="Copy maths source 1"]');
+        p._selectedThreadId='other-chat';stale.click();p._selectedThreadId='cb002';
+        old.querySelector('[data-math-source]').dataset.mathSource='$changed$';stale.click();
+        old.replaceWith(p._renderMessage('assistant','$new$',203));stale.click();
+      });
+      expect(await page.evaluate(()=>window.cb002ClipboardWrites)).toEqual(['$x$','$$\nz^2\n$$']);
+      await expect(page.locator('codex-bridge-panel .assistant-math-actions')).toHaveCount(0);
+      await page.screenshot({path:resolve(evidence,`maths-overflow-${touch?'touch':'keyboard'}.png`)});
+    }finally{await context.close();}
+  });
+}

@@ -304,7 +304,10 @@ test("refreshes HA-owned HTTP authentication during PNG upload and image reads w
   await expect.poll(() => page.evaluate(() => window.__haHttpEvidence.requests.filter((request) => request.path.includes("/uploads")).map((request) => request.method))).toEqual(["POST", "PUT", "POST"]);
   await expect.poll(() => panel.evaluate((element) => element._pendingUploads)).toBe(0);
   await expect(panel.locator("#error-strip")).toBeHidden();
+  await panel.getByRole("button", { name: "Add to chat", exact: true }).click();
+  await panel.getByRole("button", { name: "Files and workspace context", exact: true }).click();
   await expect(composerImage).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect.poll(() => panel.evaluate((element) => element._events.some((event) => event.sequence === 900))).toBe(true);
   await panel.locator(".uploaded-image-message").scrollIntoViewIfNeeded();
   await expect(uploadedImage).toBeVisible();
@@ -1686,7 +1689,9 @@ test("keeps a failed run's details open on a narrow dark screen", async ({ page 
 test("keeps a populated plugin catalogue stable through frequent HA refreshes", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   const panel = page.locator("codex-bridge-panel");
+  await panel.getByRole("button", { name: /^Model and thinking:/ }).click();
   await expect(panel.locator("#thread-model-select")).toBeVisible();
+  await page.keyboard.press("Escape");
   await page.evaluate(() => {
     const panel = document.querySelector("codex-bridge-panel");
     panel._activeDestination = "plugins";
@@ -1777,8 +1782,13 @@ test("keeps chat prose readable and completion singular across themes and widths
       expect(appearance.font).not.toMatch(/monospace|consolas|courier/i);
       expect(appearance.color).toBe(theme === "light" ? "rgb(21, 27, 41)" : "rgb(240, 242, 246)");
       await expect(panel.locator(".message-actions")).toHaveCount(2);
-      await expect(panel.getByRole("button", { name: "Copy message", exact: true })).toHaveCount(2);
-      await expect(panel.getByRole("button", { name: "Quote message", exact: true })).toHaveCount(2);
+      await expect(panel.getByRole("button", { name: "Message actions", exact: true })).toHaveCount(2);
+      for (const message of await panel.locator(".message").all()) {
+        await message.getByRole("button", { name: "Message actions", exact: true }).click();
+        await expect(message.getByRole("menuitem", { name: "Copy message", exact: true })).toBeVisible();
+        await expect(message.getByRole("menuitem", { name: "Quote message", exact: true })).toBeVisible();
+        await page.keyboard.press("Escape");
+      }
       await expect(panel.locator(".message.user .bubble")).toHaveCSS("background-color", "rgb(0, 0, 0)");
       await expect(panel.locator(".message.user .bubble-text")).toHaveCSS("color", "rgb(255, 255, 255)");
       expect(appearance.fits).toBe(true);
@@ -1829,8 +1839,10 @@ test("gives desktop chats wider space and one working control with message and c
   await expect(panel.locator(".run-command-details pre")).toHaveText("git diff --stat");
   await panel.locator("#run-step-chip").click();
   const assistant = panel.locator(".message.assistant");
-  await expect(assistant.getByRole("button", { name: "Copy message", exact: true })).toHaveCount(1);
-  await expect(assistant.getByRole("button", { name: "Quote message", exact: true })).toHaveCount(1);
+  await assistant.getByRole("button", { name: "Message actions", exact: true }).click();
+  await expect(assistant.getByRole("menuitem", { name: "Copy message", exact: true })).toBeVisible();
+  await expect(assistant.getByRole("menuitem", { name: "Quote message", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(assistant.getByRole("button", { name: "Line numbers", exact: true })).toHaveCount(1);
   await expect(assistant.getByRole("button", { name: "Wrap lines", exact: true })).toHaveCount(1);
   const copy = assistant.getByRole("button", { name: "Copy original code", exact: true });
@@ -2900,7 +2912,7 @@ test("keeps the conversation rail stable and opens Activity as a compact-width d
       const messages = rect("#message-list");
       const conversation = rect(".conversation-layout");
       const composer = rect(".composer-shell");
-      const toolbar = root?.querySelector("#compact-toolbar");
+      const toolbar = root?.querySelector(".compact-composer-bar");
       const bubble = root?.querySelector(".bubble-text");
       const railElement = root?.querySelector(".rail-pane");
       const mainElement = root?.querySelector(".main-pane");
@@ -3351,31 +3363,27 @@ test("keeps every pending decision action reachable at desktop and mobile widths
   }
 });
 
-test("keeps the mobile composer focused and folds diagnostics behind an accessible disclosure", async ({ page }) => {
+test("keeps the desktop and mobile composer compact while settings open in anchored menus", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
   const panel = page.locator("codex-bridge-panel");
-  const settings = panel.locator("#composer-diagnostics");
-  const summary = settings.locator(":scope > summary");
   const toolbar = panel.locator("#compact-toolbar");
   const composer = panel.locator(".composer-shell");
-
-  await expect(settings).toHaveAttribute("open", "");
-  await expect(toolbar).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(summary).toHaveText("Chat settings and limits");
-  await expect(settings).not.toHaveAttribute("open", "");
-  await expect(toolbar).toBeHidden();
-  const collapsedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
-
-  await summary.click();
-  await expect(settings).toHaveAttribute("open", "");
-  await expect(toolbar).toBeVisible();
-  const expandedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
-  expect(collapsedHeight).toBeLessThan(844 * 0.34);
-  expect(expandedHeight - collapsedHeight).toBeGreaterThan(100);
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(toolbar).toBeHidden();
+    const collapsedHeight = await composer.evaluate((node) => node.getBoundingClientRect().height);
+    await panel.getByRole("button", { name: /^Turn options/ }).click();
+    await expect(panel.getByRole("dialog", { name: "Turn options", exact: true })).toBeVisible();
+    expect(await composer.evaluate((node) => node.getBoundingClientRect().height)).toBeCloseTo(collapsedHeight, 0);
+    await page.keyboard.press("Escape");
+    await panel.getByRole("button", { name: /^Model and thinking:/ }).click();
+    await expect(toolbar).toBeVisible();
+    expect(await composer.evaluate((node) => node.getBoundingClientRect().height)).toBeCloseTo(collapsedHeight, 0);
+    expect(collapsedHeight).toBeLessThan(844 * 0.34);
+    await page.keyboard.press("Escape");
+  }
 });
 
 test("fills the available viewport below the Home Assistant header at desktop and phone sizes", async ({ page }) => {
@@ -3416,27 +3424,30 @@ test("offers only supported Add actions and keeps uploads and navigation usable"
   await selectHarnessThread(page);
   const panel = page.locator("codex-bridge-panel");
   const toggle = panel.locator("#add-menu-button");
-  const menu = panel.locator("#add-menu");
+  const menu = panel.getByRole("dialog", { name: "Add to chat", exact: true });
+  const files = panel.getByRole("dialog", { name: "Files and workspace context", exact: true });
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(menu).toBeVisible();
-  await expect(menu.locator("#upload-file-button")).toBeVisible();
-  await expect(menu.locator("#upload-folder-button")).toBeVisible();
   await expect(menu.locator("#schedule-message-button")).toBeHidden();
   await expect(menu.locator("#add-plugins-button")).toBeHidden();
   await expect(menu.getByText("Attach Google Chrome")).toHaveCount(0);
+  await menu.getByRole("button", { name: "Files and workspace context", exact: true }).click();
+  await expect(files.locator("#upload-file-button")).toBeVisible();
+  await expect(files.locator("#upload-folder-button")).toBeVisible();
   expect((await new AxeBuilder({ page }).include("codex-bridge-panel").analyze()).violations).toEqual([]);
   const chooserPromise = page.waitForEvent("filechooser");
-  await menu.locator("#upload-file-button").press("Enter");
+  await files.locator("#upload-file-button").press("Enter");
   await (await chooserPromise).setFiles([]);
-  await expect(menu).toBeHidden();
+  await expect(files).toBeHidden();
   await expect(toggle).toBeFocused();
   await toggle.press("Enter");
   await expect(menu).toBeVisible();
+  await menu.getByRole("button", { name: "Files and workspace context", exact: true }).click();
   const folderChooserPromise = page.waitForEvent("filechooser");
-  await menu.locator("#upload-folder-button").press("Enter");
+  await files.locator("#upload-folder-button").press("Enter");
   await folderChooserPromise;
-  await expect(menu).toBeHidden();
+  await expect(files).toBeHidden();
   await expect(toggle).toBeFocused();
   await toggle.click();
   await page.keyboard.press("Escape");
@@ -4702,6 +4713,8 @@ for (const width of [390, 1440]) {
     const upload = panel.locator(".uploaded-image-message .inline-image-thumbnail");
     await upload.scrollIntoViewIfNeeded();
     await expect.poll(() => upload.locator("img").evaluate((image) => image.complete && image.naturalWidth)).toBe(480);
+    await panel.getByRole("button", { name: "Add to chat", exact: true }).click();
+    await panel.getByRole("button", { name: "Files and workspace context", exact: true }).click();
     await expect(panel.locator("#attachment-chip-list .inline-image-raster")).toBeVisible();
     await expect(panel.locator("#message-list")).not.toContainText("resumable/upload-id");
     const composerOptions = panel.locator("#attachment-chip-list .inline-image-actions button").first();
@@ -4856,8 +4869,10 @@ for (const width of [1440, 390]) {
     await expect(panel.locator(".message.assistant table")).toHaveCount(1);
     await expect(panel.locator('.message.assistant a[href^="javascript:"]')).toHaveCount(0);
     expect(await page.evaluate(() => window.__enhancementUnsafe)).toBeUndefined();
-    if (width === 390) await panel.locator("#composer-diagnostics > summary").click();
+    await panel.getByRole("button", { name: "Add to chat", exact: true }).click();
+    await panel.getByRole("button", { name: "Repository review", exact: true }).click();
     await panel.getByRole("button", { name: "Review changes", exact: true }).click();
+    await panel.getByRole("button", { name: "Close Repository review", exact: true }).click();
     await panel.locator("#git-review summary").click();
     await panel.getByRole("button", { name: "Load file diff" }).click();
     await expect(panel.locator("#git-review .git-diff")).toContainText("xxx");
@@ -4870,7 +4885,9 @@ for (const width of [1440, 390]) {
       panel._refreshActiveThread = async () => true;
       panel._renderComposerState(panel._activeThread);
     });
+    await panel.getByRole("button", { name: /^Turn options/ }).click();
     await panel.locator("#follow-up-mode").selectOption("queue");
+    await page.keyboard.press("Escape");
     await panel.locator("#prompt-input").fill("Follow up after the response");
     await panel.locator("#send-button").click();
     const sent = await page.evaluate(() => document.querySelector("codex-bridge-panel")._enhancementCalls.filter((item) => item.action === "send_prompt").at(-1));

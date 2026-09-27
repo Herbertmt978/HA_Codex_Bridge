@@ -2,6 +2,7 @@ import { createReadStream } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
+import { tmpdir } from "node:os";
 
 import AxeBuilder from "@axe-core/playwright";
 import { build } from "esbuild";
@@ -9,7 +10,7 @@ import { expect, test } from "@playwright/test";
 import { installTaskUsageFixture } from "./task-usage-fixture.js";
 
 const repositoryRoot = resolve(process.cwd());
-const evidenceDirectory = resolve(process.env.CODEX_BRIDGE_CB060_EVIDENCE_DIR || "D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb060/browser");
+const evidenceDirectory = resolve(process.env.CODEX_BRIDGE_CB060_EVIDENCE_DIR || resolve(tmpdir(), "codex-bridge-task-usage"));
 const bundlePath = resolve(evidenceDirectory, "codex-bridge-panel-source.js");
 const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8" };
 let server;
@@ -67,7 +68,8 @@ for (const width of [1280, 390]) {
       try {
         const page = await context.newPage();
         const panel = await preparePanel(page, { theme, owner: `cb060-${width}-${theme}` });
-        if (width === 390) await panel.locator("#composer-diagnostics > summary").tap();
+        const turnOptions = panel.getByRole("button", { name: /^Turn options/ });
+        if (await turnOptions.getAttribute("aria-expanded") !== "true") await turnOptions.click();
         const duration = panel.getByRole("combobox", { name: "Elapsed-time limit", exact: true });
         await expect(duration).toHaveValue("");
         await expect(panel.getByText("Partial results retained after the elapsed-time stop.", { exact: false })).toBeVisible();
@@ -76,6 +78,7 @@ for (const width of [1280, 390]) {
         if (width === 390) await send.tap(); else await send.press("Enter");
         await expect.poll(() => page.evaluate(() => window.__cb060UsageFixture.calls.filter((item) => item.type === "codex_bridge/send_prompt").length)).toBe(1);
         expect(await page.evaluate(() => window.__cb060UsageFixture.calls.find((item) => item.type === "codex_bridge/send_prompt"))).not.toHaveProperty("max_duration_seconds");
+        if (await turnOptions.getAttribute("aria-expanded") !== "true") await turnOptions.click();
         await expect(duration).toBeEnabled();
         await duration.focus();
         await duration.press("Home");
@@ -95,9 +98,8 @@ for (const width of [1280, 390]) {
         if (width === 390) await send.tap(); else await send.press("Enter");
         await expect.poll(() => page.evaluate(() => window.__cb060UsageFixture.calls.filter((item) => item.type === "codex_bridge/send_prompt").length)).toBe(2);
         expect(await page.evaluate(() => window.__cb060UsageFixture.calls.filter((item) => item.type === "codex_bridge/send_prompt")[1].max_duration_seconds)).toBe(60);
+        if (await turnOptions.getAttribute("aria-expanded") !== "true") await turnOptions.click();
         await expect(duration).toHaveValue("");
-
-        if (width === 390) await panel.locator("#composer-diagnostics > summary").tap();
         await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).click();
         const open = panel.getByRole("button", { name: "Usage history", exact: true });
         if (width === 390) await open.tap(); else { await open.focus(); await open.press("Enter"); }

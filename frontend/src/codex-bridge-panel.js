@@ -1,5 +1,7 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
 import { GoalControls, goalStyles } from "./goal-controls.js";
+import { BottomPaneResize, bottomPaneResizeStyles } from "./bottom-pane-resize.js";
+import { CompactComposer, compactComposerStyles } from "./compact-composer.js";
 import { contextUsage } from "./context-usage.js";
 import { durationLimit, renderUsageHistory } from "./task-usage.js";
 import { renderAssistantMarkdown, assistantMarkdownStyles, fencedCodeParts, assistantMarkdownMaxLength } from "./markdown.js";
@@ -55,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.0";
+const PANEL_VERSION = "1.13.1";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -5789,6 +5791,8 @@ template.innerHTML = `
         border-color: color-mix(in srgb, var(--accent-color) 64%, var(--border-color) 36%);
       }
     }
+    ${compactComposerStyles}
+    ${bottomPaneResizeStyles}
   </style>
   <div class="shell">
     <div class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
@@ -6358,6 +6362,8 @@ class CodexBridgePanel extends HTMLElement {
 
   connectedCallback() {
     this._installStaticUi();
+    this._compactComposer.connect();
+    this._bottomPaneResize.connect();
     this._chatContextMenu.connect();
     if (typeof ResizeObserver === "function") {
       this._timelineResizeObserver ||= new ResizeObserver(() => this._scheduleTimelineScrollSync(true));
@@ -6398,6 +6404,8 @@ class CodexBridgePanel extends HTMLElement {
     this._inlineImageController?.dispose();
     this._inlineImageController = null;
     this._chatContextMenu.disconnect();
+    this._compactComposer?.disconnect();
+    this._bottomPaneResize?.disconnect();
     window.cancelAnimationFrame(this._timelineScrollFrame);
     this._timelineScrollFrame = null;
     this._closeTimelinePreview();
@@ -6449,6 +6457,10 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _setAddMenuOpen(open, { restoreFocus = false } = {}) {
+    if (open && this._compactComposer) {
+      this._compactComposer.open("add", this.shadowRoot.getElementById("add-menu-button"));
+      return;
+    }
     if (open) this._hideTooltip();
     this._addMenuOpen = open;
     const menu = this.shadowRoot.getElementById("add-menu");
@@ -6678,6 +6690,9 @@ class CodexBridgePanel extends HTMLElement {
       this._setTooltipTarget(control, control.getAttribute("aria-label") || control.getAttribute("title") || "");
     }
 
+    this._compactComposer = new CompactComposer(this, icons);
+    this._bottomPaneResize = new BottomPaneResize(this);
+
     this.shadowRoot.addEventListener("contextmenu", (event) => {
       const row = event.target instanceof Element ? event.target.closest(".chat-row[data-chat-thread-id]") : null;
       if (!row) return;
@@ -6853,6 +6868,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _syncComposerDiagnostics() {
+    if (this._compactComposer) return;
     const details = this.shadowRoot.getElementById("composer-diagnostics");
     if (!details) {
       return;
@@ -6893,6 +6909,9 @@ class CodexBridgePanel extends HTMLElement {
     const action = actionTarget.dataset.action;
     if (actionTarget.closest("#add-menu")) {
       this._setAddMenuOpen(false, { restoreFocus: action === "upload-file" || action === "upload-folder" });
+    }
+    if (actionTarget.closest(".compact-surface") && ["upload-file", "upload-folder", "schedule-message", "add-plugins"].includes(action)) {
+      this._compactComposer.close(action === "upload-file" || action === "upload-folder");
     }
     if (
       actionTarget.closest(".rail-pane")
@@ -7489,6 +7508,7 @@ class CodexBridgePanel extends HTMLElement {
       const shortcut = event.key.toLowerCase();
       if (shortcut === "f" && this._activeDestination === "chats" && this._selectedThreadId && this._config?.capabilities?.includes("conversation_search_v1")) {
         event.preventDefault();
+        if (this._compactComposer.openPage !== "search") this._compactComposer.open("search", this.shadowRoot.getElementById("chat-menu-button"));
         this.shadowRoot.getElementById("conversation-search-input").focus();
         return;
       }
@@ -9248,6 +9268,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _renderComposerState(activeThread) {
+    queueMicrotask(() => this._compactComposer?.sync());
     this._workspaceContext.render();
     this._chatContext.render();
     this._renderGoals(activeThread);
@@ -11491,6 +11512,7 @@ class CodexBridgePanel extends HTMLElement {
       this._renderedSequence = 0;
       messageList.replaceChildren(this._mainEmptyState());
       this._renderConversationTimeline();
+    this._restoreMessageActionFocus();
       return;
     }
 
@@ -11501,6 +11523,10 @@ class CodexBridgePanel extends HTMLElement {
     const searchSelected = search?.threadId === this._selectedThreadId && !search.error && Boolean(search.results[search.index]);
     const shouldStick = !searchSelected && (threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80);
     if (shouldRebuild) {
+      const focused = this.shadowRoot.activeElement?.closest?.('.message-actions');
+      const sequence = focused?.closest('.message')?.dataset.sequence;
+      this._messageActionFocus = sequence && !threadChanged ? { threadId:this._selectedThreadId, sequence } : null;
+      this._openMessageActions?.();
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
       this._forceMessageRebuild = false;
@@ -11518,6 +11544,7 @@ class CodexBridgePanel extends HTMLElement {
       this._syncStreamingMessage(messageList, activity);
       this._restoreConversationSearchSelection();
       this._renderConversationTimeline();
+    this._restoreMessageActionFocus();
       return;
     }
 
@@ -11539,6 +11566,7 @@ class CodexBridgePanel extends HTMLElement {
     this._syncStreamingMessage(messageList, activity);
     this._restoreConversationSearchSelection();
     this._renderConversationTimeline();
+    this._restoreMessageActionFocus();
 
     if (shouldStick) {
       this._scrollMessagesToBottom();
@@ -11553,6 +11581,14 @@ class CodexBridgePanel extends HTMLElement {
 
   _conversationBookmarkKey() {
     return `${this._preferenceKey || "codex-bridge:preferences:local"}:bookmarks:${this._selectedThreadId}`;
+  }
+
+  _restoreMessageActionFocus() {
+    const saved = this._messageActionFocus;
+    this._messageActionFocus = null;
+    if (!saved || saved.threadId !== this._selectedThreadId) return;
+    const article = [...this.shadowRoot.querySelectorAll('.message')].find(node => node.dataset.sequence === saved.sequence);
+    (article?.querySelector('.message-actions-trigger') || this.shadowRoot.getElementById('conversation-scroll')).focus({ preventScroll:true });
   }
 
   _renderConversationTimeline() {
@@ -11815,7 +11851,10 @@ class CodexBridgePanel extends HTMLElement {
     const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if ((!isStreaming && !isPartial) || !text) {
+      const restoreActions = Boolean(existing?.querySelector('.message-actions')?.contains(this.shadowRoot.activeElement));
+      if (existing?.querySelector('.message-actions-trigger')?.getAttribute('aria-expanded') === 'true') this._openMessageActions?.();
       existing?.remove();
+      if (restoreActions) this.shadowRoot.getElementById('conversation-scroll')?.focus({ preventScroll:true });
       return;
     }
     messageList.querySelector(".empty-state")?.remove();
@@ -11834,7 +11873,10 @@ class CodexBridgePanel extends HTMLElement {
       isPartial ? "Assistant partial response" : "Assistant response in progress"
     );
     if (existing) {
+      const restoreActions = Boolean(existing.querySelector('.message-actions')?.contains(this.shadowRoot.activeElement));
+      if (existing.querySelector('.message-actions-trigger')?.getAttribute('aria-expanded') === 'true') this._openMessageActions?.();
       existing.replaceWith(article);
+      if (restoreActions) article.querySelector('.message-actions-trigger')?.focus({ preventScroll:true });
     } else {
       messageList.append(article);
     }
@@ -12119,13 +12161,27 @@ class CodexBridgePanel extends HTMLElement {
     }));
     bubble.append(content);
     article.append(bubble);
-    article.append(this._messageActions(content, String(text ?? ""), role));
-    if (mathsSources.length) article.append(mathSourceActions(document, mathsSources, async (source) => {
-      try {
-        await this._writeClipboardText(source);
-        this._clearError();
-      } catch (error) { this._setError(error); }
-    }));
+    const messageActions = this._messageActions(content, String(text ?? ""), role);
+    article.append(messageActions);
+    const sourceThreadId = this._selectedThreadId;
+    if (mathsSources.length) {
+      const sourceActions = mathSourceActions(document, mathsSources, async (source) => {
+        const currentSources = [...content.querySelectorAll('[data-math-source]')].map(node => node.dataset.mathSource);
+        if (!article.isConnected || sourceThreadId !== this._selectedThreadId
+          || currentSources.length !== mathsSources.length || currentSources.some((value, index) => value !== mathsSources[index])) return;
+        messageActions._closeMenu(true);
+        try {
+          await this._writeClipboardText(source);
+          this._clearError();
+        } catch (error) { this._setError(error); }
+      });
+      for (const button of sourceActions.querySelectorAll('button')) {
+        button.setAttribute('role', 'menuitem');
+        button.addEventListener('mousedown', event => event.preventDefault());
+        button.setAttribute('aria-label', button.textContent);
+        messageActions.querySelector('.message-actions-menu').append(button);
+      }
+    }
     return article;
   }
 
@@ -12135,6 +12191,79 @@ class CodexBridgePanel extends HTMLElement {
     actions.setAttribute("aria-label", "Message actions");
     const threadId = this._selectedThreadId;
     const title = this._activeThread?.title;
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "composer-limits-button message-actions-trigger";
+    trigger.textContent = "⋯";
+    trigger.setAttribute("aria-label", "Message actions");
+    trigger.setAttribute("aria-haspopup", "menu");
+    trigger.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("div");
+    menu.className = "message-actions-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Message actions");
+    menu.hidden = true;
+    let capturedPassage = null;
+    const readMenuSelection = () => {
+      try { return this.shadowRoot.getSelection?.() || window.getSelection(); }
+      catch { return null; }
+    };
+    const capture = () => { capturedPassage = selectedMessagePassageResult(content, readMenuSelection()); };
+    const close = (restore = false) => {
+      menu.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      capturedPassage = null;
+      if (this._openMessageActions === close) this._openMessageActions = null;
+      if (restore && trigger.isConnected) trigger.focus();
+      capturedPassage = null;
+    };
+    actions._closeMenu = close;
+    trigger.addEventListener("pointerdown", capture);
+    actions._captureMenuSelection = capture;
+    trigger.addEventListener("focus", () => {
+      if (!readMenuSelection()?.isCollapsed || !capturedPassage) capture();
+    });
+    trigger.addEventListener("pointercancel", () => { capturedPassage = null; });
+    trigger.addEventListener("blur", () => { if (menu.hidden) capturedPassage = null; });
+    trigger.addEventListener("mousedown", (event) => event.preventDefault());
+    trigger.addEventListener("click", () => {
+      if (!menu.hidden) { close(true); return; }
+      this._openMessageActions?.();
+      const current = readMenuSelection();
+      if (!current?.isCollapsed || !capturedPassage) capture();
+      for (const item of menu.querySelectorAll("[data-passage]")) {
+        item.disabled = !capturedPassage?.text;
+        item.title = capturedPassage?.text ? item.getAttribute("aria-label") : capturedPassage?.error || "Select a passage inside this message first.";
+      }
+      selectionHelp.textContent = capturedPassage?.text ? "" : capturedPassage?.error || "Select a passage inside this message to copy or quote it.";
+      selectionHelp.hidden = Boolean(capturedPassage?.text);
+      menu.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      this._openMessageActions = close;
+      const rect = trigger.getBoundingClientRect();
+      menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 208))}px`;
+      menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
+      menu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+    });
+    actions.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" || event.key === "Tab") {
+        if (event.key === "Escape") event.preventDefault();
+        close(true);
+      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const items = [...menu.querySelectorAll("button:not(:disabled)")];
+        const index = items.indexOf(this.shadowRoot.activeElement);
+        items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+      }
+    });
+    actions.addEventListener("focusout", () => queueMicrotask(() => {
+      if (!actions.contains(this.shadowRoot.activeElement)) close();
+    }));
+    const selectionHelp = document.createElement("p");
+    selectionHelp.className = "row-meta message-selection-help";
+    selectionHelp.setAttribute("role", "status");
+    menu.append(selectionHelp);
+    actions.append(trigger, menu);
     for (const [label, quote, passage] of [
       ["Copy message", false, false], ["Copy passage", false, true],
       ["Quote message", true, false], ["Quote passage", true, true],
@@ -12142,7 +12271,11 @@ class CodexBridgePanel extends HTMLElement {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "composer-limits-button";
+      button.setAttribute("aria-label", label);
+      button.title = label;
       button.textContent = label;
+      button.setAttribute("role", "menuitem");
+      if (passage) button.dataset.passage = "true";
       let activatedPassage = null;
       const readSelection = () => {
         try { return this.shadowRoot.getSelection?.() || window.getSelection(); }
@@ -12165,9 +12298,10 @@ class CodexBridgePanel extends HTMLElement {
       button.addEventListener("click", async () => {
         const selection = readSelection();
         let result = passage ? selectedMessagePassageResult(content, selection) : { text: original, error: "" };
-        if (passage && selection?.isCollapsed && activatedPassage) result = activatedPassage;
+        if (passage && selection?.isCollapsed && (capturedPassage || activatedPassage)) result = capturedPassage || activatedPassage;
         const selected = result.text;
         activatedPassage = null;
+        close(!quote);
         if (!selected) {
           this._setError(result.error || "Select a passage inside this message first.");
           return;
@@ -12193,7 +12327,7 @@ class CodexBridgePanel extends HTMLElement {
           this._setError(error);
         }
       });
-      actions.append(button);
+      menu.append(button);
     }
     return actions;
   }
@@ -13270,11 +13404,12 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _toggleBottomPanel() {
+    this._bottomPaneResize.finish(true);
     this._bottomPanelOpen = !this._bottomPanelOpen;
     this.shadowRoot.getElementById("bottom-panel").hidden = !this._bottomPanelOpen;
     this.shadowRoot.getElementById(this._bottomPanelOpen ? "bottom-preview" : "preview-home").append(this.shadowRoot.getElementById("artifact-preview-section"));
     this._renderChatControls();
-    if (this._bottomPanelOpen) this._terminal.resize();
+    if (this._bottomPanelOpen) this._bottomPaneResize.resize();
   }
 
   _selectBottomTab(tab) {
@@ -14435,7 +14570,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderConversationSearch() {
     const section = this.shadowRoot.getElementById("conversation-search");
-    section.hidden = !this._selectedThreadId || this._activeDestination !== "chats" || !this._config?.capabilities?.includes("conversation_search_v1");
+    section.hidden = this._compactComposer?.openPage !== "search" || !this._selectedThreadId || this._activeDestination !== "chats" || !this._config?.capabilities?.includes("conversation_search_v1");
     const state = this._conversationSearchState;
     const status = this.shadowRoot.getElementById("conversation-search-status");
     status.textContent = state?.loading ? "Searching retained messages…" : state?.error ? "Chat search unavailable. Try the search again."
