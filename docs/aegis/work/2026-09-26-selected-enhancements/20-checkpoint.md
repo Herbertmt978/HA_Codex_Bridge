@@ -112,3 +112,28 @@ The corrected candidate requires fresh full Integration, static and validator
 checks. Unaffected Bridge, frontend and App gates may be carried only after
 exact canonical input equivalence is recorded. Parent owns publication and
 managed HA-DEV acceptance; no native or phone actions occurred in this follow-up.
+
+## In-flight question delivery removal race — 27 September 2026
+
+An admitted HA interval callback can be sending a Companion notification even
+though it is not the coordinator's tracked broker refresh task. Close now fences
+listeners and drains both startup and ledger ownership locks in their existing
+order. It lets admitted service work finish before a removal owner reads the
+ledger, and refresh/reply callbacks waiting for the lock recheck the close fence.
+It no longer cancels an admitted tracked refresh as a substitute for draining.
+
+Unload retains the runtime owner until close completes. Permanent removal also
+drains an owner retained by cancelled or failed unload, because HA can invoke
+removal without retrying those unload states. Errors and cancellation leave that
+owner and the durable claims available for safe cleanup; they do not establish a
+successful removal. The existing local MCP revocation-before-wait rule remains.
+
+The focused Linux suite passes 73 cases. Native HA interval scheduling, service
+execution and public setup/unload/removal drive tests for timer and tracked broker
+delivery, cancellation followed by removal retry, and a failed platform unload.
+They require the send to finish before its tag is cleared, no later timer delivery
+and an empty ledger only after successful cleanup. Two queued-callback cases prove
+the close fence prevents a fresh lookup or reply after lock acquisition.
+Independent lifecycle review confirmed the owner and lock ordering correction.
+Fresh full Integration, static and validator gates remain required against the
+next frozen candidate; unchanged gates require explicit input equivalence.

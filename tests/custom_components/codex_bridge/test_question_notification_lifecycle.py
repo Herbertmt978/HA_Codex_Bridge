@@ -1,6 +1,7 @@
 """Question delivery claims survive reload and are cleaned on entry deletion."""
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -8,7 +9,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.helpers.storage import Store
 from homeassistant.setup import async_setup_component
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.codex_bridge.const import (
     CONF_BRIDGE_TOKEN,
@@ -145,3 +146,128 @@ async def test_public_entry_removal_retains_cleanup_evidence_when_service_fails(
     saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
     assert saved == original
     assert "Question notification removal is incomplete" in caplog.text
+
+
+async def _inflight_notification(hass, monkeypatch, *, source="timer"):
+    entry, store, calls, _fail_clear = await _setup_connection(hass, monkeypatch, CONNECTION_TYPE_SUPERVISOR)
+    runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+    owner = runtime.question_notifications
+    started, release = asyncio.Event(), asyncio.Event()
+    second = {**_interaction(), "interaction_id": "question-2", "thread_id": "thread-2"}
+    runtime.client.async_list_pending_interactions.return_value = {"items": [_interaction(), second]}
+
+    async def block_send(call):
+        if call.data.get("message") != "clear_notification":
+            started.set()
+            await release.wait()
+        calls.append((call.domain, call.service, dict(call.data)))
+
+    hass.services.async_register("notify", "mobile_app_test_phone", block_send)
+    if source == "timer":
+        # Advance HA's real interval handles and let its background job admit
+        # the delivery. No timer callback or entry-manager method is mocked.
+        async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=31))
+    else:
+        await owner._on_broker_event(SimpleNamespace(event_type="interaction.created"))
+    await asyncio.wait_for(started.wait(), timeout=2)
+    assert owner._lock.locked()
+    return entry, store, calls, owner, release
+
+
+async def _wait_for_close_fence(owner):
+    while not owner._closed:
+        await asyncio.sleep(0)
+
+
+@pytest.mark.parametrize("boundary", ["unload", "remove"])
+@pytest.mark.parametrize("source", ["timer", "broker"])
+async def test_public_entry_drains_inflight_delivery_before_removal(hass, monkeypatch, boundary, source):
+    entry, _store, calls, owner, release = await _inflight_notification(hass, monkeypatch, source=source)
+    operation = hass.config_entries.async_unload if boundary == "unload" else hass.config_entries.async_remove
+    removal = asyncio.create_task(operation(entry.entry_id))
+    try:
+        await asyncio.wait_for(_wait_for_close_fence(owner), timeout=2)
+        assert not removal.done()
+        assert entry.entry_id in hass.data[DOMAIN][DATA_ENTRIES]
+        assert not any(call[2].get("message") == "clear_notification" for call in calls)
+        release.set()
+        result = await asyncio.wait_for(removal, timeout=2)
+        if boundary == "unload":
+            assert result is True
+            assert entry.state is ConfigEntryState.NOT_LOADED
+            assert not any(call[2].get("message") == "clear_notification" for call in calls)
+            assert await hass.config_entries.async_remove(entry.entry_id) == {"require_restart": False}
+        else:
+            assert result == {"require_restart": False}
+        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        tag = "codex_bridge_question_question-2"
+        matching = [(index, call[2]["message"]) for index, call in enumerate(calls)
+                    if call[0] == "notify" and call[2].get("data", {}).get("tag") == tag]
+        assert [message for _index, message in matching] == ["A question needs your response.", "clear_notification"]
+        saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
+        assert saved == {"interactions": []}
+        final_calls = list(calls)
+        async_fire_time_changed(hass, datetime.now(UTC) + timedelta(seconds=65))
+        await hass.async_block_till_done()
+        assert calls == final_calls
+    finally:
+        release.set()
+        if not removal.done():
+            await asyncio.wait_for(removal, timeout=2)
+
+
+async def test_cancelled_public_removal_keeps_owner_until_delivery_finishes(hass, monkeypatch):
+    entry, _store, calls, owner, release = await _inflight_notification(hass, monkeypatch)
+    removal = asyncio.create_task(hass.config_entries.async_remove(entry.entry_id))
+    try:
+        await asyncio.wait_for(_wait_for_close_fence(owner), timeout=2)
+        removal.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await removal
+        assert hass.config_entries.async_get_entry(entry.entry_id) is entry
+        assert hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].question_notifications is owner
+        saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
+        assert saved["interactions"]
+        retry = asyncio.create_task(hass.config_entries.async_remove(entry.entry_id))
+        await asyncio.sleep(0)
+        assert not retry.done()
+        assert not any(call[2].get("message") == "clear_notification" for call in calls)
+        release.set()
+        assert await asyncio.wait_for(retry, timeout=2) == {"require_restart": False}
+        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        assert calls[-1][1] == "dismiss"
+        saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
+        assert saved == {"interactions": []}
+    finally:
+        release.set()
+        if not removal.done():
+            await asyncio.wait_for(removal, timeout=2)
+
+
+async def test_failed_public_platform_unload_still_drains_before_removal(hass, monkeypatch):
+    entry, _store, calls, owner, release = await _inflight_notification(hass, monkeypatch)
+    from homeassistant.components import sensor
+
+    # Fail only the native platform callback, leaving HA's entry manager and
+    # forwarding/unload machinery intact. HA removes after FAILED_UNLOAD.
+    monkeypatch.setattr(sensor, "async_unload_entry", AsyncMock(return_value=False))
+    assert await hass.config_entries.async_unload(entry.entry_id) is False
+    assert entry.state is ConfigEntryState.FAILED_UNLOAD
+    assert hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].question_notifications is owner
+    removal = asyncio.create_task(hass.config_entries.async_remove(entry.entry_id))
+    try:
+        await asyncio.wait_for(_wait_for_close_fence(owner), timeout=2)
+        assert not removal.done()
+        assert not any(call[2].get("message") == "clear_notification" for call in calls)
+        release.set()
+        assert await asyncio.wait_for(removal, timeout=2) == {"require_restart": True}
+        saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
+        assert saved == {"interactions": []}
+        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        matching = [call[2]["message"] for call in calls if call[0] == "notify"
+                    and call[2].get("data", {}).get("tag") == "codex_bridge_question_question-2"]
+        assert matching == ["A question needs your response.", "clear_notification"]
+    finally:
+        release.set()
+        if not removal.done():
+            await asyncio.wait_for(removal, timeout=2)

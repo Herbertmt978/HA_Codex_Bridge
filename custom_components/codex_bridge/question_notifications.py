@@ -198,20 +198,22 @@ class QuestionNotificationCoordinator:
             await self.async_refresh()
 
     async def async_close(self) -> None:
+        """Fence callbacks and drain admitted work before surrendering the ledger."""
         self._closed = True
         self._refresh_pending = False
-        task, self._refresh_task = self._refresh_task, None
-        if task is not None:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
         for remove_name in ("_remove_timer", "_remove_bus", "_remove_broker"):
             remove = getattr(self, remove_name)
             if remove is not None:
                 remove()
                 setattr(self, remove_name, None)
+        # Timer jobs, direct refreshes and mobile replies are not necessarily
+        # _refresh_task. Do not cancel an admitted service call: it may already
+        # have sent the notification. Wait in the same order as async_start so
+        # a new removal owner can read the ledger only after delivery finishes.
+        async with self._start_lock:
+            async with self._lock:
+                pass
+        self._refresh_task = None
 
     async def async_permanently_remove(self) -> bool:
         """Clear this coordinator's managed notices and durable ledger.
@@ -399,6 +401,8 @@ class QuestionNotificationCoordinator:
             await self.async_start()
             return
         async with self._lock:
+            if self._closed:
+                return
             if not self._enabled() or not self._runtime.supports_capability("interactions_v2"):
                 had_entries = bool(self._entries)
                 for entry in tuple(self._entries.values()):
@@ -730,6 +734,8 @@ class QuestionNotificationCoordinator:
         if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{20,128}", token):
             return
         async with self._lock:
+            if self._closed:
+                return
             match = self._find_action(token)
             if match is None:
                 return

@@ -723,7 +723,7 @@ async def test_question_fingerprint_rejects_stale_choice_after_projection_change
     await coordinator.async_close()
 
 
-async def test_broker_listener_schedules_coalesced_refresh_and_unload_cancels_it(monkeypatch):
+async def test_broker_listener_schedules_coalesced_refresh_and_unload_drains_it(monkeypatch):
     coordinator, runtime, client, _services = _fixture(monkeypatch, interactions=[])
 
     class _Broker:
@@ -749,7 +749,41 @@ async def test_broker_listener_schedules_coalesced_refresh_and_unload_cancels_it
     await started.wait()
     assert coordinator._refresh_task is not None
     assert not coordinator._refresh_task.done()
-    await coordinator.async_close()
+    close = asyncio.create_task(coordinator.async_close())
+    await asyncio.sleep(0)
+    assert not close.done()
+    assert broker.listener is None
+    release.set()
+    await asyncio.wait_for(close, timeout=2)
     assert coordinator._refresh_task is None
     assert broker.listener is None
     assert client.async_list_pending_interactions.await_count == 2
+
+
+@pytest.mark.parametrize("queued_operation", ["refresh", "reply"])
+async def test_close_fence_rejects_work_waiting_for_ledger_lock(monkeypatch, queued_operation):
+    coordinator, _runtime, client, services = _fixture(monkeypatch)
+    await coordinator.async_start()
+    _mobile, tokens = _tokens(services)
+    started, release = asyncio.Event(), asyncio.Event()
+
+    async def blocked_pending(*_args, **_kwargs):
+        started.set()
+        await release.wait()
+        return {"items": [_interaction()]}
+
+    client.async_list_pending_interactions.side_effect = blocked_pending
+    admitted = asyncio.create_task(coordinator.async_refresh())
+    await started.wait()
+    queued = asyncio.create_task(
+        coordinator.async_refresh() if queued_operation == "refresh"
+        else coordinator._on_action(_event(tokens[0], reply_text="Source only"))
+    )
+    await asyncio.sleep(0)
+    close = asyncio.create_task(coordinator.async_close())
+    await asyncio.sleep(0)
+    assert coordinator._closed and not close.done()
+    release.set()
+    await asyncio.wait_for(asyncio.gather(admitted, queued, close), timeout=2)
+    assert client.async_list_pending_interactions.await_count == 2
+    client.async_answer_interaction.assert_not_awaited()

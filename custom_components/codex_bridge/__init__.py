@@ -241,6 +241,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Clear this entry's question notices and revoke its managed MCP grant."""
     async def clear_questions() -> None:
+        domain_data = hass.data.get(DOMAIN)
+        entries = domain_data.get(DATA_ENTRIES) if isinstance(domain_data, dict) else None
+        runtime = entries.get(entry.entry_id) if isinstance(entries, dict) else None
+        if runtime is not None:
+            # A cancelled/failed unload may still own an admitted delivery. HA
+            # can proceed to remove without another unload, so drain that owner
+            # before a fresh coordinator takes its saved ledger.
+            await runtime.async_close()
+            entries.pop(entry.entry_id, None)
         # Normal unload preserves delivery claims for restart. Permanent removal
         # has no runtime to reconcile them, including on an external connection.
         coordinator = QuestionNotificationCoordinator(
@@ -257,8 +266,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     async def detach(_name: str, _selected: bool) -> None:
         return None
 
-    # HA has already removed the entry and closed its runtime. Revoke local
-    # authority before any network wait, even if App discovery is cancelled.
+    # HA has already removed the entry. Revoke local authority before any
+    # service or network wait, even if a previous unload was interrupted.
     local = HaMcpShortcut(
         hass, entry.entry_id, None, connection_type=CONNECTION_TYPE_SUPERVISOR,
         supports_capability=lambda _value: False, selection_callback=detach,
@@ -304,9 +313,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if runtime is not None and runtime.entity_coordinator is not None:
         if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
             return False
-    runtime = domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
     if runtime is not None:
         await runtime.async_close()
+        # Preserve the draining owner on cancellation/error, so permanent
+        # removal cannot race a still-admitted timer or mobile action.
+        domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
     if not domain_data[DATA_ENTRIES]:
         async_remove_panel(hass)
         domain_data[DATA_PANEL_REGISTERED] = False
