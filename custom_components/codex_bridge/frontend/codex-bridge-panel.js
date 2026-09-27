@@ -35375,6 +35375,100 @@ function renderMcpCredentialForm(doc, state) {
   return form;
 }
 
+// frontend/src/community-mcp.js
+var COPY = Object.freeze({
+  not_connected: "The installed community HA-MCP App is available. Review the destination and authorise its connection below.",
+  not_installed: "No community HA-MCP App is installed. Use the HA-MCP installation and connection guide below.",
+  configured: "The connection is saved. Choose allowed tools, then enable MCP for the regular chat where you want to use them.",
+  paused: "The existing connection is paused. Its allowed tools are preserved; resume it when ready.",
+  unavailable: "Could not confirm the community HA-MCP App. Refresh connection options or use the existing HA-MCP setup guide.",
+  ambiguous: "More than one community HA-MCP App matches. Use manual server setup to choose the intended server.",
+  stopped: "The community HA-MCP App is stopped. Start it in Home Assistant if you intend to use it, then refresh connection options.",
+  unsupported: "Quick connect requires a Supervisor installation. Use the existing HA-MCP setup guide for this installation.",
+  endpoint_unavailable: "A supported private Home Assistant address could not be confirmed. Check Home Assistant’s internal URL and the App’s published port, or use manual setup.",
+  secret_unavailable: "The App has no supported saved connection path. Check its configuration and use manual setup if needed.",
+  connection_changed: "The connection or destination changed. Refresh to review it again. If a saved connection still uses the old destination, remove it before reconnecting; its tools will need selecting again.",
+  retry: "Codex is busy. Wait for active and queued work to finish, then refresh connection options.",
+  enable_mcp: "Update the Bridge App and Integration and enable MCP and local MCP connections in the App, then refresh connection options."
+});
+var supportsCommunityMcp = (capabilities = []) => Array.isArray(capabilities) && ["community_mcp_quick_connect_v1", "mcp_local_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"].every((key) => capabilities.includes(key));
+function normalizeCommunityMcp(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.state !== "string" || !Object.hasOwn(COPY, value.state) || typeof value.reused !== "boolean" || value.server_name !== null && (typeof value.server_name !== "string" || !/^[a-z][a-z0-9_-]{0,63}$/u.test(value.server_name)) || value.version !== null && (typeof value.version !== "string" || !/^\d+(?:\.\d+){1,3}(?:[a-z0-9.-]{0,24})$/iu.test(value.version)) || value.consent_revision !== null && (typeof value.consent_revision !== "string" || !/^[a-f0-9]{64}$/u.test(value.consent_revision))) return null;
+  if (value.destination !== null) {
+    if (typeof value.destination !== "string" || value.destination.length > 300) return null;
+    try {
+      const url = new URL(value.destination);
+      if (url.protocol !== "http:" || url.port !== "9583" || url.username || url.password || url.search || url.hash || url.pathname !== "/") return null;
+    } catch {
+      return null;
+    }
+  }
+  return {
+    state: value.state,
+    server_name: value.server_name,
+    reused: value.reused,
+    version: value.version,
+    destination: value.destination,
+    consent_revision: value.consent_revision
+  };
+}
+var communityMcpMessage = (code2) => Object.hasOwn(COPY, code2) ? COPY[code2] : "The result could not be confirmed. Refresh connection options before trying again; the action was not replayed.";
+function renderCommunityMcp(doc, state, capabilities = []) {
+  const node2 = (tag, label, className = "desktop-note") => {
+    const element4 = doc.createElement(tag);
+    element4.textContent = label;
+    element4.className = className;
+    return element4;
+  };
+  const card = node2("section", "", "schedule-card settings-card community-mcp-shortcut");
+  card.setAttribute("aria-labelledby", "community-mcp-title");
+  const title = node2("h3", "Installed community HA-MCP", "desktop-subheading");
+  title.id = "community-mcp-title";
+  const status = normalizeCommunityMcp(state.data.community_mcp);
+  const supported = supportsCommunityMcp(capabilities);
+  const notice = node2("p", communityMcpMessage(!supported ? "enable_mcp" : status?.state));
+  notice.setAttribute("role", "status");
+  card.append(title, notice);
+  if (status?.destination) card.append(node2("p", `Home Assistant MCP Server${status.version ? ` ${status.version}` : ""} · ${status.destination}`));
+  if (state.communityMcpError) {
+    const error = node2("p", communityMcpMessage(state.communityMcpError), "desktop-error");
+    error.setAttribute("role", "alert");
+    card.append(error);
+  }
+  const actions = node2("div", "", "desktop-form-actions");
+  if (supported && status?.state === "not_connected" && status.destination && status.consent_revision) {
+    const detail = node2("p", `Connect Codex to ${status.destination} using this App’s existing private connection path. Allowed tools use the community server’s Home Assistant permissions and may control devices or edit configuration. HTTP carries the credential without encryption; the private Bridge registry and its backups retain a copy. New connections allow no tools. This does not enable Assist or MCP for a chat.`);
+    detail.id = "community-mcp-consent-detail";
+    const label = node2("label", "", "mcp-consent");
+    const checkbox = doc.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.communityMcpAcknowledged = "";
+    checkbox.checked = state.communityMcpAcknowledged === true;
+    checkbox.disabled = Boolean(state.communityMcpBusy);
+    checkbox.setAttribute("aria-describedby", detail.id);
+    label.append(checkbox, node2("span", "I authorise this Home Assistant destination and accept the connection and backup risks.", ""));
+    card.append(detail, label);
+    const connect = node2("button", "Connect installed HA-MCP", "panel-button");
+    connect.type = "button";
+    connect.dataset.desktopAction = "community-mcp-connect";
+    connect.disabled = Boolean(state.communityMcpBusy) || !checkbox.checked;
+    actions.append(connect);
+  }
+  if (supported && status?.server_name) {
+    const tools = node2("button", "Choose allowed tools", "panel-button");
+    tools.type = "button";
+    tools.dataset.desktopAction = "edit-mcp-tools";
+    tools.dataset.id = status.server_name;
+    actions.append(tools);
+    card.append(node2("p", "Manage this connection in the server list below. Existing pause state and tool permissions are preserved. In a regular chat, enable MCP in its conversation settings. Select Assist servers separately if you also want voice access."));
+  }
+  if (state.communityMcpBusy) actions.querySelectorAll("button").forEach((button4) => {
+    button4.disabled = true;
+  });
+  card.append(actions);
+  return card;
+}
+
 // frontend/src/desktop-features.js
 var DESTINATIONS = Object.freeze([
   { id: "chats", label: "Chats", icon: "chat" },
@@ -35814,6 +35908,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text2(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    panel.append(renderCommunityMcp(documentRef, state, config?.capabilities));
     panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
@@ -35948,7 +36043,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
 }
 var renderedFeatureInputs = /* @__PURE__ */ new WeakMap();
 function featureDraftInputs(state) {
-  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged });
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged, communityMcpAcknowledged: state.communityMcpAcknowledged });
 }
 function syncDesktopFeatureDrafts(container, state) {
   const rendered = renderedFeatureInputs.get(container);
@@ -35962,6 +36057,12 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
   container.onchange = (event) => {
+    if (event.target?.matches?.("[data-community-mcp-acknowledged]")) {
+      state.communityMcpAcknowledged = event.target.checked;
+      const connect = container.querySelector('[data-desktop-action="community-mcp-connect"]');
+      if (connect) connect.disabled = !event.target.checked || Boolean(state.communityMcpBusy);
+      syncDesktopFeatureDrafts(container, state);
+    }
     if (event.target?.matches?.("[data-ha-mcp-acknowledged]")) {
       state.haMcpAcknowledged = event.target.checked;
       const connect = container.querySelector('[data-desktop-action="ha-mcp-connect"]');
@@ -35980,7 +36081,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   };
   const inputs = JSON.stringify({
     destination,
-    state: { ...state, formDraft: void 0, agentsDrafts: void 0, haMcpAcknowledged: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, haMcpAcknowledged: void 0, communityMcpAcknowledged: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
     timezone,
     hasActiveProject,
     activeProjectId,
@@ -44715,6 +44816,13 @@ var CodexBridgePanel = class extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (supportsCommunityMcp(capabilities) && !state.communityMcpBusy) {
+          state.data.community_mcp = await this._readCommunityMcp();
+          state.communityMcpAcknowledged = false;
+        } else if (!supportsCommunityMcp(capabilities)) {
+          delete state.data.community_mcp;
+          state.communityMcpAcknowledged = false;
+        }
         if (supportsHaMcpShortcut(capabilities) && !state.haMcpBusy) {
           const shortcut = await this._readHaMcpShortcut();
           if (!isCurrentSettingsRequest()) return;
@@ -44916,6 +45024,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
+    if (action === "community-mcp-connect") {
+      if (destination !== "settings") return;
+      return this._connectCommunityMcp(state);
+    }
     if (["ha-mcp-connect", "ha-mcp-refresh", "ha-mcp-disconnect"].includes(action)) {
       if (destination !== "settings") return;
       return this._haMcpShortcutMutation(action.slice(7), state);
@@ -45385,6 +45497,52 @@ var CodexBridgePanel = class extends HTMLElement {
       state.loading = false;
     }
     return mutationSucceeded;
+  }
+  async _readCommunityMcp() {
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/community", {
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(3e4)
+      });
+      return normalizeCommunityMcp(await response.json());
+    } catch {
+      return null;
+    }
+  }
+  async _connectCommunityMcp(state) {
+    const status = normalizeCommunityMcp(state.data.community_mcp);
+    if (!supportsCommunityMcp(this._config?.capabilities) || state.loading || state.communityMcpBusy || status?.state !== "not_connected" || !status.consent_revision || this.shadowRoot.querySelector("[data-community-mcp-acknowledged]")?.checked !== true) return false;
+    state.communityMcpBusy = true;
+    state.communityMcpAcknowledged = false;
+    state.communityMcpError = "";
+    this._renderDesktopSurface();
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acknowledged: true, consent_revision: status.consent_revision }),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(25e4)
+      });
+      const result = normalizeCommunityMcp(await response.json().catch(() => null));
+      if (!response.ok || !result || !["configured", "paused"].includes(result.state)) {
+        state.communityMcpError = result?.state || "unknown";
+        return false;
+      }
+      state.data.community_mcp = result;
+      state.notice = result.reused ? "Existing HA-MCP connection reused. Its pause state and allowed tools are preserved." : "Installed HA-MCP connected with no tools allowed. Choose allowed tools and enable MCP in your chat’s conversation settings.";
+      state.communityMcpBusy = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.communityMcpError = "unknown";
+      return false;
+    } finally {
+      state.communityMcpBusy = false;
+      this._renderDesktopSurface();
+    }
   }
   async _readHaMcpShortcut() {
     try {

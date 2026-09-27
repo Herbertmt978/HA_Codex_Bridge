@@ -150,6 +150,7 @@ _KNOWN_PROBLEM_CODES = frozenset(
         "invalid_event_filter",
         "invalid_relative_path",
         "mcp_config_conflict",
+        "community_mcp_connection_changed",
         "mcp_restart_required",
         "mcp_disabled",
         "mcp_elicitation_unavailable",

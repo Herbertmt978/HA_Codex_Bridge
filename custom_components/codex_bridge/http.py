@@ -15,6 +15,7 @@ from homeassistant.exceptions import Unauthorized
 
 from .bridge_api import BridgeApiError
 from .ha_mcp_shortcut import HaMcpShortcutError
+from .community_mcp import CodexBridgeCommunityMcpView
 from .http_streaming import (
     DOWNLOAD_STREAM_CHUNK_BYTES,
     HttpStreamingError,
@@ -638,6 +639,7 @@ class CodexBridgeDiscordView(HomeAssistantView):
 
 def async_register_http_views(hass: HomeAssistant) -> None:
     hass.http.register_view(CodexBridgeHaMcpView(hass))
+    hass.http.register_view(CodexBridgeCommunityMcpView(hass))
     hass.http.register_view(CodexBridgeDiscordView(hass))
     hass.http.register_view(CodexBridgeMcpCredentialView(hass))
     hass.http.register_view(CodexBridgeMcpConnectionView(hass))

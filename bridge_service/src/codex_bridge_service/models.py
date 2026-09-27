@@ -592,6 +592,7 @@ class BridgeReadinessRecord(BaseModel):
             "reset_credits_v1",
             "mcp_admin_v1",
             "mcp_local_v1",
+            "community_mcp_quick_connect_v1",
             "mcp_credentials_v1",
             "mcp_credential_binding_v1",
             "mcp_management_v1",

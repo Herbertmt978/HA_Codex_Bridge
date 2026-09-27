@@ -1800,6 +1800,14 @@ class BridgeApiClient:
             request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 
+    async def async_community_mcp(self, *, name: str, url: str, connect: bool = False) -> dict[str, Any]:
+        """Submit a privately discovered community endpoint; never return its URL."""
+        self._require_mcp_capability()
+        self.require_capability("community_mcp_quick_connect_v1")
+        return await self._async_json("POST", "/mcp/community/connection",
+            json_body={"name": name, "url": url, "connect": connect, "acknowledged": connect},
+            request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT)
+
     async def async_add_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
         if payload.get("require_tool_selection"):

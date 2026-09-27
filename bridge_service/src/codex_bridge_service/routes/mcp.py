@@ -99,6 +99,14 @@ class McpOAuthLoginResponse(BaseModel):
     authorization_url: str
 
 
+class CommunityMcpRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(pattern=r"^ha-community-[a-f0-9]{12}$")
+    url: str = Field(min_length=1, max_length=2048, repr=False)
+    connect: StrictBool = False
+    acknowledged: StrictBool = False
+
+
 def _manager(request: Request) -> McpManager:
     manager = getattr(request.app.state, "mcp_manager", None)
     if not isinstance(manager, McpManager):
@@ -122,6 +130,17 @@ def list_mcp_servers(
     _authorize(request, authorization)
     try:
         return _manager(request).list_servers()
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/community/connection")
+def community_mcp_connection(payload: CommunityMcpRequest, request: Request,
+                             authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    try:
+        return _manager(request).community_connection(name=payload.name, url=payload.url,
+            connect=payload.connect, acknowledged=payload.acknowledged)
     except McpManagerError as error:
         raise _problem(error) from None
 

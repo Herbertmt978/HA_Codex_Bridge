@@ -84,6 +84,57 @@ test.afterAll(async () => {
   });
 });
 
+for (const width of [390, 1280]) {
+  test(`community HA-MCP quick connect shows destination and requires consent at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.addInitScript(() => { window.communityNativeFetch = window.fetch.bind(window); });
+    let connected = false;
+    const requests = [];
+    const serverName = "ha-community-123456789abc";
+    await page.route("**/api/codex_bridge/mcp/community", async (route) => {
+      const request = route.request();
+      if (request.method() === "POST") {
+        requests.push(request.postDataJSON()); connected = true;
+        await page.evaluate((name) => { window.communityServer = { name, enabled: true, enabled_tools: [], tool_policy: "selected", startup: "ready", tool_count: 0, revision: "a".repeat(64) }; }, serverName);
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+        state: connected ? "configured" : "not_connected", server_name: connected ? serverName : null,
+        reused: false, destination: "http://192.168.1.20:9583", version: "8.5.0", consent_revision: "c".repeat(64),
+      }) });
+    });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._config.capabilities = ["community_mcp_quick_connect_v1", "mcp_local_v1", "mcp_admin_v1", "mcp_tool_permissions_v1", "mcp_management_v1"];
+      window.communityServer = null;
+      panel._hass = { ...panel._hass, fetchWithAuth: (url, init) => window.communityNativeFetch(url, init) };
+      const originalWs = panel._callWS.bind(panel);
+      panel._callWS = (method, args) => {
+        if (method === "list_mcp") return Promise.resolve({ items: window.communityServer ? [window.communityServer] : [] });
+        return originalWs(method, args);
+      };
+      panel._selectDesktopDestination("settings");
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    const card = panel.locator(".community-mcp-shortcut");
+    const connect = card.getByRole("button", { name: "Connect installed HA-MCP", exact: true });
+    await expect(card).toContainText("http://192.168.1.20:9583");
+    await expect(connect).toBeDisabled(); expect(requests).toEqual([]);
+    await card.getByRole("checkbox").check(); await expect(connect).toBeEnabled();
+    await connect.click();
+    await expect(card.getByRole("button", { name: "Choose allowed tools", exact: true })).toBeVisible();
+    expect(requests).toEqual([{ acknowledged: true, consent_revision: "c".repeat(64) }]);
+    expect(await page.evaluate(() => window.communityServer.enabled_tools)).toEqual([]);
+    await expect(card).toContainText("regular chat");
+    const bounds = await card.boundingBox(); expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await card.screenshot({ path: testInfo.outputPath("community-ha-mcp-connected.png") });
+  });
+}
+
 for (const width of [390, 1280]) for (const theme of ["light", "dark"]) {
   test(`installed HA MCP shortcut requires consent and starts deny-all at ${width}px in ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
