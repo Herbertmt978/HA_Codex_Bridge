@@ -209,7 +209,7 @@ def test_delayed_authoritative_start_uses_exact_budget_stop(tmp_path, monkeypatc
         timeouts = [value for method, value in client.request_timeouts if method == "turn/start"]
         assert 0 < timeouts[0] <= 1
         if outcome == "completed" or outcome.startswith("buffered_"):
-            expected = {"buffered_failed": "failed", "buffered_interrupted": "cancelled"}.get(outcome, "completed")
+            expected = {"buffered_failed": "failed", "buffered_interrupted": "interrupted"}.get(outcome, "completed")
             _wait_until(lambda: broker._state.runs[bounded.run_id].status == expected)
             assert broker._state.runs[bounded.run_id].stop_reason is None
             assert _requests(client, "turn/interrupt") == []
