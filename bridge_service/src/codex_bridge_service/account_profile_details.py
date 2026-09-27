@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from math import isfinite
 from pathlib import Path
 from threading import Event, Lock, Thread
@@ -63,6 +63,8 @@ allow_local_binding = false
 allow_upstream_proxy = false
 """
 
+MAX_USAGE_AGE = timedelta(minutes=15)
+
 
 def _public_details(status: str, plan: str | None, limits: LimitsStatusRecord | None) -> dict[str, Any]:
     windows: list[dict[str, Any]] = []
@@ -71,6 +73,7 @@ def _public_details(status: str, plan: str | None, limits: LimitsStatusRecord | 
             if window is not None:
                 windows.append({
                     "name": name,
+                    "window_minutes": window.window_minutes,
                     "remaining_percent": window.remaining_percent,
                     "resets_at": window.resets_at,
                 })
@@ -83,9 +86,13 @@ def _public_details(status: str, plan: str | None, limits: LimitsStatusRecord | 
         "status": status,
         "plan": normalize_chatgpt_plan_type(plan),
         "windows": windows,
-        "available_resets": count if type(count) is int and count >= 0 else None,
+        "available_resets": count if type(count) is int and 0 <= count <= 10000 else None,
         "next_reset_expiry": min(known) if known and count else None,
-        "expiry_complete": bool(count and isinstance(credits, list) and len(credits) >= count),
+        "expiry_complete": bool(
+            type(count) is int and 0 <= count <= 10000 and isinstance(credits, list)
+            and len(credits) == count and len(known) == count
+        ),
+        "five_hour_enabled": limits.five_hour_enabled if limits is not None else None,
         "updated_at": (
             limits.updated_at or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
         ) if status == "available" and limits is not None else None,
@@ -106,6 +113,9 @@ def _verified_snapshot(raw: bytes | None, account_id: str) -> dict[str, Any] | N
         if not isinstance(details, dict) or set(details) != {
             "status", "plan", "windows", "available_resets", "next_reset_expiry",
             "expiry_complete", "updated_at",
+        } and set(details) != {
+            "status", "plan", "windows", "available_resets", "next_reset_expiry",
+            "expiry_complete", "updated_at", "five_hour_enabled",
         } or details["status"] != "available":
             return None
         plan = details["plan"]
@@ -116,13 +126,16 @@ def _verified_snapshot(raw: bytes | None, account_id: str) -> dict[str, Any] | N
             return None
         seen: set[str] = set()
         for window in windows:
-            if not isinstance(window, dict) or set(window) != {
+            if not isinstance(window, dict) or set(window) not in ({
                 "name", "remaining_percent", "resets_at",
-            }:
+            }, {
+                "name", "window_minutes", "remaining_percent", "resets_at",
+            }):
                 return None
             name = window["name"]
             remaining = window["remaining_percent"]
             reset = window["resets_at"]
+            duration = window.get("window_minutes")
             if name not in ("5 hours", "Weekly") or name in seen:
                 return None
             if remaining is not None and (
@@ -131,6 +144,8 @@ def _verified_snapshot(raw: bytes | None, account_id: str) -> dict[str, Any] | N
             ):
                 return None
             if reset is not None and (type(reset) is not int or reset <= 0):
+                return None
+            if duration is not None and (type(duration) is not int or not 1 <= duration <= 525600):
                 return None
             seen.add(name)
         resets = details["available_resets"]
@@ -141,6 +156,9 @@ def _verified_snapshot(raw: bytes | None, account_id: str) -> dict[str, Any] | N
         if expiry is not None and (type(expiry) is not int or expiry <= 0):
             return None
         if type(details["expiry_complete"]) is not bool:
+            return None
+        five_hour_enabled = details.get("five_hour_enabled")
+        if five_hour_enabled is not None and type(five_hour_enabled) is not bool:
             return None
         if not isinstance(updated, str) or len(updated) > 40:
             return None
@@ -172,6 +190,7 @@ class AccountProfileDetailsProbe:
         self._client_factory = client_factory
         self._lock = Lock()
         self._cache: dict[str, tuple[str, float, dict[str, Any]]] = {}
+        self._latest_details: dict[str, dict[str, Any]] = {}
         self._retry_after: dict[str, tuple[str, float, str]] = {}
         self._poll_interval_seconds = poll_interval_seconds
         self._stop_polling = Event()
@@ -220,6 +239,90 @@ class AccountProfileDetailsProbe:
             self._next_inactive += 1
             self.read(profile["id"])
 
+    def cached_telemetry(self, *, now: datetime | None = None) -> dict[str, Any]:
+        """Return inventory plus verified disk snapshots without refreshing a sign-in."""
+        observed_at = now or datetime.now(UTC)
+        profiles = self._store.list_profiles()
+        with self._lock:
+            latest = {key: dict(value) for key, value in self._latest_details.items()}
+            self._latest_details = {
+                profile["id"]: self._latest_details[profile["id"]]
+                for profile in profiles if profile["id"] in self._latest_details
+            }
+        rows: list[dict[str, Any]] = []
+        inventory_complete = True
+        for profile in profiles:
+            profile_id = profile["id"]
+            try:
+                _, account_id = self._store.target_credential(profile_id)
+                snapshot = _verified_snapshot(
+                    self._store.read_usage_snapshot(profile_id), account_id,
+                )
+            except (AccountProfileError, WorkspaceNotFoundError):
+                inventory_complete = False
+                rows.append({
+                    "id": profile_id, "label": profile["label"],
+                    "active": profile["active"], "status": "unavailable",
+                    "updated_at": None, "windows": [], "available_resets": None,
+                    "next_reset_expiry": None, "expiry_complete": False,
+                    "five_hour_enabled": None,
+                })
+                continue
+
+            observed = latest.get(profile_id)
+            status = observed.get("status") if observed else None
+            if snapshot is None:
+                status = (
+                    observed.get("status")
+                    if observed and observed.get("status") != "available"
+                    else "unavailable"
+                )
+                rows.append({
+                    "id": profile_id, "label": profile["label"],
+                    "active": profile["active"], "status": status,
+                    "updated_at": None, "windows": [], "available_resets": None,
+                    "next_reset_expiry": None, "expiry_complete": False,
+                    "five_hour_enabled": None,
+                    "reauthentication_required": bool(
+                        observed and observed.get("reauthentication_required")
+                    ),
+                })
+                continue
+            updated_at = snapshot.get("updated_at")
+            try:
+                measured_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+                fresh = timedelta(0) <= observed_at - measured_at <= MAX_USAGE_AGE
+            except (AttributeError, TypeError, ValueError):
+                fresh = False
+            if status != "available" or not fresh:
+                status = "stale" if snapshot.get("status") == "available" else snapshot.get("status", "stale")
+            windows = []
+            for window in snapshot.get("windows", []):
+                expected = {"5 hours": 300, "Weekly": 10080}.get(window.get("name"))
+                if expected is not None and window.get("window_minutes") == expected:
+                    windows.append({
+                        "name": window["name"],
+                        "window_minutes": expected,
+                        "remaining_percent": window["remaining_percent"],
+                        "resets_at": window["resets_at"],
+                    })
+            rows.append({
+                "id": profile_id,
+                "label": profile["label"],
+                "active": profile["active"],
+                "status": status or "stale",
+                "updated_at": updated_at,
+                "windows": windows,
+                "available_resets": snapshot.get("available_resets"),
+                "next_reset_expiry": snapshot.get("next_reset_expiry"),
+                "expiry_complete": snapshot.get("expiry_complete", False),
+                "five_hour_enabled": snapshot.get("five_hour_enabled"),
+                "reauthentication_required": bool(
+                    observed and observed.get("reauthentication_required")
+                ),
+            })
+        return {"inventory_complete": inventory_complete, "profiles": rows}
+
     def _persist_verified(self, profile_id: str, account_id: str, details: dict[str, Any]) -> None:
         raw = json.dumps(
             {"version": 1, "account_id": account_id, "details": details},
@@ -264,6 +367,12 @@ class AccountProfileDetailsProbe:
         return details
 
     def read(self, profile_id: str) -> dict[str, Any]:
+        details = self._read(profile_id)
+        with self._lock:
+            self._latest_details[profile_id] = dict(details)
+        return details
+
+    def _read(self, profile_id: str) -> dict[str, Any]:
         # Profile identifiers and public metadata come only from the validated registry.
         profile = next((item for item in self._store.list_profiles() if item["id"] == profile_id), None)
         if profile is None:

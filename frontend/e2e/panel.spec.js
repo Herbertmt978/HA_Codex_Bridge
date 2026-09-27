@@ -308,6 +308,7 @@ test("refreshes HA-owned HTTP authentication during PNG upload and image reads w
   await expect.poll(() => panel.evaluate((element) => element._events.some((event) => event.sequence === 900))).toBe(true);
   await panel.locator(".uploaded-image-message").scrollIntoViewIfNeeded();
   await expect(uploadedImage).toBeVisible();
+  await panel.locator(".generated-image-message").scrollIntoViewIfNeeded();
   await expect(generatedImage).toBeVisible();
   for (const image of [composerImage, uploadedImage, generatedImage]) await expect.poll(() => image.evaluate((node) => node.complete && node.naturalWidth)).toBe(24);
   const evidence = await page.evaluate(() => window.__haHttpEvidence);
@@ -1748,7 +1749,7 @@ test("keeps chat prose readable and completion singular across themes and widths
       ["message.created", { text: "Say hello" }],
       ["run.started", { run_id: "run-style" }],
       ["plan.updated", { run_id: "run-style", plan: [{ step: "Reply", status: "completed" }] }],
-      ["message.completed", { run_id: "run-style", text: "Hello. This response uses plain, readable text.\n\nNo whole-message Copy action is shown." }],
+      ["message.completed", { run_id: "run-style", text: "Hello. This response uses plain, readable text.\n\nMessage actions remain separate from the prose." }],
       ["run.completed", { run_id: "run-style" }],
     ].map(([event_type, payload], index) => ({ event_id: `style-${index}`, thread_id: panel._selectedThreadId, sequence: 20000 + index, event_type, payload }));
     panel._forceMessageRebuild = true;
@@ -1764,7 +1765,7 @@ test("keeps chat prose readable and completion singular across themes and widths
         await expect.poll(() => panel.locator("#workspace-drawer").evaluate((node) => node.getBoundingClientRect().right)).toBeLessThanOrEqual(0);
       }
       await expect(panel.locator(".message .avatar, .message-head")).toHaveCount(0);
-      await expect(panel.getByRole("article", { name: "Your message" })).toHaveText("Say hello");
+      await expect(panel.getByRole("article", { name: "Your message" }).locator(".bubble-text")).toHaveText("Say hello");
       const prose = panel.locator(".message.assistant .assistant-markdown-paragraph").first();
       await expect(prose).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       const appearance = await prose.evaluate((node) => {
@@ -1775,7 +1776,9 @@ test("keeps chat prose readable and completion singular across themes and widths
       });
       expect(appearance.font).not.toMatch(/monospace|consolas|courier/i);
       expect(appearance.color).toBe(theme === "light" ? "rgb(21, 27, 41)" : "rgb(240, 242, 246)");
-      await expect(panel.locator(".message-actions")).toHaveCount(0);
+      await expect(panel.locator(".message-actions")).toHaveCount(2);
+      await expect(panel.getByRole("button", { name: "Copy message", exact: true })).toHaveCount(2);
+      await expect(panel.getByRole("button", { name: "Quote message", exact: true })).toHaveCount(2);
       await expect(panel.locator(".message.user .bubble")).toHaveCSS("background-color", "rgb(0, 0, 0)");
       await expect(panel.locator(".message.user .bubble-text")).toHaveCSS("color", "rgb(255, 255, 255)");
       expect(appearance.fits).toBe(true);
@@ -1788,7 +1791,7 @@ test("keeps chat prose readable and completion singular across themes and widths
   }
 });
 
-test("gives desktop chats wider space and one working control with code-only copying", async ({ page }, testInfo) => {
+test("gives desktop chats wider space and one working control with message and code copying", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
   await selectHarnessThread(page);
@@ -1825,8 +1828,12 @@ test("gives desktop chats wider space and one working control with code-only cop
   await expect(panel.locator(".run-command-details pre")).toBeVisible();
   await expect(panel.locator(".run-command-details pre")).toHaveText("git diff --stat");
   await panel.locator("#run-step-chip").click();
-  await expect(panel.locator(".message.assistant button")).toHaveCount(1);
-  const copy = panel.getByRole("button", { name: "Copy code", exact: true });
+  const assistant = panel.locator(".message.assistant");
+  await expect(assistant.getByRole("button", { name: "Copy message", exact: true })).toHaveCount(1);
+  await expect(assistant.getByRole("button", { name: "Quote message", exact: true })).toHaveCount(1);
+  await expect(assistant.getByRole("button", { name: "Line numbers", exact: true })).toHaveCount(1);
+  await expect(assistant.getByRole("button", { name: "Wrap lines", exact: true })).toHaveCount(1);
+  const copy = assistant.getByRole("button", { name: "Copy original code", exact: true });
   await copy.focus();
   await expect(copy).toBeFocused();
   await expect(panel.locator(".code-text")).toHaveText("const answer = 'hello';\n");

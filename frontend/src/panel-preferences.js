@@ -1,8 +1,8 @@
-export const DEFAULT_PREFERENCES = Object.freeze({ theme: "ha", textSize: "default", motion: "system", mode: "full-auto", model: "", thinking: "" });
+export const DEFAULT_PREFERENCES = Object.freeze({ theme: "ha", textSize: "default", motion: "system", mode: "full-auto", model: "", thinking: "", draftRecovery: "off" });
 
 export function normalisePreferences(value = {}) {
   const result = { ...DEFAULT_PREFERENCES };
-  for (const [key, allowed] of Object.entries({ theme: ["ha", "light", "dark"], textSize: ["default", "large", "larger"], motion: ["system", "reduced"], mode: ["observe", "edit", "full-auto"] })) {
+  for (const [key, allowed] of Object.entries({ theme: ["ha", "light", "dark"], textSize: ["default", "large", "larger"], motion: ["system", "reduced"], mode: ["observe", "edit", "full-auto"], draftRecovery: ["off", "on"] })) {
     if (allowed.includes(value?.[key])) result[key] = value[key];
   }
   for (const key of ["model", "thinking"]) {

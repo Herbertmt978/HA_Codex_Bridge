@@ -57,6 +57,17 @@ changing product language or architecture.
 - Reuse the panel's design tokens and accessible interaction patterns. Preserve
   loading, empty, error, retry, keyboard, narrow-screen, and reduced-motion
   states.
+- Match adjacent established controls before adding a new control. Composer
+  selectors use `composer-utility`, `composer-select` and `compact-select`;
+  compact text actions use `composer-limits-button`. File preview/Terminal tabs
+  and the PDF preview toolbar are the canonical compact toolbar examples.
+  Use the existing font, surface, border, radius and spacing tokens rather than
+  browser-default sizing or a separate visual system. Keep labelled inputs,
+  visible focus, disabled states and readable errors. Verify new controls in
+  light/dark themes at desktop and narrow widths with actual rendered output;
+  include keyboard/touch and reduced-motion checks where interaction changes.
+  Follow [Panel design language](docs/panel-design-language.md) for canonical
+  source examples, dimensions, control states and rendered verification.
 - Edit `frontend/src/`, then regenerate the panel and bundled PDF worker below
   `custom_components/codex_bridge/frontend/` with `npm run build`; do not
   hand-edit generated frontend assets.

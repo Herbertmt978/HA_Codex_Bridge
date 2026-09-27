@@ -4,6 +4,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from ..auth import require_bridge_token
+from ..event_store import ConversationSearchBudgetError
 from ..storage import ThreadNotFoundError
 from ..workspace import WorkspaceBoundaryError, WorkspaceNotFoundError
 
@@ -35,12 +36,31 @@ class TranscriptMessage(BaseModel):
     role: str
     text: str
     timestamp: str
+    anchor_cursor: int | None = None
+    revision_cursor: int | None = None
+
+
+class ConversationSearchResult(TranscriptSearchResult):
+    anchor_cursor: int | None
+    revision_cursor: int
+
+
+class ConversationSearchResponse(TranscriptSearchResponse):
+    results: list[ConversationSearchResult]
+    total_matching_messages: int
 
 
 def _excerpt(text: str, query: str, *, maximum: int = 240) -> str:
     folded = text.casefold()
-    start = folded.find(query.casefold())
-    if start < 0:
+    folded_start = folded.find(query.casefold())
+    start = 0
+    folded_offset = 0
+    for index, character in enumerate(text):
+        if folded_offset + len(character.casefold()) > folded_start:
+            start = index
+            break
+        folded_offset += len(character.casefold())
+    if folded_start < 0:
         return text[:maximum]
     left = max(0, start - maximum // 3)
     right = min(len(text), left + maximum)
@@ -112,6 +132,50 @@ def search_transcript(
     )
 
 
+@router.get("/threads/{thread_id}/search", response_model=ConversationSearchResponse)
+def search_conversation(
+    thread_id: str,
+    request: Request,
+    q: str = Query(min_length=1, max_length=256),
+    limit: int = Query(default=50, ge=1, le=100),
+    before_cursor: int | None = Query(default=None, ge=1, le=9_007_199_254_740_991),
+    authorization: str | None = Header(default=None),
+) -> ConversationSearchResponse:
+    """Search all indexed retained pages of exactly the selected chat."""
+    require_bridge_token(
+        authorization=authorization, request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    query = q.strip()
+    if not query:
+        raise HTTPException(status_code=422, detail="query must not be blank")
+    storage = request.app.state.storage
+    try:
+        thread = storage.get_thread(thread_id)
+        messages, total = storage.event_store.search_conversation_messages(
+            query=query, thread_id=thread_id, before_cursor=before_cursor, limit=limit + 1,
+        )
+    except ConversationSearchBudgetError as error:
+        raise HTTPException(status_code=503, detail="conversation search budget exceeded; retry") from error
+    except ThreadNotFoundError as error:
+        raise HTTPException(status_code=404, detail="thread not found") from error
+    except WorkspaceBoundaryError as error:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from error
+    has_more = len(messages) > limit
+    page = messages[:limit]
+    return ConversationSearchResponse(
+        results=[ConversationSearchResult(
+            thread_id=thread_id, title=thread.title, archived_at=thread.archived_at,
+            role=message["role"], sequence=message["scope_sequence"],
+            excerpt=_excerpt(message["text"], query), anchor_cursor=message["anchor_cursor"],
+            revision_cursor=message["cursor"],
+        ) for message in page],
+        total_matching_messages=total, has_more=has_more,
+        next_cursor=page[-1]["scope_sequence"] if has_more and page else None,
+        **(storage.event_store.transcript_index_status() | {"complete": True}),
+    )
+
+
 @router.get(
     "/threads/{thread_id}/transcript/{sequence}", response_model=TranscriptMessage
 )
@@ -131,6 +195,8 @@ def get_transcript_message(
         message = request.app.state.storage.event_store.get_transcript_message(
             thread_id, sequence
         )
+    except ConversationSearchBudgetError as exc:
+        raise HTTPException(status_code=503, detail="conversation search budget exceeded; retry") from exc
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
     except WorkspaceNotFoundError as exc:
@@ -144,5 +210,6 @@ def get_transcript_message(
         sequence=message["scope_sequence"],
         role=message["role"],
         text=message["text"],
-        timestamp=message["timestamp"],
+        timestamp=message["timestamp"], anchor_cursor=message["anchor_cursor"],
+        revision_cursor=message["cursor"],
     )

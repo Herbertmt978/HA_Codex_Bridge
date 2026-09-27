@@ -196,7 +196,9 @@ def _app_server_five_hour_enabled(snapshot: dict[str, Any]) -> bool | None:
 def _app_server_reset_credits(value: object) -> dict[str, Any] | None:
     if not isinstance(value, dict) or type(value.get("availableCount")) is not int:
         return None
-    count = max(0, min(value["availableCount"], 10000))
+    count = value["availableCount"]
+    if not 0 <= count <= 10000:
+        return None
     details = value.get("credits")
     if not isinstance(details, list):
         return {"available_count": count, "credits": None}
@@ -262,12 +264,10 @@ def _app_server_limits_window(payload: object) -> LimitsWindowRecord | None:
 def _safe_percentage(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    result = float(value)
-    if not isfinite(result):
+    if not 0 <= value <= 100:
         return None
-    if not 0.0 <= result <= 100.0:
-        result = min(100.0, max(0.0, result))
-    return result
+    result = float(value)
+    return result if isfinite(result) else None
 
 
 def _safe_nonnegative_integer(value: object) -> int | None:

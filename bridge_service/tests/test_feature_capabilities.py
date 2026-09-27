@@ -41,7 +41,8 @@ class _Runner:
         raise AssertionError("unsupported web search must not dispatch")
 
 
-def test_external_prompt_rejects_native_web_search_override_before_dispatch(tmp_path) -> None:
+@pytest.mark.parametrize("mode", ["live", "disabled"])
+def test_external_prompt_rejects_native_web_search_override_before_dispatch(tmp_path, mode) -> None:
     runner: _Runner | None = None
 
     def runner_factory(storage):
@@ -69,7 +70,7 @@ def test_external_prompt_rejects_native_web_search_override_before_dispatch(tmp_
     response = TestClient(app).post(
         f"/threads/{thread.thread_id}/prompts",
         headers=AUTHORIZATION,
-        json={"prompt": "Find current information", "web_search": "live"},
+        json={"prompt": "Find current information", "web_search": mode},
     )
 
     assert response.status_code == 422

@@ -148,13 +148,13 @@ describe("desktop chat controls", () => {
     element._renderToolbar();
     const model = element.shadowRoot.getElementById("thread-model-select");
     const thinking = element.shadowRoot.getElementById("thread-thinking-select");
-    const limits = element.shadowRoot.querySelector(".composer-limits-button");
+    const limits = element.shadowRoot.querySelector('#compact-toolbar [data-action="open-usage"]');
     if (focused) model.focus();
     element._status.limits = { ...element._status.limits, secondary: { remaining_percent: 51 }, updated_at: "2026-09-26T11:01:00Z" };
     element._renderToolbar();
     expect(element.shadowRoot.getElementById("thread-model-select")).toBe(model);
     expect(element.shadowRoot.getElementById("thread-thinking-select")).toBe(thinking);
-    expect(element.shadowRoot.querySelector(".composer-limits-button")).toBe(limits);
+    expect(element.shadowRoot.querySelector('#compact-toolbar [data-action="open-usage"]')).toBe(limits);
     expect(limits.textContent).toContain("Week 51%");
     if (focused) expect(element.shadowRoot.activeElement).toBe(model);
   });

@@ -247,6 +247,10 @@ async def test_cancelled_public_removal_keeps_owner_until_delivery_finishes(hass
 async def test_failed_public_platform_unload_still_drains_before_removal(hass, monkeypatch):
     entry, _store, calls, owner, release = await _inflight_notification(hass, monkeypatch)
     from homeassistant.components import sensor
+    allowances = hass.data[DOMAIN]["account_allowance_coordinators"]
+    allowance = allowances[entry.entry_id]
+    close_allowance = AsyncMock(wraps=allowance.async_close)
+    monkeypatch.setattr(allowance, "async_close", close_allowance)
 
     # Fail only the native platform callback, leaving HA's entry manager and
     # forwarding/unload machinery intact. HA removes after FAILED_UNLOAD.
@@ -264,6 +268,8 @@ async def test_failed_public_platform_unload_still_drains_before_removal(hass, m
         saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
         assert saved == {"interactions": []}
         assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        close_allowance.assert_awaited_once()
+        assert entry.entry_id not in allowances
         matching = [call[2]["message"] for call in calls if call[0] == "notify"
                     and call[2].get("data", {}).get("tag") == "codex_bridge_question_question-2"]
         assert matching == ["A question needs your response.", "clear_notification"]

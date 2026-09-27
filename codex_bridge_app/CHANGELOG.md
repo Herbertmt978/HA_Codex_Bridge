@@ -2,6 +2,23 @@
 
 All notable App changes are recorded here.
 
+## 1.13.0
+
+- Adds message copy and attributed quotes, opt-in local draft recovery, retained
+  conversation search, readable code blocks and safe mathematical notation.
+- Adds inspectable workspace and previous-chat context, repository status and
+  an attention inbox. Changed source context requires explicit review and refresh.
+- Adds deliberate-turn goals, reported run usage and optional elapsed-time limits,
+  plus reviewed per-turn web-search choices. Usage is telemetry, not billing;
+  token hard caps are unsupported.
+- Shows verified individual subagent status and targeted stopping. Direct
+  follow-up to v2 children remains unavailable with the pinned runtime.
+- Adds saved-account allowance/reset diagnostics and aligns new controls with
+  the existing panel design. Automatic chat selection chooses an ordinary chat
+  or a usable empty state; Assistant Chats remain last and collapsed by default.
+- Pairs App, Integration and panel `1.13.0` with Bridge `0.20.0` and unchanged
+  Codex `0.157.1`.
+
 ## 1.12.0
 
 - Keeps HA Assistant Chats at the bottom of the sidebar, below Projects,

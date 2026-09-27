@@ -634,8 +634,9 @@ def test_limits_probe_normalizes_nullable_resets_and_unlimited_credits() -> None
 @pytest.mark.parametrize(
     ("used_percent", "expected_used", "expected_remaining"),
     [
-        (-20, 0.0, 100.0),
-        (120, 100.0, 0.0),
+        (-20, None, None),
+        (120, None, None),
+        (10 ** 400, None, None),
         (nan, None, None),
         (inf, None, None),
         (-inf, None, None),
@@ -643,7 +644,7 @@ def test_limits_probe_normalizes_nullable_resets_and_unlimited_credits() -> None
         ("50", None, None),
     ],
 )
-def test_limits_probe_clamps_or_rejects_untrusted_usage_values(
+def test_limits_probe_rejects_untrusted_usage_values(
     used_percent: object,
     expected_used: float | None,
     expected_remaining: float | None,
@@ -791,3 +792,21 @@ def test_app_server_probes_do_not_read_auth_files_or_call_private_backends() -> 
     assert "urlopen" not in source
     assert "access_token" not in source
     assert "refresh_token" not in source
+
+
+@pytest.mark.parametrize("count", [-1, 10001, True, "0", 1.5])
+def test_invalid_reset_credit_count_is_unknown(count):
+    response = _rate_limits(primary={"usedPercent": 20, "windowDurationMins": 300})
+    response["rateLimitResetCredits"] = {"availableCount": count, "credits": []}
+    status = _limits_probe(RecordingAppServerClient(response)).probe()
+    assert status.reset_credits is None
+    assert status.primary.remaining_percent == 80
+
+
+@pytest.mark.parametrize("count", [0, 1, 10000])
+def test_valid_reset_credit_count_is_preserved(count):
+    response = _rate_limits(primary={"usedPercent": 0, "windowDurationMins": 300})
+    response["rateLimitResetCredits"] = {"availableCount": count, "credits": []}
+    status = _limits_probe(RecordingAppServerClient(response)).probe()
+    assert status.reset_credits["available_count"] == count
+    assert status.primary.remaining_percent == 100

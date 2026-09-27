@@ -543,6 +543,7 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
     # persisting in Codex's sticky thread configuration when the next turn
     # does not specify an override.
     assert thread_request["config"] == {
+        "features.goals": False,
         "default_permissions": "ha_bridge",
         "web_search": "cached",
     }

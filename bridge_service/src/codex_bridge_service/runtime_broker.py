@@ -4,7 +4,7 @@ import hashlib
 import json
 import os
 from collections.abc import Callable, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -14,6 +14,7 @@ from typing import Any, Iterator, Literal, Protocol, cast
 from uuid import uuid4
 
 from .activity_display import command_preview
+from .child_agents import ChildAgents, ChildAgentError, ChildOwner
 from .assist_mcp import private_execution_directory
 
 from .codex_app_server import (
@@ -51,6 +52,7 @@ from .models import (
     ThreadRecord,
 )
 from .resource_limits import ResourceLimitError, ResourceLimits
+from .goals import GoalSnapshotStale, goal_context_text
 from .runtime_gate import (
     RuntimeGate,
     RuntimeGateSnapshot,
@@ -90,7 +92,18 @@ from .storage import (
     ProjectMutationError,
     ThreadNotFoundError,
 )
-from .workspace import WorkspaceBoundaryError
+from .workspace import WorkspaceBoundary, WorkspaceBoundaryError
+from .chat_context import (ChatContextReference, ChatContextError, capture_chat_context, append_chat_context, reference_of)
+from .usage_history import DurationBudget, UsageHistory, UsageHistoryError, UsageRun
+from .workspace_context import (
+    MAX_WORKSPACE_CONTEXTS,
+    WorkspaceContextAttachment,
+    WorkspaceContextLimitError,
+    WorkspaceContextReference,
+    WorkspaceContextStaleError,
+    capture_workspace_context,
+    visible_prompt,
+)
 
 
 class _AppServer(Protocol):
@@ -158,6 +171,31 @@ class RuntimeRequestConflictError(RuntimeBrokerError):
 
     def __init__(self) -> None:
         super().__init__("The client request ID was already used for different input.")
+
+
+class RuntimeWorkspaceContextStaleError(RuntimeBrokerError):
+    code = "stale_context"
+    status_code = 409
+
+    def __init__(self) -> None:
+        super().__init__(
+            "A selected workspace file changed or moved. Refresh its excerpt before sending again."
+        )
+
+    def public_detail(self) -> dict[str, object]:
+        return {
+            "code": self.code,
+            "retryable": False,
+            "message": str(self),
+        }
+
+
+class RuntimeWorkspaceContextLimitError(RuntimeBrokerError):
+    code = "workspace_context_limit_exceeded"
+    status_code = 413
+
+    def __init__(self) -> None:
+        super().__init__("The selected workspace excerpts exceed their size limit.")
 
 
 class AssistPolicyError(RuntimeBrokerError):
@@ -298,6 +336,15 @@ class RuntimeCollaborationModeConflictError(RuntimeBrokerError):
 
     def __init__(self) -> None:
         super().__init__("Changing collaboration mode requires a queued turn.")
+
+
+class RuntimeWebSearchModeConflictError(RuntimeBrokerError):
+    code = "web_search_requires_queue"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Choose Queue or wait for the active response to finish to change web search."
+        )
 
 
 class RuntimeThreadBusyError(RuntimeBrokerError):
@@ -540,6 +587,7 @@ class RuntimeBroker:
         host_access: HostAccessManager | None = None,
         provider_admission_check: Callable[[], bool] | None = None,
         provider_account_owner_marker: Callable[[], str | None] | None = None,
+        provider_account_label: Callable[[], str | None] | None = None,
         auth_failure_listener: Callable[[int], None] | None = None,
         mcp_manager: McpManager | None = None,
     ) -> None:
@@ -600,6 +648,7 @@ class RuntimeBroker:
         self._browser_dynamic_tools_enabled = browser_dynamic_tools_enabled
         self._provider_admission_check = provider_admission_check
         self._provider_account_owner_marker = provider_account_owner_marker
+        self._provider_account_label = provider_account_label
         self._deferred_recovered_queue_ids: set[str] = set()
         self._recovering_queue_ids: set[str] = set()
         self._browser_pending_thread_authorities: dict[
@@ -619,6 +668,17 @@ class RuntimeBroker:
             self._state = RuntimeStateRecord()
             self._recovered_corrupt_state = True
         self._lock = RLock()
+        self.child_agents = ChildAgents(storage.root, app_server,
+                                        request=self._request_child_agents_locked,
+                                        active_authority=self._child_control_authority_locked)
+        self.usage_history: UsageHistory | None = None
+        self._usage_unavailable = False
+        try:
+            self.usage_history = UsageHistory(storage.root)
+        except (UsageHistoryError, WorkspaceBoundaryError, OSError):
+            # Optional observations must not prevent execution. Preserve the
+            # original confined file; no empty replacement or inferred zero.
+            self._usage_unavailable = True
         self._leases: dict[str, RuntimeLease] = {}
         self._pending_prompt_admissions: dict[str, PromptAdmission] = {}
         self._completion_events: dict[str, Event] = {}
@@ -877,6 +937,106 @@ class RuntimeBroker:
             return None
         return marker
 
+    def _usage_account_label(self) -> str | None:
+        if self._provider_account_label is None:
+            return None
+        try:
+            label = self._provider_account_label()
+        except Exception:
+            return None
+        return label if isinstance(label, str) and 0 < len(label) <= 160 else None
+
+    @property
+    def supports_subagents(self) -> bool:
+        contract = getattr(self.app_server, "protocol_contract", None)
+        return bool(self.child_agents.available and contract is not None
+                    and contract.codex_version == "codex-cli 0.157.1"
+                    and all(contract.permits("clientRequests", method)
+                            for method in ("thread/read", "turn/interrupt")))
+
+    def _child_owner_locked(self, thread_id: str) -> ChildOwner | None:
+        thread = self.storage.load_thread(thread_id)
+        if thread.assist_origin or thread.archived_at:
+            return None
+        runs = [run for run in self._state.runs.values()
+                if run.thread_id == thread_id and run.codex_thread_id == thread.codex_thread_id]
+        if not runs:
+            return None
+        run = max(runs, key=lambda r: r.created_at)
+        if not run.codex_thread_id or run.generation != self.app_server.generation:
+            return None
+        lease = self._leases.get(run.run_id)
+        return ChildOwner(
+            thread_id=thread_id, run_id=run.run_id, native_parent=run.codex_thread_id,
+            workspace=str(self.storage.resolve_workspace_path(run.workspace_path)),
+            account=self._current_provider_account_owner_marker(), generation=run.generation,
+            active=bool(run.status == "running" and lease is not None and lease.state == "active"
+                        and self.app_server.ready and self._provider_admission_allowed()
+                        and run.account_owner_marker is not None
+                        and run.account_owner_marker == self._current_provider_account_owner_marker()),
+        )
+
+    def list_child_agents(self, thread_id: str) -> dict[str, Any]:
+        with self._lock:
+            owner = self._child_owner_locked(thread_id)
+            return self.child_agents.list(thread_id, owner)
+
+    def refresh_child_agent(self, thread_id: str, child_id: str) -> dict[str, Any]:
+        with self._lock:
+            owner = self._child_owner_locked(thread_id)
+            if owner is None or not self.supports_subagents:
+                raise ChildAgentError("child_stale")
+            self.child_agents.refresh(owner, child_id)
+            row = self.child_agents._row(owner, child_id)
+            return self.child_agents.public(row, self._child_owner_locked(thread_id))
+
+    def stop_child_agent(self, thread_id: str, child_id: str, revision: int,
+                         client_request_id: str) -> dict[str, Any]:
+        with self._lock:
+            owner = self._child_owner_locked(thread_id)
+            if owner is None or not self.supports_subagents:
+                raise ChildAgentError("child_stale")
+            result = self.child_agents.stop(owner, child_id, revision, client_request_id)
+            row = self.child_agents._row(owner, child_id)
+            result["child"] = self.child_agents.public(row, self._child_owner_locked(thread_id))
+            return result
+
+    def _request_child_agents_locked(self, method: str, params: dict[str, Any], *,
+                                     owner: ChildOwner, expected_revision: int) -> Any:
+        """Release the lifecycle lock during IO, then revalidate the exact owner.
+
+        Publication ownership excludes workspace/delete mutations. The retained
+        revision prevents callback or concurrent refresh changes being overwritten.
+        No timeout/error path cancels the parent or aborts its runtime generation.
+        """
+        if method == "turn/interrupt" and not self._child_control_authority_locked(owner):
+            raise ChildAgentError("child_stale")
+        self._begin_publication_locked(owner.thread_id)
+        self._lock.release()
+        try:
+            result = self.app_server.request(method, params, timeout_seconds=5.0)
+        finally:
+            self._lock.acquire()
+            self._finish_publication_locked(owner.thread_id)
+        current = self._child_owner_locked(owner.thread_id)
+        row = next((row for row in self.child_agents.state.children
+                    if row.thread_id == owner.thread_id
+                    and row.native_child == params.get("threadId")), None)
+        if (current is None or row is None
+                or (method == "thread/read" and row.revision != expected_revision)
+                or current.run_id != owner.run_id or current.native_parent != owner.native_parent
+                or current.workspace != owner.workspace or current.account != owner.account
+                or current.generation != owner.generation):
+            raise ChildAgentError("child_stale")
+        return result
+
+    def _child_control_authority_locked(self, owner: ChildOwner) -> bool:
+        current = self._child_owner_locked(owner.thread_id)
+        return bool(current is not None and current.active
+                    and current.run_id == owner.run_id and current.native_parent == owner.native_parent
+                    and current.workspace == owner.workspace and current.account == owner.account
+                    and current.generation == owner.generation)
+
     @property
     def supports_plan_mode(self) -> bool:
         return (
@@ -918,7 +1078,7 @@ class RuntimeBroker:
             cwd = str(self.storage.resolve_workspace_path(source.workspace_path))
             response = self.app_server.request(
                 "thread/fork",
-                {"threadId": source.codex_thread_id, "cwd": cwd},
+                {"threadId": source.codex_thread_id, "cwd": cwd, "config": {"features.goals": False}},
                 timeout_seconds=self.control_request_timeout_seconds,
             )
             if generation != self.app_server.generation:
@@ -1012,7 +1172,7 @@ class RuntimeBroker:
                 cwd = str(self.storage.resolve_workspace_path(destination.root_path))
                 response = self.app_server.request(
                     "thread/fork",
-                    {"threadId": source.codex_thread_id, "cwd": cwd},
+                    {"threadId": source.codex_thread_id, "cwd": cwd, "config": {"features.goals": False}},
                     timeout_seconds=self.control_request_timeout_seconds,
                 )
                 if generation != self.app_server.generation:
@@ -1218,7 +1378,16 @@ class RuntimeBroker:
         collaboration_mode: Literal["default", "plan"] | None = None,
         admission: PromptAdmission | None = None,
         assist: bool = False,
+        workspace_context: list[WorkspaceContextReference] | tuple[WorkspaceContextReference, ...] = (),
+        chat_context: list[ChatContextReference] | tuple[ChatContextReference, ...] = (),
+        max_duration_seconds: int | None = None,
     ) -> RunRecord:
+        if max_duration_seconds is not None:
+            DurationBudget(max_duration_seconds=max_duration_seconds)
+            if max_duration_seconds > min(self.limits.run_total_timeout_seconds, self.turn_timeout_seconds):
+                raise ValueError("Elapsed-time limit exceeds the runtime ceiling.")
+            if admission is not None:
+                raise ValueError("Prepared admissions do not support elapsed-time limits.")
         if type(unattended) is not bool:
             raise ValueError("unattended must be a boolean")
         if type(assist) is not bool:
@@ -1232,6 +1401,20 @@ class RuntimeBroker:
         request_id = client_request_id or f"req_{uuid4().hex}"
         prompt = _prompt(prompt)
         request_id = _identifier(request_id, limit=256, label="client request id")
+        references = tuple(
+            WorkspaceContextReference.model_validate(reference)
+            for reference in workspace_context
+        )
+        if len(references) > MAX_WORKSPACE_CONTEXTS:
+            raise RuntimeWorkspaceContextLimitError()
+        if references and admission is not None:
+            raise RuntimeWorkspaceContextLimitError()
+        chat_references = tuple(ChatContextReference.model_validate(item) for item in chat_context)
+        if chat_references and (admission is not None or unattended or assist):
+            raise ChatContextError("destination_unavailable")
+        if chat_references and len(chat_references) + len(references) > 8:
+            raise ChatContextError("limit_exceeded")
+        request_fingerprint = _context_fingerprint(prompt, references, chat_references, max_duration_seconds)
         _require_message_event_capacity(
             prompt=prompt,
             client_request_id=request_id,
@@ -1265,14 +1448,14 @@ class RuntimeBroker:
             self._validate_prompt_admission_locked(
                 admission,
                 request_id=request_id,
-                fingerprint=_fingerprint(prompt),
+                fingerprint=request_fingerprint,
                 unattended=unattended,
                 web_search=web_search,
             )
             if admission is None:
                 self._raise_for_pending_prompt_admission_locked(
                     request_id,
-                    fingerprint=_fingerprint(prompt),
+                    fingerprint=request_fingerprint,
                     unattended=unattended,
                     web_search=web_search,
                 )
@@ -1290,7 +1473,7 @@ class RuntimeBroker:
                 existing = self._state.runs.get(existing_outcome.run_id)
                 if (
                     existing_outcome.thread_id != thread_id
-                    or existing_outcome.fingerprint != _fingerprint(prompt)
+                    or existing_outcome.fingerprint != request_fingerprint
                     or existing_outcome.unattended != unattended
                     or existing_outcome.web_search != web_search
                     or existing_outcome.follow_up_mode != follow_up_mode
@@ -1304,6 +1487,29 @@ class RuntimeBroker:
                     if existing is not None
                     else _outcome_record(existing_outcome)
                 )
+
+        # An accepted idempotent retry returned above without touching files.
+        # New submissions capture precisely the previewed bytes before they can
+        # reserve queue ownership or publish any user message.
+        attachments = self._capture_workspace_context(thread, references)
+        chat_attachments = capture_chat_context(self.storage, thread_id, chat_references)
+        goals = getattr(self.storage, "goals", None)
+        goal_snapshot = (
+            goals.capture(thread_id)
+            if goals is not None and not unattended and not assist and not thread.assist_origin
+            else None
+        )
+        try:
+            visible_user_prompt = _context_prompt(prompt, attachments, chat_attachments)
+            if goal_snapshot is not None:
+                visible_user_prompt += goal_context_text(goal_snapshot)
+        except WorkspaceContextLimitError:
+            raise RuntimeWorkspaceContextLimitError() from None
+        _require_message_event_capacity(
+            prompt=visible_user_prompt,
+            client_request_id=request_id,
+            maximum_bytes=self.limits.max_event_payload_bytes,
+        )
 
         # Auth reconciliation can bind account ownership through storage locks
         # that broker-owned deletion acquires before ``self._lock``. Never run
@@ -1320,14 +1526,14 @@ class RuntimeBroker:
             self._validate_prompt_admission_locked(
                 admission,
                 request_id=request_id,
-                fingerprint=_fingerprint(prompt),
+                fingerprint=request_fingerprint,
                 unattended=unattended,
                 web_search=web_search,
             )
             if admission is None:
                 self._raise_for_pending_prompt_admission_locked(
                     request_id,
-                    fingerprint=_fingerprint(prompt),
+                    fingerprint=request_fingerprint,
                     unattended=unattended,
                     web_search=web_search,
                 )
@@ -1344,7 +1550,7 @@ class RuntimeBroker:
                 existing = self._state.runs.get(existing_outcome.run_id)
                 if (
                     existing_outcome.thread_id != thread_id
-                    or existing_outcome.fingerprint != _fingerprint(prompt)
+                    or existing_outcome.fingerprint != request_fingerprint
                     or existing_outcome.unattended != unattended
                     or existing_outcome.web_search != web_search
                     or existing_outcome.follow_up_mode != follow_up_mode
@@ -1359,6 +1565,10 @@ class RuntimeBroker:
                     else _outcome_record(existing_outcome)
                 )
 
+            # Auth reconciliation ran outside the broker lock. A source can
+            # change there; refuse before reserving any new prompt ownership.
+            if chat_references and capture_chat_context(self.storage, thread_id, chat_references) != chat_attachments:
+                raise ChatContextError("changed")
             self._ensure_request_capacity_locked(
                 reserved_request_id=(request_id if admission is not None else None)
             )
@@ -1376,12 +1586,23 @@ class RuntimeBroker:
                 raise RuntimePromptPendingError()
 
             active = self._active_run_for_thread_locked(thread_id)
+            if active is not None and follow_up_mode != "queue" and max_duration_seconds is not None:
+                raise RuntimeRequestConflictError()
             if (
                 active is not None
                 and follow_up_mode != "queue"
                 and active.collaboration_mode != selected_collaboration_mode
             ):
                 raise RuntimeCollaborationModeConflictError()
+            if (
+                active is not None
+                and follow_up_mode != "queue"
+                and (active.web_search or _MANAGED_WEB_SEARCH_DEFAULT)
+                != (web_search or _MANAGED_WEB_SEARCH_DEFAULT)
+            ):
+                # Native turn/steer accepts input only. Search configuration is
+                # applied when starting/resuming a thread for a new turn.
+                raise RuntimeWebSearchModeConflictError()
             if active is not None and follow_up_mode != "queue":
                 # The authoritative account can fail closed after the
                 # pre-lock check. An active run already owns a prompt lease,
@@ -1399,7 +1620,7 @@ class RuntimeBroker:
                     kind="steer",
                     unattended=False,
                     web_search=web_search,
-                    fingerprint=_fingerprint(prompt),
+                    fingerprint=request_fingerprint,
                     follow_up_mode=follow_up_mode,
                     collaboration_mode=selected_collaboration_mode,
                     status="uncertain",
@@ -1436,10 +1657,11 @@ class RuntimeBroker:
                     self.storage.resolve_workspace_path(thread.workspace_path)
                     accepted_at = datetime.now(UTC)
                     now = accepted_at.isoformat()
+                    # Immediate runs need the same acceptance-time owner proof
+                    # as queued runs for later child inspection and control.
                     account_owner_marker = (
                         self._current_provider_account_owner_marker()
-                        if lease.state == "queued"
-                        and self._provider_account_owner_marker is not None
+                        if self._provider_account_owner_marker is not None
                         else None
                     )
                     if (
@@ -1457,8 +1679,13 @@ class RuntimeBroker:
                         follow_up_mode=follow_up_mode,
                         collaboration_mode=selected_collaboration_mode,
                         prompt=prompt,
-                        prompt_fingerprint=_fingerprint(prompt),
+                        prompt_fingerprint=request_fingerprint,
+                        workspace_context=attachments,
+                        chat_context=chat_attachments,
+                        goal_context=goal_snapshot,
                         account_owner_marker=account_owner_marker,
+                        account_usage_label=self._usage_account_label() if account_owner_marker else None,
+                        max_duration_seconds=max_duration_seconds,
                         mode=thread.mode,
                         host_access_grant=thread.host_access_grant,
                         model=thread.effective_model,
@@ -1490,7 +1717,7 @@ class RuntimeBroker:
                         web_search=web_search,
                         follow_up_mode=follow_up_mode,
                         collaboration_mode=selected_collaboration_mode,
-                        fingerprint=run.prompt_fingerprint,
+                        fingerprint=request_fingerprint,
                         status="accepted",
                         run_status=run.status,
                     )
@@ -1516,7 +1743,7 @@ class RuntimeBroker:
                             payload={
                                 "run_id": run.run_id,
                                 "role": "user",
-                                "text": prompt,
+                                "text": visible_user_prompt,
                                 "client_request_id": request_id,
                             },
                         )
@@ -1563,13 +1790,28 @@ class RuntimeBroker:
         codex_thread_id, turn_id, run_id, generation = steer
         assert codex_thread_id is not None
         try:
+            steered_thread = self.storage.get_thread(thread_id)
+            steered_attachments = self._capture_workspace_context(
+                steered_thread, references
+            )
+            steered_chat_attachments = capture_chat_context(self.storage, thread_id, chat_references)
+        except (RuntimeWorkspaceContextStaleError, RuntimeWorkspaceContextLimitError, ChatContextError):
+            with self._lock:
+                outcome = self._state.request_idempotency.get(request_id)
+                if outcome is not None and outcome.run_id == run_id and outcome.status == "uncertain":
+                    self._state.request_idempotency.pop(request_id, None)
+                    self._persist_locked()
+                self._finish_publication_locked(thread_id)
+            raise
+        steered_prompt = _context_prompt(prompt, steered_attachments, steered_chat_attachments)
+        try:
             try:
                 result = self.app_server.request(
                     "turn/steer",
                     {
                         "threadId": codex_thread_id,
                         "expectedTurnId": turn_id,
-                        "input": self._prompt_input(prompt, web_search),
+                        "input": self._prompt_input(steered_prompt, web_search),
                         "clientUserMessageId": request_id,
                     },
                     timeout_seconds=self.control_request_timeout_seconds,
@@ -1627,7 +1869,7 @@ class RuntimeBroker:
                             payload={
                                 "run_id": run_id,
                                 "role": "user",
-                                "text": prompt,
+                                "text": steered_prompt,
                                 "client_request_id": request_id,
                                 "steered": True,
                             },
@@ -1666,6 +1908,8 @@ class RuntimeBroker:
                     revision=run.queue_revision,
                     position=position,
                     collaboration_mode=run.collaboration_mode,
+                    workspace_context=list(run.workspace_context),
+                    chat_context=list(run.chat_context),
                 )
                 for position, run in enumerate(queued, start=1)
             ]
@@ -1690,9 +1934,31 @@ class RuntimeBroker:
                 raise QueuedPromptNotFoundError()
             if run.queue_revision != expected_revision:
                 raise QueuedPromptRevisionConflictError()
-            fingerprint = _fingerprint(normalized)
+            if run.chat_context:
+                if capture_chat_context(self.storage, thread_id, tuple(reference_of(item) for item in run.chat_context)) != run.chat_context:
+                    raise ChatContextError("changed")
+            fingerprint = _context_fingerprint(
+                normalized,
+                tuple(
+                    WorkspaceContextReference(
+                        path=item.path,
+                        start_line=item.start_line,
+                        end_line=item.end_line,
+                        content_revision=item.content_revision,
+                    )
+                    for item in run.workspace_context
+                ),
+                tuple(reference_of(item) for item in run.chat_context),
+                run.max_duration_seconds,
+            )
+            try:
+                visible_user_prompt = _context_prompt(normalized, run.workspace_context, run.chat_context)
+                if run.goal_context is not None:
+                    visible_user_prompt += goal_context_text(run.goal_context)
+            except WorkspaceContextLimitError:
+                raise RuntimeWorkspaceContextLimitError() from None
             _require_message_event_capacity(
-                prompt=normalized,
+                prompt=visible_user_prompt,
                 client_request_id=run.client_request_id,
                 maximum_bytes=self.limits.max_event_payload_bytes,
             )
@@ -1743,7 +2009,7 @@ class RuntimeBroker:
                             "run_id": run_id,
                             "message_sequence": message_sequence,
                             "role": "user",
-                            "text": normalized,
+                            "text": visible_user_prompt,
                         },
                     )
                 )
@@ -1777,6 +2043,8 @@ class RuntimeBroker:
                 revision=run.queue_revision,
                 position=position,
                 collaboration_mode=run.collaboration_mode,
+                workspace_context=list(run.workspace_context),
+                chat_context=list(run.chat_context),
             )
 
     def cancel_queued_prompt(self, thread_id: str, run_id: str) -> RunRecord:
@@ -1829,12 +2097,22 @@ class RuntimeBroker:
         thread_id: str,
         *,
         run_id: str | None = None,
+        budget_stop: bool = False,
     ) -> RunRecord:
+        if budget_stop and run_id is None:
+            raise ValueError("An elapsed-time stop requires the exact run.")
         self.storage.load_thread(thread_id)
         abort_without_turn = False
         with self._lock:
             run = self._find_cancellable_run_locked(thread_id, run_id)
             if run is None:
+                stopped = self._state.runs.get(run_id) if budget_stop and run_id else None
+                if stopped is not None and stopped.thread_id == thread_id and stopped.stop_reason == "elapsed_time_limit" and stopped.status in _TERMINAL_RUN_STATES:
+                    return _run_record(stopped)
+                raise TurnChangedError()
+            if budget_stop and run.stop_reason == "elapsed_time_limit":
+                return _run_record(run)
+            if budget_stop and (not run.codex_thread_id or not run.codex_turn_id):
                 raise TurnChangedError()
             if run.status == "queued":
                 lease = self._leases.get(run.run_id)
@@ -1844,7 +2122,19 @@ class RuntimeBroker:
                     run, "cancelled", "The queued prompt was cancelled."
                 )
                 return _run_record(run)
-            self._cancel_queued_for_thread_locked(thread_id, except_run_id=run.run_id)
+            if not budget_stop:
+                self._cancel_queued_for_thread_locked(thread_id, except_run_id=run.run_id)
+            else:
+                run.stop_reason = "elapsed_time_limit"
+                try:
+                    if self._usage_unavailable or self.usage_history is None:
+                        raise UsageHistoryError("Usage history is unavailable.")
+                    self.usage_history.request_budget_stop(
+                        run.run_id, elapsed_seconds=run.max_duration_seconds or 0,
+                        requested_at=_now(),
+                    )
+                except (UsageHistoryError, WorkspaceBoundaryError, OSError):
+                    self._usage_unavailable = True
             run.status = "cancelling"
             self._revoke_browser_turn_locked(run.run_id)
             run.cancellation_requested_at = _now()
@@ -1888,7 +2178,7 @@ class RuntimeBroker:
                     {"threadId": codex_thread_id, "turnId": turn_id},
                 )
             except Exception:
-                if generation is not None:
+                if generation is not None and not budget_stop:
                     self.app_server.abort_generation(generation)
                     with self._lock:
                         self._clear_queued_locked("app-server generation aborted")
@@ -1897,6 +2187,22 @@ class RuntimeBroker:
         finally:
             with self._lock:
                 self._finish_publication_locked(thread_id)
+
+    def get_usage_history(self, *, thread_id: str | None = None,
+                          project_id: str | None = None) -> dict[str, object]:
+        with self._lock:
+            if self._usage_unavailable or self.usage_history is None:
+                raise UsageHistoryError("Usage history is unavailable.")
+            view = self.usage_history.view(thread_id=thread_id, project_id=project_id)
+            for item in view["items"]:
+                run = self._state.runs.get(item["run_id"])
+                item["budget_stop_state"] = (
+                    "unconfirmed" if run and run.budget_stop_unconfirmed
+                    else "requested" if run and run.stop_reason and run.status not in _TERMINAL_RUN_STATES
+                    else "finished" if item["budget_stop_requested_at"] else None
+                )
+            view["max_duration_seconds"] = min(86_400, int(self.limits.run_total_timeout_seconds), int(self.turn_timeout_seconds))
+            return view
 
     def get_task_action_run(self, action_id: str) -> RunRecord | None:
         """Read the durable run admitted with a Home Assistant action key."""
@@ -2248,6 +2554,8 @@ class RuntimeBroker:
                 browser_broker.close()
             except BaseException:
                 pass
+        if self.usage_history is not None:
+            self.usage_history.close()
 
     def _run_worker(self, run_id: str) -> None:
         try:
@@ -2263,6 +2571,19 @@ class RuntimeBroker:
             if lease is None:
                 return
             lease.wait_until_active(timeout_seconds=queue_wait_timeout)
+            with self._lock:
+                if any(row.budget_stop_unconfirmed for row in self._state.runs.values()
+                       if row.status not in _TERMINAL_RUN_STATES):
+                    # Retain explicit queued input and its original authority.
+                    # A fresh broker must revalidate it before provider dispatch.
+                    run = self._state.runs.get(run_id)
+                    if run is not None:
+                        run.status = "queued"
+                        self._deferred_recovered_queue_ids.add(run_id)
+                        self._leases.pop(run_id, None)
+                        lease.release()
+                        self._persist_locked()
+                    return
             if not self._provider_admission_allowed():
                 with self._lock:
                     run = self._state.runs.get(run_id)
@@ -2276,10 +2597,18 @@ class RuntimeBroker:
                         )
                 return
             self._start_turn(run_id)
+            with self._lock:
+                if self._state.runs.get(run_id) and self._state.runs[run_id].status == "queued":
+                    return
             self._watch_turn(run_id)
         except (RuntimeLeaseCancelledError, RuntimeLeaseTimeoutError):
             with self._lock:
                 run = self._state.runs.get(run_id)
+                if run is not None and run.status == "queued" and self._budget_admission_blocked_locked():
+                    self._deferred_recovered_queue_ids.add(run_id)
+                    self._leases.pop(run_id, None)
+                    self._persist_locked()
+                    return
                 if self._preserve_queued_prompt_during_shutdown_locked(run):
                     return
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
@@ -2320,7 +2649,51 @@ class RuntimeBroker:
                             else "The Codex turn timed out."
                         ),
                     )
+        except ChatContextError as context_error:
+            with self._lock:
+                run = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(run):
+                    return
+                if run is not None and run.status not in _TERMINAL_RUN_STATES:
+                    explanation = "Previous chat context is no longer valid (" + context_error.state.replace("_", " ") + "). Review or remove it and send again."
+                    self._terminalize_locked(run, "failed", explanation, failure=_SafeFailure(explanation, "chat_context_" + context_error.state))
+        except GoalSnapshotStale:
+            with self._lock:
+                run = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(run):
+                    return
+                if run is not None and run.status not in _TERMINAL_RUN_STATES:
+                    message = "The accepted goal changed or was paused/cancelled before this turn started. Review the goal and send the retained prompt again."
+                    self._terminalize_locked(run, "failed", message,
+                                             failure=_SafeFailure(message, "stale_goal"))
+        except RuntimeWorkspaceContextStaleError:
+            with self._lock:
+                run = self._state.runs.get(run_id)
+                if self._preserve_queued_prompt_during_shutdown_locked(run):
+                    return
+                if run is not None and run.status not in _TERMINAL_RUN_STATES:
+                    self._terminalize_locked(
+                        run,
+                        "failed",
+                        "A selected workspace file changed or moved before dispatch. Refresh the excerpt and send again.",
+                        failure=_SafeFailure(
+                            "A selected workspace file changed or moved before dispatch. Refresh the excerpt and send again.",
+                            "stale_context",
+                        ),
+                    )
         except Exception as start_error:
+            with self._lock:
+                expired = self._state.runs.get(run_id)
+                elapsed_expired = (
+                    expired is not None
+                    and expired.status not in _TERMINAL_RUN_STATES
+                    and self._elapsed_budget_remaining_locked(expired) <= 0
+                    and (expired.turn_start_dispatched or expired.run_id not in self._assist_loading_runs)
+                )
+            if elapsed_expired:
+                self._stop_expired_start(run_id)
+                self._watch_turn(run_id)
+                return
             generation_to_abort: int | None = None
             with self._lock:
                 failed = self._state.runs.get(run_id)
@@ -2488,6 +2861,14 @@ class RuntimeBroker:
             run = self._state.runs[run_id]
             if run.status in _TERMINAL_RUN_STATES or self._closed:
                 return
+            if self._budget_admission_blocked_locked():
+                run.status = "queued"
+                self._deferred_recovered_queue_ids.add(run_id)
+                held_lease = self._leases.pop(run_id, None)
+                if held_lease is not None:
+                    held_lease.release()
+                self._persist_locked()
+                return
             if run.status == "cancelling":
                 self._terminalize_locked(
                     run,
@@ -2495,15 +2876,16 @@ class RuntimeBroker:
                     "The queued turn was cancelled before it started.",
                 )
                 return
-            thread_request_timeout = min(
-                self.control_request_timeout_seconds,
-                self._remaining_total_budget_locked(run),
-            )
             run.status = "starting"
             run.started_at = _now()
+            if run.max_duration_seconds is not None:
+                run.budget_deadline_at = DurationBudget(
+                    max_duration_seconds=run.max_duration_seconds,
+                ).deadline(run.started_at)
             run.last_activity_at = run.started_at
             run.generation = self.app_server.generation
             generation = run.generation
+            thread_request_timeout = self._start_request_timeout_locked(run)
             self._activity[run_id] = monotonic()
             self._persist_locked()
             thread = self.storage.get_thread(run.thread_id)
@@ -2529,7 +2911,7 @@ class RuntimeBroker:
                 raise WorkspaceBoundaryError()
             if selected_attachments:
                 raise RuntimeAttachmentsUnavailableError()
-            inputs = self._turn_input(run)
+            self._turn_input(run)
 
         image_generation_authority_revision: int | None = None
         authority = self._image_generation_authority
@@ -2559,6 +2941,9 @@ class RuntimeBroker:
             self._persist_locked()
 
         thread_config: dict[str, object] = {
+            # Stable native goals default on and can launch idle turns outside
+            # Bridge admission. Bridge goals guide deliberate bounded turns only.
+            "features.goals": False,
             "default_permissions": policy.permission_profile,
             # Codex keeps thread configuration when resuming. Always send the
             # managed default so a prior live/disabled override cannot leak
@@ -2582,6 +2967,8 @@ class RuntimeBroker:
             thread_config.update(manager.assist_thread_config(
                 workspace, thread.assist_mcp_servers, execution_cwd=native_cwd,
             ))
+        # Apply last: no other configuration owner can revive native goals.
+        thread_config["features.goals"] = False
         host_lease = None
         if (
             run.mode is RunMode.HAOS_FULL_ACCESS
@@ -2600,11 +2987,7 @@ class RuntimeBroker:
                     # and consent this process did not witness.
                     run.codex_thread_id = None
         browser_tools_advertised = False
-        if thread.assist_origin and thread.assist_mcp_servers is not None:
-            with self._lock:
-                if run.status in _TERMINAL_RUN_STATES or generation != self.app_server.generation:
-                    return
-                self._assist_loading_runs.add(run.run_id)
+        fresh_usage_thread = run.codex_thread_id is None
         if run.codex_thread_id:
             # Codex 0.157.1 ignores resume settings while the thread is loaded.
             # Detach our idle provider thread and confirm it has unloaded before
@@ -2614,10 +2997,7 @@ class RuntimeBroker:
             with self._lock:
                 if generation != self.app_server.generation or run.status != "starting":
                     raise RuntimeUnavailableError()
-                thread_request_timeout = min(
-                    self.control_request_timeout_seconds,
-                    self._remaining_total_budget_locked(run),
-                )
+                thread_request_timeout = self._start_request_timeout_locked(run)
             self._unload_provider_thread(
                 run.codex_thread_id, generation,
                 timeout_seconds=thread_request_timeout,
@@ -2626,10 +3006,9 @@ class RuntimeBroker:
             with self._lock:
                 if generation != self.app_server.generation or run.status != "starting":
                     raise RuntimeUnavailableError()
-                thread_request_timeout = min(
-                    self.control_request_timeout_seconds,
-                    self._remaining_total_budget_locked(run),
-                )
+                thread_request_timeout = self._start_request_timeout_locked(run)
+                if thread.assist_origin and thread.assist_mcp_servers is not None:
+                    self._assist_loading_runs.add(run.run_id)
             thread_params["threadId"] = run.codex_thread_id
             thread_result = self.app_server.request(
                 "thread/resume",
@@ -2647,6 +3026,14 @@ class RuntimeBroker:
                 browser_tools_advertised = True
             if host_lease is not None:
                 thread_params.setdefault("dynamicTools", []).append(host_dynamic_tool_spec())
+            with self._lock:
+                if self._closed or run.status in _TERMINAL_RUN_STATES:
+                    return
+                if generation != self.app_server.generation or run.status != "starting":
+                    raise RuntimeUnavailableError()
+                thread_request_timeout = self._start_request_timeout_locked(run)
+                if thread.assist_origin and thread.assist_mcp_servers is not None:
+                    self._assist_loading_runs.add(run.run_id)
             thread_result = self.app_server.request(
                 "thread/start",
                 thread_params,
@@ -2698,22 +3085,28 @@ class RuntimeBroker:
             if generation != self.app_server.generation:
                 raise RuntimeUnavailableError()
 
-        with self._lock:
-            run = self._state.runs[run_id]
-            if run.status in _TERMINAL_RUN_STATES:
-                return
-            if generation != self.app_server.generation:
-                raise RuntimeUnavailableError()
-            turn_request_timeout = min(
-                self.control_request_timeout_seconds,
-                self._remaining_total_budget_locked(run),
-            )
-            run.turn_start_dispatched = True
-            self._persist_locked()
+        # The thread start/resume above carries no user prompt. Revalidate the
+        # selected excerpts immediately before committing and dispatching the
+        # actual turn input.
+        goals = getattr(self.storage, "goals", None)
+        guard = goals.dispatch_guard(run.thread_id, run.goal_context) if goals is not None else nullcontext()
+        with guard:
+            latest_inputs = self._turn_input(run)
+            with self._lock:
+                run = self._state.runs[run_id]
+                if run.status in _TERMINAL_RUN_STATES or run.status == "cancelling":
+                    return
+                if generation != self.app_server.generation:
+                    raise RuntimeUnavailableError()
+                turn_request_timeout = self._start_request_timeout_locked(run, elapsed_cap=True)
+                # Pause/cancel after this boundary affects future starts. The
+                # existing Stop action still owns this dispatched bounded turn.
+                run.turn_start_dispatched = True
+                self._persist_locked()
 
         turn_params: dict[str, object] = {
             "threadId": codex_thread_id,
-            "input": inputs,
+            "input": latest_inputs,
             "clientUserMessageId": run.client_request_id,
             "cwd": str(native_cwd),
             "model": run.model,
@@ -2754,9 +3147,30 @@ class RuntimeBroker:
             if run.codex_turn_id and run.codex_turn_id != turn_id:
                 raise RuntimeProtocolMismatchError()
             run.codex_turn_id = turn_id
-            self._authorize_browser_turn_locked(run)
+            try:
+                if self._usage_unavailable or self.usage_history is None:
+                    raise UsageHistoryError("Usage history is unavailable.")
+                self.usage_history.start(UsageRun(
+                    run_id=run.run_id, thread_id=run.thread_id,
+                    project_id=self.storage.load_thread(run.thread_id).project_id,
+                    account_marker=run.account_owner_marker,
+                    account_label=run.account_usage_label or "Account not reported",
+                    native_thread_id=codex_thread_id, native_turn_id=turn_id,
+                    started_at=run.started_at or run.created_at,
+                    budget=(DurationBudget(max_duration_seconds=run.max_duration_seconds)
+                            if run.max_duration_seconds is not None else None),
+                ), fresh_native_thread=fresh_usage_thread)
+            except (UsageHistoryError, WorkspaceBoundaryError, OSError):
+                self._usage_unavailable = True
+            # The public user message retains the exact visible excerpt; the
+            # private checkpoint only needs it while queued or pre-dispatch.
+            run.workspace_context = ()
+            run.chat_context = ()
+            elapsed_expired = self._elapsed_budget_remaining_locked(run) <= 0
+            if not elapsed_expired:
+                self._authorize_browser_turn_locked(run)
             pending_host = self._host_pending.pop(run.run_id, None)
-            if pending_host is not None and self._host_access.active(pending_host):
+            if pending_host is not None and not elapsed_expired and self._host_access.active(pending_host):
                 self._host_turns[run.run_id] = (
                     BrowserInvocationContext(
                         run_id=run.run_id, thread_id=run.thread_id,
@@ -2793,6 +3207,10 @@ class RuntimeBroker:
                 )
             self._callback_replays_in_progress.add(run_id)
 
+        if elapsed_expired and turn_status == "inProgress":
+            # Bind only the authoritative response identity, and latch/revoke
+            # before replaying callbacks which may be slow or request tools.
+            self._stop_expired_start(run_id, callbacks=buffered_callbacks)
         self._replay_pre_response_callbacks(
             run_id,
             expected_turn_id=turn_id,
@@ -2802,8 +3220,11 @@ class RuntimeBroker:
             current = self._state.runs.get(run_id)
             if current is None or current.status in _TERMINAL_RUN_STATES:
                 return
-            interrupt_after_start = current.status == "cancelling"
-        if interrupt_after_start:
+            elapsed_expired = current.stop_reason is None and self._elapsed_budget_remaining_locked(current) <= 0
+            interrupt_after_start = current.status == "cancelling" and current.stop_reason != "elapsed_time_limit"
+        if elapsed_expired:
+            self._stop_expired_start(run_id)
+        elif interrupt_after_start:
             try:
                 self.app_server.request(
                     "turn/interrupt",
@@ -2819,18 +3240,32 @@ class RuntimeBroker:
             return
         started = monotonic()
         turn_deadline = started + self.turn_timeout_seconds
+        with self._lock:
+            run = self._state.runs.get(run_id)
+            deadline = _parse_time(run.budget_deadline_at) if run else None
+        budget_deadline_monotonic = (
+            started + max(0.0, (deadline - datetime.now(UTC)).total_seconds())
+            if deadline else float("inf")
+        )
         while True:
             with self._lock:
                 run = self._state.runs.get(run_id)
                 if run is None or run.status in _TERMINAL_RUN_STATES:
                     return
                 total_remaining = self._total_budget_remaining_locked(run)
+                # This deadline is a one-shot interrupt trigger. Once latched,
+                # waiting must use the watchdog/global ceilings, not a zero wait.
+                budget_remaining = (
+                    budget_deadline_monotonic - monotonic()
+                    if run.stop_reason is None else float("inf")
+                )
             wait_seconds = max(
                 0.0,
                 min(
                     self.watchdog_interval_seconds,
                     turn_deadline - monotonic(),
                     total_remaining,
+                    budget_remaining,
                 ),
             )
             if event.wait(wait_seconds):
@@ -2854,7 +3289,14 @@ class RuntimeBroker:
                 )
                 cancel_at = _parse_time(run.cancellation_requested_at)
                 total_timed_out = self._total_budget_remaining_locked(run) <= 0
+                stop_for_budget = run.stop_reason is None and monotonic() >= budget_deadline_monotonic
             now = monotonic()
+            if stop_for_budget:
+                try:
+                    self.cancel_run(run.thread_id, run_id=run.run_id, budget_stop=True)
+                except TurnChangedError:
+                    pass
+                continue
             if generation is not None and generation != self.app_server.generation:
                 with self._lock:
                     self._reconcile_generation_locked(
@@ -2873,6 +3315,14 @@ class RuntimeBroker:
                 and datetime.now(UTC) - cancel_at
                 >= timedelta(seconds=self.cancel_grace_seconds)
             )
+            if cancel_expired and run.stop_reason == "elapsed_time_limit":
+                with self._lock:
+                    if not run.budget_stop_unconfirmed:
+                        run.budget_stop_unconfirmed = True
+                        self._persist_locked()
+                # Do not kill a shared generation or release uncertain authority.
+                # The existing global resource ceiling remains authoritative.
+                cancel_expired = False
             if generation is not None and (timed_out or idle or cancel_expired):
                 self.app_server.abort_generation(generation)
                 with self._lock:
@@ -2897,6 +3347,66 @@ class RuntimeBroker:
         if deadline is None:
             raise RuntimeStateError("The runtime deadline is missing or invalid.")
         return (deadline - datetime.now(UTC)).total_seconds()
+
+    def _elapsed_budget_remaining_locked(self, run: RuntimeRunState) -> float:
+        deadline = _parse_time(run.budget_deadline_at)
+        return (deadline - datetime.now(UTC)).total_seconds() if deadline else float("inf")
+
+    def _start_request_timeout_locked(self, run: RuntimeRunState, *, elapsed_cap: bool = False) -> float:
+        total_remaining = self._remaining_total_budget_locked(run)
+        elapsed_remaining = self._elapsed_budget_remaining_locked(run)
+        if elapsed_remaining <= 0:
+            raise TimeoutError("The elapsed-time limit expired before turn dispatch.")
+        timeout = min(self.control_request_timeout_seconds, total_remaining)
+        # Thread preparation can load an Assist/MCP session whose identity is
+        # unknown until the response. Keep its existing control/global bound;
+        # only actual model dispatch uses the additional elapsed response cap.
+        return min(timeout, elapsed_remaining) if elapsed_cap else timeout
+
+    def _stop_expired_start(self, run_id: str, *, callbacks: list[AppServerNotification | AppServerRequest] | None = None) -> None:
+        """Reuse cancellation/terminal owners without guessing a native turn."""
+        with self._lock:
+            run = self._state.runs.get(run_id)
+            if run is None or run.status in _TERMINAL_RUN_STATES or self._closed:
+                return
+            if run.generation != self.app_server.generation:
+                self._reconcile_generation_locked(self.app_server.generation, reason="app-server generation changed")
+                return
+            if not run.turn_start_dispatched:
+                run.stop_reason = "elapsed_time_limit"
+                self._terminalize_locked(run, "cancelled", None)
+                return
+            if not run.codex_turn_id:
+                # An RPC timeout can mean native work started. Keep its lease
+                # and queue authority until existing generation/global recovery;
+                # buffered callbacks are not an authoritative start response.
+                run.stop_reason = "elapsed_time_limit"
+                run.status = "cancelling"
+                run.cancellation_requested_at = run.cancellation_requested_at or _now()
+                run.budget_stop_unconfirmed = True
+                self._revoke_browser_turn_locked(run.run_id)
+                events = self._expire_run_interactions_locked(run)
+                self._persist_locked(events=events)
+                self._set_thread_projection_locked(run)
+                return
+            if any(
+                isinstance(callback, AppServerNotification)
+                and callback.method == "turn/completed"
+                and isinstance(callback.params, dict)
+                and isinstance(callback.params.get("turn"), dict)
+                and callback.params["turn"].get("status") in {"completed", "failed", "interrupted"}
+                and self._correlated_run_locked(callback.generation, callback.params.get("threadId"), callback.params["turn"].get("id")) is run
+                for callback in [*(callbacks or []), *self._pre_response_callbacks.get(run_id, [])]
+            ):
+                # Replay already received output and definitive completion in
+                # order; the validated response has now authorised correlation.
+                return
+            thread_id = run.thread_id
+        try:
+            self.cancel_run(thread_id, run_id=run_id, budget_stop=True)
+        except TurnChangedError:
+            # Concurrent definitive completion already owns terminal cleanup.
+            pass
 
     def _remaining_total_budget_locked(self, run: RuntimeRunState) -> float:
         remaining = self._total_budget_remaining_locked(run)
@@ -3356,8 +3866,32 @@ class RuntimeBroker:
         method: str,
         params: dict[str, Any],
     ) -> None:
+        if (method == "item/completed" and isinstance(params.get("item"), dict)
+                and params["item"].get("type") == "collabAgentToolCall"):
+            if run.codex_thread_id and run.generation:
+                try:
+                    self.child_agents.observe(ChildOwner(
+                        thread_id=run.thread_id, run_id=run.run_id,
+                        native_parent=run.codex_thread_id,
+                        workspace=str(self.storage.resolve_workspace_path(run.workspace_path)),
+                        account=run.account_owner_marker, generation=run.generation,
+                        active=run.status == "running",
+                    ), params["item"])
+                except (ChildAgentError, OSError, ValueError):
+                    # A failed optional projection must not interrupt the parent.
+                    self.child_agents.available = False
         if method == "thread/tokenUsage/updated":
             usage = params.get("tokenUsage")
+            try:
+                if self._usage_unavailable or self.usage_history is None:
+                    raise UsageHistoryError("Usage history is unavailable.")
+                self.usage_history.observe(
+                    run.run_id, native_thread_id=run.codex_thread_id or "",
+                    native_turn_id=run.codex_turn_id or "",
+                    token_usage=usage, observed_at=_now(),
+                )
+            except (UsageHistoryError, WorkspaceBoundaryError, OSError):
+                self._usage_unavailable = True
             last = usage.get("last") if isinstance(usage, dict) else None
             used = last.get("totalTokens") if isinstance(last, dict) else None
             window = usage.get("modelContextWindow") if isinstance(usage, dict) else None
@@ -4199,10 +4733,24 @@ class RuntimeBroker:
             return
         self._revoke_browser_turn_locked(run.run_id)
         self._close_assist_mcp_before_release_locked(run)
+        was_budget_unconfirmed = run.budget_stop_unconfirmed
+        run.budget_stop_unconfirmed = False
         run.status = status  # type: ignore[assignment]
         run.prompt = None
+        run.goal_context = None
+        run.workspace_context = ()
+        run.chat_context = ()
         run.terminal_message = message
+        if run.stop_reason == "elapsed_time_limit":
+            message = "The elapsed-time limit requested a stop. Partial results are retained."
+            run.terminal_message = message
         run.last_activity_at = _now()
+        try:
+            if self._usage_unavailable or self.usage_history is None:
+                raise UsageHistoryError("Usage history is unavailable.")
+            self.usage_history.finish(run.run_id, status=status, finished_at=run.last_activity_at)
+        except (UsageHistoryError, WorkspaceBoundaryError, OSError):
+            self._usage_unavailable = True
         for outcome in self._state.request_idempotency.values():
             if outcome.run_id == run.run_id:
                 outcome.run_status = run.status
@@ -4315,6 +4863,11 @@ class RuntimeBroker:
             if run.generation is not None:
                 self.app_server.abort_generation(run.generation)
             raise RuntimeUnavailableError() from persistence_error
+
+        if was_budget_unconfirmed and not self._closed and not self._fatal_error and not self._budget_admission_blocked_locked():
+            # Reuse the existing authority-checked recovery owner for deliberately
+            # queued prompts held behind the uncertainty fence.
+            self.resume_recovered_queued_runs()
 
         if auth_projection_failed:
             raise RuntimeUnavailableError()
@@ -4658,7 +5211,60 @@ class RuntimeBroker:
     ) -> list[dict[str, object]]:
         if run.prompt is None:
             raise RuntimeStateError("The queued Codex prompt is unavailable.")
-        return self._prompt_input(run.prompt, run.web_search)
+        attachments = self._revalidate_run_workspace_context(run)
+        chat_attachments = capture_chat_context(self.storage, run.thread_id, tuple(reference_of(item) for item in run.chat_context))
+        if chat_attachments != run.chat_context:
+            raise ChatContextError("changed")
+        prompt = _context_prompt(run.prompt, attachments, chat_attachments)
+        if run.goal_context is not None:
+            goals = getattr(self.storage, "goals", None)
+            if goals is None:
+                raise GoalSnapshotStale("Goal ownership is unavailable.")
+            goals.validate_snapshot(run.thread_id, run.goal_context)
+            prompt += goal_context_text(run.goal_context)
+        return self._prompt_input(prompt, run.web_search)
+
+    def _capture_workspace_context(
+        self,
+        thread: ThreadRecord,
+        references: tuple[WorkspaceContextReference, ...],
+    ) -> tuple[WorkspaceContextAttachment, ...]:
+        if not references:
+            return ()
+        boundary = getattr(self.storage, "workspace_boundary", None)
+        if not isinstance(boundary, WorkspaceBoundary):
+            raise RuntimeWorkspaceContextStaleError()
+        try:
+            return capture_workspace_context(
+                boundary, thread.workspace_path, references
+            )
+        except WorkspaceContextStaleError:
+            raise RuntimeWorkspaceContextStaleError() from None
+        except WorkspaceContextLimitError:
+            raise RuntimeWorkspaceContextLimitError() from None
+
+    def _revalidate_run_workspace_context(
+        self,
+        run: RuntimeRunState,
+    ) -> tuple[WorkspaceContextAttachment, ...]:
+        if not run.workspace_context:
+            return ()
+        try:
+            thread = self.storage.get_thread(run.thread_id)
+        except ThreadNotFoundError:
+            raise RuntimeWorkspaceContextStaleError() from None
+        if thread.workspace_path != run.workspace_path:
+            raise RuntimeWorkspaceContextStaleError()
+        references = tuple(
+            WorkspaceContextReference(
+                path=item.path,
+                start_line=item.start_line,
+                end_line=item.end_line,
+                content_revision=item.content_revision,
+            )
+            for item in run.workspace_context
+        )
+        return self._capture_workspace_context(thread, references)
 
     @staticmethod
     def _prompt_input(
@@ -4733,6 +5339,11 @@ class RuntimeBroker:
     def _purge_threads_locked(self, thread_ids: set[str]) -> None:
         if not thread_ids:
             return
+        try:
+            self.child_agents.purge(thread_ids)
+        except ChildAgentError:
+            # Do not claim a chat deletion removed unreadable private history.
+            raise RuntimeUnavailableError() from None
         run_ids = {
             run_id
             for run_id, run in self._state.runs.items()
@@ -5278,6 +5889,7 @@ class RuntimeBroker:
             self._revoke_browser_turn_locked(run.run_id)
             run.status = "interrupted"
             run.prompt = None
+            run.goal_context = None
             run.terminal_message = "The private Codex runtime state is unavailable."
             run.last_activity_at = _now()
             lease = self._leases.pop(run.run_id, None)
@@ -5298,10 +5910,14 @@ class RuntimeBroker:
             except (OSError, ValueError):
                 pass
 
+    def _budget_admission_blocked_locked(self) -> bool:
+        return any(row.budget_stop_unconfirmed for row in self._state.runs.values()
+                   if row.status not in _TERMINAL_RUN_STATES)
+
     def _require_started_locked(self) -> None:
         if self._closed:
             raise RuntimeClosedError()
-        if not self._started or self._fatal_error:
+        if not self._started or self._fatal_error or self._budget_admission_blocked_locked():
             raise RuntimeUnavailableError()
 
     def runtime_snapshot(self) -> RuntimeGateSnapshot:
@@ -5639,6 +6255,47 @@ def _safe_failure(value: object) -> _SafeFailure:
 
 def _fingerprint(value: object) -> str:
     return runtime_fingerprint(value)
+
+
+def _context_prompt(prompt, workspace_items, chat_items):
+    if not chat_items:
+        return visible_prompt(prompt, workspace_items)
+    return append_chat_context(prompt, chat_items, workspace_items=workspace_items)
+
+
+def _context_fingerprint(prompt, workspace_references, chat_references, max_duration_seconds=None):
+    if not chat_references:
+        return _workspace_prompt_fingerprint(prompt, workspace_references, max_duration_seconds)
+    return _fingerprint({"workspace_prompt": _workspace_prompt_fingerprint(prompt, workspace_references, max_duration_seconds),
+                         "chat_context": [item.model_dump() for item in chat_references]})
+
+
+def _workspace_prompt_fingerprint(
+    prompt: str,
+    references: tuple[WorkspaceContextReference, ...],
+    max_duration_seconds: int | None = None,
+) -> str:
+    if max_duration_seconds is not None:
+        return _fingerprint({
+            "prompt_fingerprint": _workspace_prompt_fingerprint(prompt, references),
+            "max_duration_seconds": max_duration_seconds,
+        })
+    if not references:
+        # Preserve existing idempotency keys and recovered v1 state for regular
+        # prompt submissions.
+        return _fingerprint(prompt)
+    return _fingerprint({
+        "prompt": prompt,
+        "workspace_context": [
+            {
+                "path": item.path,
+                "start_line": item.start_line,
+                "end_line": item.end_line,
+                "content_revision": item.content_revision,
+            }
+            for item in references
+        ],
+    })
 
 
 def _attachment_manifest(attachments: list[Any]) -> str:

@@ -1093,6 +1093,7 @@ async def test_chat_operations_require_negotiated_capability_before_any_operatio
         {"follow_up_mode": "steer"},
         {"collaboration_mode": "plan"},
         {"collaboration_mode": "default"},
+        {"max_duration_seconds": 60},
     ],
 )
 async def test_explicit_prompt_semantics_require_capability_before_post(

@@ -324,6 +324,17 @@ def test_problem_record_keeps_only_safe_cursor_recovery_metadata() -> None:
     assert "secret-token" not in repr(problem)
 
 
+def test_problem_record_preserves_web_search_queue_code_without_private_details() -> None:
+    problem = ProblemRecord.from_payload(409, {"detail": {
+        "code": "web_search_requires_queue", "retryable": False,
+        "message": "private-token-sentinel", "token": "private-token-sentinel",
+    }})
+    assert problem.code == "web_search_requires_queue"
+    assert problem.status == 409
+    assert problem.retryable is False
+    assert "private-token-sentinel" not in repr(problem)
+
+
 def test_problem_record_redacts_unknown_remote_codes_and_untrusted_fields() -> None:
     problem = ProblemRecord.from_payload(
         409,

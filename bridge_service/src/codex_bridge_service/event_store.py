@@ -54,6 +54,10 @@ class TranscriptCapacityError(EventStoreCapacityError):
     """The bounded searchable transcript has no room for another message."""
 
 
+class ConversationSearchBudgetError(EventStoreError):
+    """Retained conversation search exceeded its bounded work budget."""
+
+
 class EventStoreAdmissionError(EventStoreCapacityError):
     """Capacity failed before a durable operation could publish state."""
 
@@ -131,6 +135,23 @@ class CompactionResult:
     deleted_count: int
     minimum_cursor: int
     snapshot_cursor: int
+
+
+@dataclass(frozen=True, slots=True)
+class AttentionLifecycleRecord:
+    """Minimal latest run lifecycle state used by the attention projection."""
+
+    thread_id: str
+    event_type: str
+    run_id: str
+    timestamp: str
+    cursor: int
+
+
+@dataclass(frozen=True, slots=True)
+class AttentionLifecycleBatch:
+    items: tuple[AttentionLifecycleRecord, ...]
+    has_more: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,6 +268,7 @@ class BridgeEventStore:
         self.max_operation_tombstones = max_operation_tombstones
         self.max_concurrent_waiters = max_concurrent_waiters
         self._wait_capacity = BoundedSemaphore(max_concurrent_waiters)
+        self._conversation_search_capacity = BoundedSemaphore(2)
         self._condition = Condition(RLock())
         self._signal_revision = 0
         self._closed = False
@@ -298,6 +320,7 @@ class BridgeEventStore:
 
                 CREATE TABLE IF NOT EXISTS transcript_messages (
                     cursor INTEGER PRIMARY KEY,
+                    anchor_cursor INTEGER,
                     thread_id TEXT NOT NULL,
                     scope_sequence INTEGER NOT NULL,
                     role TEXT NOT NULL CHECK(role IN ('user','assistant')),
@@ -313,6 +336,16 @@ class BridgeEventStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_transcript_thread_sequence
                     ON transcript_messages(thread_id, scope_sequence);
+
+                CREATE TABLE IF NOT EXISTS thread_run_lifecycle (
+                    thread_id TEXT PRIMARY KEY,
+                    event_type TEXT NOT NULL,
+                    run_id TEXT,
+                    timestamp TEXT NOT NULL,
+                    cursor INTEGER NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_thread_run_lifecycle_cursor
+                    ON thread_run_lifecycle(cursor);
 
                 CREATE TABLE IF NOT EXISTS operation_ledger (
                     operation_key TEXT PRIMARY KEY,
@@ -373,6 +406,18 @@ class BridgeEventStore:
                 row["name"]
                 for row in connection.execute("PRAGMA table_info(scope_state)")
             }
+            # Seed only missing rows from the retained journal on upgrade.
+            # Existing projection rows remain authoritative after compaction.
+            connection.execute(
+                "INSERT OR IGNORE INTO thread_run_lifecycle "
+                "(thread_id, event_type, run_id, timestamp, cursor) "
+                "SELECT thread_id, event_type, json_extract(payload_json, '$.run_id'), "
+                "timestamp, cursor FROM (SELECT *, ROW_NUMBER() OVER "
+                "(PARTITION BY thread_id ORDER BY cursor DESC) AS rank "
+                "FROM events WHERE scope = 'thread' AND thread_id IS NOT NULL "
+                "AND event_type IN ('run.started', 'run.completed', 'run.failed', "
+                "'run.cancelled', 'run.interrupted')) WHERE rank = 1"
+            )
             if "retained_count" not in columns:
                 connection.execute(
                     "ALTER TABLE scope_state ADD COLUMN "
@@ -392,6 +437,30 @@ class BridgeEventStore:
                     "ALTER TABLE outbox_operations ADD COLUMN "
                     "has_events INTEGER NOT NULL DEFAULT 1"
                 )
+            transcript_columns = {row["name"] for row in connection.execute(
+                "PRAGMA table_info(transcript_messages)"
+            )}
+            if "anchor_cursor" not in transcript_columns:
+                connection.execute("ALTER TABLE transcript_messages ADD COLUMN anchor_cursor INTEGER")
+                # A retained creation/completion proves the original anchor.
+                # Backfill is best effort within a fixed work budget; unknown
+                # legacy anchors remain nullable and are never guessed.
+                deadline = monotonic() + 2.0
+                connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
+                try:
+                    connection.execute(
+                        "UPDATE transcript_messages SET anchor_cursor = ("
+                        "SELECT MIN(cursor) FROM events WHERE scope = 'thread' "
+                        "AND scope_id = transcript_messages.thread_id "
+                        "AND scope_sequence = transcript_messages.scope_sequence "
+                        "AND event_type IN ('message.created', 'message.completed')) "
+                        "WHERE anchor_cursor IS NULL"
+                    )
+                except sqlite3.OperationalError as error:
+                    if str(error) != "interrupted":
+                        raise
+                finally:
+                    connection.set_progress_handler(None, 0)
             # Keep only the visible user/assistant transcript outside the
             # compactable activity journal. This migrates retained older
             # messages; payloads already removed by an earlier compaction
@@ -448,13 +517,18 @@ class BridgeEventStore:
                     ):
                         complete = False
                         continue
+                    original = connection.execute(
+                        "SELECT MIN(cursor) FROM events WHERE scope = 'thread' AND scope_id = ? "
+                        "AND scope_sequence = ? AND event_type IN ('message.created', 'message.completed')",
+                        (message["thread_id"], sequence),
+                    ).fetchone()[0]
                     connection.execute(
                         "INSERT OR IGNORE INTO transcript_messages "
-                        "(cursor, thread_id, scope_sequence, role, text, timestamp) "
-                        "VALUES(?, ?, ?, ?, ?, ?)",
+                        "(cursor, thread_id, scope_sequence, role, text, timestamp, anchor_cursor) "
+                        "VALUES(?, ?, ?, ?, ?, ?, ?)",
                         (
                             message["cursor"], message["thread_id"], sequence,
-                            role, text, message["timestamp"],
+                            role, text, message["timestamp"], original,
                         ),
                     )
                     used_bytes += text_bytes
@@ -664,6 +738,19 @@ class BridgeEventStore:
                 ),
             )
             if normalized_scope == "thread" and normalized_thread_id is not None:
+                if event_type in {"run.started", "run.completed", "run.failed", "run.cancelled", "run.interrupted"}:
+                    run_id = normalized_payload.get("run_id")
+                    if not isinstance(run_id, str) or not 1 <= len(run_id) <= 256:
+                        run_id = None
+                    database.execute(
+                        "INSERT INTO thread_run_lifecycle "
+                        "(thread_id, event_type, run_id, timestamp, cursor) "
+                        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(thread_id) DO UPDATE SET "
+                        "event_type=excluded.event_type, run_id=excluded.run_id, "
+                        "timestamp=excluded.timestamp, cursor=excluded.cursor "
+                        "WHERE excluded.cursor > thread_run_lifecycle.cursor",
+                        (normalized_thread_id, event_type, run_id, actual_timestamp, int(cursor)),
+                    )
                 self._project_transcript_message(
                     database,
                     thread_id=normalized_thread_id,
@@ -1188,6 +1275,55 @@ class BridgeEventStore:
         assert normalized_thread is not None
         return [_event_row(row) for row in rows]
 
+    def attention_lifecycle(self, *, limit: int = 200) -> AttentionLifecycleBatch:
+        """Return bounded latest terminal attention state across all threads.
+
+        A later ``run.started`` replaces an earlier completed or failed state.
+        Only IDs, timestamps, event types and a capped number of rows leave the
+        query. The single per-thread projection survives journal compaction
+        and is removed with the chat; it never stores prompts or tool output.
+        """
+        self._require_open()
+        if type(limit) is not int or limit < 1:
+            raise ValueError("attention lifecycle limit is invalid")
+        batch_limit = min(limit, 500)
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT thread_id, event_type, run_id, timestamp, cursor "
+                "FROM thread_run_lifecycle WHERE event_type IN ("
+                " 'run.completed', 'run.failed') "
+                " ORDER BY cursor DESC LIMIT ?",
+                (batch_limit + 1,),
+            ).fetchall()
+        has_more = len(rows) > batch_limit
+        items: list[AttentionLifecycleRecord] = []
+        for row in rows[:batch_limit]:
+            thread_id = row["thread_id"]
+            run_id = row["run_id"]
+            timestamp = row["timestamp"]
+            event_type = row["event_type"]
+            if (
+                not isinstance(thread_id, str)
+                or not thread_id
+                or len(thread_id) > 128
+                or not isinstance(run_id, str)
+                or not run_id
+                or len(run_id) > 256
+                or not isinstance(timestamp, str)
+                or event_type not in {"run.completed", "run.failed"}
+            ):
+                continue
+            items.append(
+                AttentionLifecycleRecord(
+                    thread_id=thread_id,
+                    event_type=event_type,
+                    run_id=run_id,
+                    timestamp=timestamp,
+                    cursor=int(row["cursor"]),
+                )
+            )
+        return AttentionLifecycleBatch(items=tuple(items), has_more=has_more)
+
     def latest_assistant_message(self, thread_id: str, run_id: str) -> str | None:
         """Read only the last retained assistant message for one run in one thread.
 
@@ -1269,6 +1405,116 @@ class BridgeEventStore:
             "maximum_messages": self.max_transcript_messages,
         }
 
+    # One read projection over the existing owners, not another durable index.
+    # Resolve edits/removals before filtering text so an older indexed value
+    # cannot resurrect a message omitted from the bounded global index.
+    _CONVERSATION_PROJECTION = """
+        WITH candidates AS (
+            SELECT cursor, thread_id, scope_sequence, role, text, timestamp,
+                   'indexed' AS event_type, 0 AS retained, anchor_cursor
+            FROM transcript_messages WHERE thread_id = :thread_id
+            UNION ALL
+            SELECT cursor, thread_id,
+                   CASE WHEN event_type IN ('message.updated', 'message.removed')
+                        THEN json_extract(payload_json, '$.message_sequence')
+                        ELSE scope_sequence END,
+                   json_extract(payload_json, '$.role'),
+                   json_extract(payload_json, '$.text'), timestamp, event_type, 1,
+                   CASE WHEN event_type IN ('message.created', 'message.completed')
+                        THEN cursor ELSE NULL END
+            FROM events WHERE scope = 'thread' AND scope_id = :thread_id AND thread_id = :thread_id
+                AND event_type IN ('message.created', 'message.completed',
+                                   'message.updated', 'message.removed')
+                AND (event_type NOT IN ('message.updated', 'message.removed')
+                     OR (json_type(payload_json, '$.message_sequence') = 'integer'
+                         AND json_extract(payload_json, '$.message_sequence') > 0))
+        ), latest AS (
+            SELECT *, ROW_NUMBER() OVER (
+                PARTITION BY scope_sequence ORDER BY cursor DESC, retained DESC
+            ) AS version, MIN(anchor_cursor) OVER (PARTITION BY scope_sequence) AS message_anchor
+            FROM candidates
+        ), visible AS (
+            SELECT cursor, thread_id, scope_sequence, role, text, timestamp,
+                   message_anchor AS anchor_cursor
+            FROM latest WHERE version = 1 AND event_type != 'message.removed'
+                AND role IN ('user', 'assistant') AND searchable_text(text)
+        )
+    """
+
+    @contextmanager
+    def _conversation_connection(self) -> Iterator[sqlite3.Connection]:
+        self._require_open()
+        if not self._conversation_search_capacity.acquire(blocking=False):
+            raise ConversationSearchBudgetError("conversation search capacity reached")
+        try:
+            with closing(self._connect()) as connection:
+                connection.execute("PRAGMA busy_timeout = 2000")
+                connection.create_function("searchable_text", 1, _indexable_transcript_text)
+                connection.create_function("unicode_casefold", 1,
+                                           lambda value: value.casefold() if isinstance(value, str) else "")
+                deadline = monotonic() + 2.0
+                connection.set_progress_handler(lambda: int(monotonic() >= deadline), 1000)
+                connection.execute("BEGIN")
+                try:
+                    yield connection
+                except sqlite3.OperationalError as error:
+                    if str(error) == "interrupted" or "locked" in str(error):
+                        raise ConversationSearchBudgetError("conversation search timed out") from error
+                    raise
+                finally:
+                    connection.set_progress_handler(None, 0)
+                    connection.rollback()
+        finally:
+            self._conversation_search_capacity.release()
+
+    def search_conversation_messages(
+        self, *, query: str, thread_id: str, before_cursor: int | None, limit: int,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Search every retained public message with bounded pages and SQL work.
+
+        Selected-chat cursors are stable message sequences; later edits do not
+        move a result across a page boundary. Count and page share one snapshot.
+        Messages no longer held by either owner cannot be reconstructed.
+        """
+        params = {"thread_id": thread_id, "query": query.casefold(),
+                  "before": before_cursor, "limit": limit}
+        with self._conversation_connection() as connection:
+            total = connection.execute(
+                self._CONVERSATION_PROJECTION +
+                "SELECT COUNT(*) FROM visible WHERE instr(unicode_casefold(text), :query) > 0",
+                params,
+            ).fetchone()[0]
+            rows = connection.execute(
+                self._CONVERSATION_PROJECTION +
+                "SELECT * FROM visible WHERE instr(unicode_casefold(text), :query) > 0 "
+                "AND (:before IS NULL OR scope_sequence < :before) "
+                "ORDER BY scope_sequence DESC LIMIT :limit", params,
+            ).fetchall()
+        return [dict(row) for row in rows], int(total)
+
+    def list_conversation_messages(
+        self, thread_id: str, *, before_sequence: int | None = None, limit: int = 50,
+    ) -> tuple[list[dict[str, Any]], int, dict[str, bool]]:
+        """List bounded pages of retained public messages for reviewed context.
+
+        Reuse the selected-chat read projection, exclusions, stable local
+        sequence and work budget. Total and page share a snapshot; complete
+        refers to currently retained public text, never removed history.
+        Rows include nullable proven original anchor_cursor and latest cursor.
+        This internal empty-literal listing does not relax HTTP search rules.
+        """
+        _normalize_scope("thread", thread_id)
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("conversation page limit is invalid")
+        if before_sequence is not None and (
+            type(before_sequence) is not int or not 1 <= before_sequence <= 9_007_199_254_740_991
+        ):
+            raise ValueError("conversation sequence is invalid")
+        rows, total = self.search_conversation_messages(
+            query="", thread_id=thread_id, before_cursor=before_sequence, limit=limit,
+        )
+        return rows, total, {"complete": True}
+
     def _project_transcript_message(
         self,
         connection: sqlite3.Connection,
@@ -1309,11 +1555,20 @@ class BridgeEventStore:
         role = payload.get("role")
         text = payload.get("text")
         existing = connection.execute(
-            "SELECT length(CAST(text AS BLOB)) AS bytes FROM transcript_messages "
+            "SELECT length(CAST(text AS BLOB)) AS bytes, anchor_cursor FROM transcript_messages "
             "WHERE thread_id = ? AND scope_sequence = ?",
             (thread_id, sequence),
         ).fetchone()
         prior_bytes = int(existing["bytes"]) if existing is not None else 0
+        anchor = existing["anchor_cursor"] if existing is not None else None
+        if event_type in {"message.created", "message.completed"}:
+            anchor = cursor
+        elif anchor is None:
+            anchor = connection.execute(
+                "SELECT MIN(cursor) FROM events WHERE scope = 'thread' AND scope_id = ? "
+                "AND scope_sequence = ? AND event_type IN ('message.created', 'message.completed')",
+                (thread_id, sequence),
+            ).fetchone()[0]
         state = connection.execute(
             "SELECT used_bytes, complete FROM transcript_state WHERE singleton = 1"
         ).fetchone()
@@ -1368,11 +1623,12 @@ class BridgeEventStore:
             complete = False
         connection.execute(
             "INSERT INTO transcript_messages "
-            "(cursor, thread_id, scope_sequence, role, text, timestamp) "
-            "VALUES(?, ?, ?, ?, ?, ?) ON CONFLICT(thread_id, scope_sequence) "
+            "(cursor, thread_id, scope_sequence, role, text, timestamp, anchor_cursor) "
+            "VALUES(?, ?, ?, ?, ?, ?, ?) ON CONFLICT(thread_id, scope_sequence) "
             "DO UPDATE SET cursor = excluded.cursor, role = excluded.role, "
-            "text = excluded.text, timestamp = excluded.timestamp",
-            (cursor, thread_id, sequence, role, text, timestamp),
+            "text = excluded.text, timestamp = excluded.timestamp, "
+            "anchor_cursor = excluded.anchor_cursor",
+            (cursor, thread_id, sequence, role, text, timestamp, anchor),
         )
         connection.execute(
             "UPDATE transcript_state SET used_bytes = ?, complete = ? "
@@ -1384,12 +1640,11 @@ class BridgeEventStore:
         self, thread_id: str, sequence: int
     ) -> dict[str, Any] | None:
         """Read one authorised public transcript message by its stable event anchor."""
-        self._require_open()
-        with closing(self._connect()) as connection:
+        with self._conversation_connection() as connection:
             row = connection.execute(
-                "SELECT thread_id, scope_sequence, role, text, timestamp "
-                "FROM transcript_messages WHERE thread_id = ? AND scope_sequence = ?",
-                (thread_id, sequence),
+                self._CONVERSATION_PROJECTION +
+                "SELECT * FROM visible WHERE scope_sequence = :sequence",
+                {"thread_id": thread_id, "sequence": sequence},
             ).fetchone()
         return dict(row) if row is not None else None
 
@@ -1427,6 +1682,9 @@ class BridgeEventStore:
             ).rowcount
             connection.execute(
                 "DELETE FROM transcript_messages WHERE thread_id = ?", (thread_id,)
+            )
+            connection.execute(
+                "DELETE FROM thread_run_lifecycle WHERE thread_id = ?", (thread_id,)
             )
             connection.execute(
                 "UPDATE transcript_state SET used_bytes = max(0, used_bytes - ?) "
@@ -1795,6 +2053,7 @@ def _canonical_payload(payload: Mapping[str, Any]) -> tuple[str, dict[str, Any]]
 
 
 _PUBLIC_EVENT_FIELDS: dict[str, frozenset[str]] = {
+    "goal.updated": frozenset({"revision", "status"}),
     "task.accepted": frozenset({"task_id", "run_id", "status"}),
     "task.interaction_needed": frozenset({"task_id", "run_id", "kind"}),
     "task.result": frozenset({"task_id", "run_id", "status"}),

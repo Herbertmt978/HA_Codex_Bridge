@@ -183,24 +183,41 @@ describe("panel run activity integration", () => {
 
   it("keeps roles accessible and copies only the selected code block exactly", async () => {
     const code = "if (value < 3) {\n  return 'yes';\n}\n";
-    const panel = createPanel({ events: [event(1, "message.completed", {
-      text: "Use this expression:\n```javascript\n" + code + "```\nExplanation.\n```text\nsecond block\n```",
-    })] });
+    const source = "Use this expression:\n```javascript\n" + code + "```\nExplanation.\n```text\nsecond block\n```";
+    const panel = createPanel({ events: [
+      event(1, "message.completed", { text: source }),
+      event(2, "command.output", { output: "hidden tool output" }),
+    ] });
     const copy = vi.spyOn(panel, "_writeClipboardText").mockResolvedValue();
     panel._render(true);
     const response = panel.shadowRoot.querySelector(".message.assistant");
     expect(response.getAttribute("aria-label")).toBe("Assistant response");
-    expect(response.querySelector(".avatar, .message-head, .message-actions")).toBeNull();
-    expect(response.querySelectorAll("button")).toHaveLength(2);
-    response.querySelector('[data-action="copy-code-block"]').click();
+    expect(response.querySelector(".avatar, .message-head")).toBeNull();
+    expect(response.querySelector(".message-actions").getAttribute("aria-label")).toBe("Message actions");
+    expect([...response.querySelectorAll(".message-actions button")].map((button) => button.textContent))
+      .toEqual(["Copy message", "Copy passage", "Quote message", "Quote passage"]);
+    expect(response.querySelectorAll('.copy-button[aria-label="Copy original code"]')).toHaveLength(2);
+    response.querySelector('.copy-button[aria-label="Copy original code"]').click();
     await Promise.resolve();
     expect(copy).toHaveBeenCalledWith(code);
+    response.querySelector(".message-actions button").click();
+    await Promise.resolve();
+    expect(copy).toHaveBeenLastCalledWith(source);
+    expect(copy.mock.calls.at(-1)[0]).not.toContain("hidden tool output");
     const plain = panel._renderMessage("assistant", "Hello", 2);
-    expect(plain.querySelector("button")).toBeNull();
+    expect(plain.querySelector(".code-block")).toBeNull();
+    expect(plain.querySelector(".message-actions").getAttribute("aria-label")).toBe("Message actions");
+    plain.querySelector(".message-actions button").click();
+    await Promise.resolve();
+    expect(copy).toHaveBeenLastCalledWith("Hello");
     const user = panel._renderMessage("user", "Say hello", 3, "Queued steer");
     expect(user.getAttribute("aria-label")).toBe("Your message");
     expect(user.querySelector(".message-state").textContent).toBe("Queued steer");
-    expect(user.querySelector(".avatar, button")).toBeNull();
+    expect(user.querySelector(".avatar, .code-block")).toBeNull();
+    expect(user.querySelector(".message-actions").getAttribute("aria-label")).toBe("Message actions");
+    user.querySelector(".message-actions button").click();
+    await Promise.resolve();
+    expect(copy).toHaveBeenLastCalledWith("Say hello");
   });
 
   it("shows only one working indicator before a plan or response exists", () => {

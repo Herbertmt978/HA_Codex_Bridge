@@ -1,0 +1,10 @@
+[
+  {"code":"stale_context","status":409,"message":"Workspace context changed. Refresh or remove it, inspect the selection and send again."},
+  {"code":"workspace_context_not_found","status":404,"message":"The workspace file is no longer available. Choose another file or remove its context."},
+  {"code":"unsafe_workspace_context_entry","status":400,"message":"Choose an available file inside this chat's workspace."},
+  {"code":"workspace_context_unavailable","status":503,"message":"Workspace context is unavailable. Check the App and refresh the selection."},
+  {"code":"workspace_context_limit_exceeded","status":413,"message":"Workspace context is too large. Choose fewer files or a smaller excerpt."},
+  {"code":"workspace_context_not_text","status":415,"message":"Choose a supported text file for workspace context."},
+  {"code":"workspace_context_range_unavailable","status":422,"message":"The selected lines are unavailable. Review the inclusive line range."},
+  {"code":"elapsed_time_limit_invalid","status":422,"message":"Choose a shorter elapsed-time limit or remove it and send again."}
+]

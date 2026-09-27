@@ -393,6 +393,7 @@ function assistantState(events, runId) {
 }
 
 const SAFE_FAILURE_MESSAGES = Object.freeze({
+  stale_goal: "The accepted goal changed or was paused/cancelled before this turn started. Review the goal and send the retained prompt again.",
   "auth.expired": "Codex sign-in expired. Start a new sign-in from Home Assistant.",
   "context.window_exceeded": "The Codex conversation context is full.",
   "limits.exhausted": "Codex usage limits have been reached.",

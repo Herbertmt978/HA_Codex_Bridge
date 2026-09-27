@@ -55,6 +55,8 @@ def readiness_capabilities(state: Any) -> tuple[str, ...]:
     if getattr(profile, "value", profile) != "home_assistant":
         return tuple(dict.fromkeys(capabilities))
     capabilities.append("attachment_downloads")
+    if getattr(getattr(state, "runner", None), "supports_subagents", False) is True:
+        capabilities.append("subagents_v1")
     provider = provider_capabilities(state)
     if provider["web_search"] is True:
         capabilities.append("web_search_v1")

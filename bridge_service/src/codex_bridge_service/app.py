@@ -31,6 +31,7 @@ from .event_store import (
     EventStoreCapacityError,
 )
 from .feature_capabilities import supports_web_search
+from .goals import GoalManager
 from .host_access import HostAccessError, HostAccessManager
 from .http_limits import AttachmentIngressMiddleware
 from .limits import AppServerLimitsProbe, CodexLimitsProbe
@@ -51,9 +52,12 @@ from .resource_limits import (
 from .readiness import evaluate_readiness
 from .routes import (
     approvals,
+    attention,
+    goals,
     agents,
     artifacts,
     chat_sections,
+    child_agents,
     attachments,
     automations,
     capabilities,
@@ -72,6 +76,9 @@ from .routes import (
     git_review,
     task_actions,
     threads,
+    workspace_context,
+    chat_context,
+    usage,
 )
 from .runner import BridgeRunner
 from .runtime_broker import RuntimeBroker, RuntimeBrokerError
@@ -556,6 +563,7 @@ def create_app(
         resource_limits=resolved_resource_limits,
     )
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
+        storage.goals = GoalManager(storage)
         resolved_host_access = HostAccessManager(storage.root)
     app.state.host_access = resolved_host_access
     if browser_dynamic_tools_enabled:
@@ -834,13 +842,20 @@ def create_app(
                 "office_preview_v1",
                 "chat_operations_v1",
                 "transcript_search_v1",
+                "conversation_search_v1",
                 "git_review_v1",
+                "git_context_v1",
+                "attention_inbox_v1",
+                "workspace_context_v1",
+                "chat_context_v1",
+                "durable_goals_v1",
                 "prompt_queue_v1",
             ]
         )
         if resolved_account_profile_store is not None:
             feature_capabilities.append("account_profiles_v1")
             feature_capabilities.append("account_profile_details_v1")
+            feature_capabilities.append("account_profile_telemetry_v1")
         # Elicitations must be rejected before we expose MCP administration.
         # Without the app-server callback, an OAuth-enabled MCP server could
         # request data through an interaction path the Bridge cannot control.
@@ -936,6 +951,14 @@ def create_app(
 
         return storage.codex_account_owner_marker()
 
+    def provider_account_usage_label() -> str | None:
+        # Read the saved label under the admitted runtime lease. No provider poll
+        # or account reconciliation occurs here; the verified marker is separate.
+        if resolved_account_profile_store is None:
+            return None
+        return next((profile["label"] for profile in resolved_account_profile_store.list_profiles()
+                     if profile["active"]), None)
+
     resolved_runner = (
         runner_factory(storage)
         if runner_factory is not None
@@ -953,6 +976,7 @@ def create_app(
             host_access=resolved_host_access,
             provider_admission_check=provider_account_admission_ready,
             provider_account_owner_marker=provider_account_owner_marker,
+            provider_account_label=provider_account_usage_label,
             auth_failure_listener=getattr(
                 resolved_auth_coordinator, "report_auth_failure", None
             ),
@@ -979,6 +1003,8 @@ def create_app(
             "Home Assistant runtime."
         )
     app.state.runner = resolved_runner
+    if isinstance(resolved_runner, RuntimeBroker):
+        app.state.feature_capabilities += ("usage_history_v1", "elapsed_time_limit_v1")
     if (
         resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT
         and getattr(resolved_runner, "supports_plan_mode", False) is True
@@ -1136,4 +1162,10 @@ def create_app(
     app.include_router(threads.router)
     app.include_router(transcript_search.router)
     app.include_router(git_review.router)
+    app.include_router(attention.router)
+    app.include_router(goals.router)
+    app.include_router(workspace_context.router)
+    app.include_router(chat_context.router)
+    app.include_router(child_agents.router)
+    app.include_router(usage.router)
     return app

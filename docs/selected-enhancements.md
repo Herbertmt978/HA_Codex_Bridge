@@ -1,12 +1,14 @@
 # Conversation and Git review enhancements
 
-This development candidate covers CB-001, CB-005, CB-008, CB-009 and CB-015.
+This development candidate covers CB-001, CB-005, CB-006, CB-008, CB-009 and CB-015.
 Release and native Home Assistant qualification are recorded separately.
 
 | Requirement | Delivery issue |
 | --- | --- |
 | CB-001: assistant Markdown | [#160](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/160) |
 | CB-005: transcript search | [#162](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/162) |
+| CB-006: browser-local draft recovery | [#169](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/169) |
+| CB-062: Find in retained selected-chat history | [#214](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/214) |
 | CB-008: Queue and Steer | [#163](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/163) |
 | CB-009: native Plan | [#164](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/164) |
 | CB-015: scoped Git review | [#165](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/165) |
@@ -21,10 +23,27 @@ stay on Home Assistant. Filesystem paths are not browser download URLs: indexed
 files retain the existing authenticated file-card actions.
 
 Fenced-code copying preserves the original code, indentation and line breaks.
+This includes CRLF and CR source line endings and unfinished streaming fences;
+copying does not add a trailing newline. Assistant deltas are incremental text,
+including repeated prefixes, and use the same safe renderer as completed/history
+messages. User prose remains plain text alongside its fenced-code controls.
 Formatting is bounded for browser responsiveness. A longer response retains its
 remaining text in a labelled, scrollable plain-text section. Markdown image syntax
 does not load arbitrary images; the existing decoded, bounded and authenticated
 attachment/artifact image views remain responsible for image presentation.
+
+The live/partial preview retains at most the latest 200,000 UTF-16 code units.
+If earlier text falls outside that window, the preview labels the omission and
+shows the retained tail as plain text so a missing opening code fence cannot
+change its meaning. Completed responses use the normal formatting limit and
+labelled remainder; completion does not promise recovery of text removed by
+Bridge ingress or history retention limits. Bridge agent-item text has its own
+byte limit (half the configured event payload budget, normally 512 KiB).
+
+The accepted DEV 1.12.0 renderer and older production 1.9.2 environment are
+different baselines. A report of old preformatted assistant prose needs the
+actual served panel version and response case before being attributed to a new
+renderer regression. Local fixtures do not establish a served-version diagnosis.
 
 ## Search messages
 
@@ -51,6 +70,44 @@ history. Upgrade migration can recover only message events still retained at
 upgrade: it cannot recreate text removed by previous compaction. Earlier search
 matches can be opened through the authenticated transcript projection when their
 activity event is no longer available.
+
+## Find in the selected chat
+
+CB-062 ([#214](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/214))
+adds **Find in chat** when `conversation_search_v1` is available. It searches
+all public messages still retained in either the event journal or the existing
+transcript projection, including messages outside the loaded page and messages
+evicted from the global search index. Later edits and removals take precedence. Original global event anchors identify
+loaded messages even when chats interleave. An older indexed message whose original
+anchor is no longer demonstrable opens as a labelled earlier-history search message
+with its own retrieval identity; it never guesses another message's numeric anchor.
+History removed from both stores cannot be recovered. Global sidebar search
+keeps its existing bounded-index coverage rules.
+
+The count is **matching messages**, rather than individual occurrences within
+a message. Next/Previous moves between messages; the excerpt and actual rendered
+message highlight readable matches. Search is literal and Unicode case-insensitive.
+Ctrl/Cmd+F focuses Find in chat; Enter searches or moves forward, Shift+Enter moves
+back, and Escape clears Find and returns to the composer. Focus stays on the search
+control during navigation so the keys can be repeated. Enter retries an unavailable
+search. Opening a match does not select another chat or submit anything.
+
+The browser retains one result page of at most 50 messages and one temporary
+unloaded matching message, plus small page cursor anchors for backwards navigation.
+It does not download the complete conversation. Query changes, chat changes and
+panel teardown invalidate pending responses. The Bridge uses a single read snapshot
+for each count/page, stable message-sequence cursors, two concurrent search slots
+and a two-second SQLite work budget. Exhaustion returns an unavailable/retry state,
+never a partial count presented as complete. New or removed matching messages can
+change counts between requests; rerun Find to refresh the result positions.
+
+Highlights preserve Markdown elements, syntax tokens and code-copy source. They
+exclude controls, state labels, hidden content and native maths expressions. Formula
+DOM and original source remain untouched; the excerpt can still highlight literal
+source, without claiming exact highlighting of rendered formula glyphs. DOM
+highlighting is limited to 256 Ki characters, 8,000 text nodes, 400 occurrences and 1,000 wrappers per message.
+The safe matching excerpt remains available even when renderer limits or source
+formatting prevent a visible match in the message body.
 
 ## Queue and Steer
 
@@ -124,6 +181,34 @@ metadata, common directories and object alternates are unsupported; metadata
 outside the grant is refused. Last-turn review remains explicitly
 unavailable because this release does not record a trustworthy Git baseline for
 each Codex turn; activity file counts are not presented as a substitute for a diff.
+
+## Unsent draft recovery
+
+CB-006 ([#169](https://github.com/Herbertmt978/HA_Codex_Bridge/issues/169)) adds
+**Recover unsent drafts in this browser**, off by default in panel settings.
+Opting in saves only composer text in IndexedDB on the Home Assistant origin,
+scoped to the Home Assistant user and chat. Recovery populates the editable
+composer after reload or browser closure; it never submits a message. ChatGPT
+account selection does not change the Home Assistant user who owns these local
+drafts. Attachments, file context and other prompt settings are not recovered.
+
+Browser-local IndexedDB provides atomic updates across tabs, including local
+HTTP origins where Web Locks may be unavailable. Drafts do not synchronise
+between devices and are not encrypted by this feature. The bounds are 8,192
+UTF-16 code units per draft, 20 combined draft and deletion-marker entries per
+user, and seven days from saving. Expired text is deleted on the next draft
+storage operation for that user; no background expiry service runs while the
+browser is closed. Oldest entries are evicted at the count limit. An oversized
+draft remains usable for the current visit and removes its older saved snapshot.
+
+A confirmed send removes only the revision saved for that request. A later edit
+in another tab survives, even when it contains identical text. Explicit discard
+removes the current saved draft; opting out clears that user's saved drafts.
+Content-free revision metadata prevents delayed old writes resurrecting removed
+text. Other users' drafts are unaffected. Missing user identity, denied storage,
+quota errors or corrupt records disable recovery rather than sharing a fallback
+owner; current composer text remains usable. Browser storage eviction can also
+remove drafts, so recovery is not a backup guarantee.
 
 ## Verification boundary
 

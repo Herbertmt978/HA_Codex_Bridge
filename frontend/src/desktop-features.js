@@ -551,6 +551,10 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addPreference(defaults, "mode", "Permissions", [["observe", "Observe"], ["edit", "Edit workspace"], ["full-auto", "Full auto · workspace"]]);
     addPreference(defaults, "model", "Model", modelChoices(settings, preferences.model));
     addPreference(defaults, "thinking", "Reasoning", reasoningChoices(settings, preferences.model, preferences.thinking));
+    const recovery = documentRef.createElement("div"); recovery.className = "schedule-card settings-card";
+    addPreference(recovery, "draftRecovery", "Recover unsent drafts in this browser", [["off", "Off"], ["on", "On"]]);
+    recovery.append(text(documentRef, "p", "Optional browser-local storage for this Home Assistant user: up to 20 chats, 8,192 characters each, for seven days. Sent or discarded text is removed. Turning this off clears saved drafts. Restoring never sends a message.", "desktop-note"));
+    panel.append(recovery);
     panel.append(defaults,
       text(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
       text(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"), saved,
