@@ -57,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.1";
+const PANEL_VERSION = "1.13.2";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -751,8 +751,8 @@ template.innerHTML = `
     .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
     .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
-    .schedule-card.host-access-settings { padding: 20px; }
-    .host-access-settings + .host-access-settings { margin-top: 16px; }
+    .schedule-card.host-access-settings { padding: 24px; }
+    .host-access-settings + .host-access-settings { margin-top: 0; }
     .host-access-settings a, .mcp-setup a, .mcp-stdio-settings a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
@@ -3258,7 +3258,42 @@ template.innerHTML = `
     .stdio-server-details dt { font-weight: 600; }
     .stdio-server-details dd { margin: 0; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
-    .settings-panel { display: grid; gap: 14px; }
+    .settings-panel { display: grid; gap: 18px; min-width: 0; }
+    .settings-panel > .desktop-note { max-width: 72ch; margin: 0; line-height: 1.55; }
+    .settings-panel > .desktop-subheading { margin: 8px 0 -6px; font-size: 18px; }
+    .settings-panel .settings-card,
+    .settings-panel .host-access-settings {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      margin: 0;
+      padding: 24px;
+      border-radius: 20px;
+      background: var(--surface-bg);
+    }
+    .settings-panel .settings-card > h3,
+    .settings-panel .host-access-settings > h3 { margin: 0; }
+    .settings-panel .settings-card > p,
+    .settings-panel .host-access-settings > p { margin: 0; max-width: 72ch; line-height: 1.55; }
+    .settings-panel .desktop-form-actions,
+    .settings-card-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 4px; }
+    .settings-panel .panel-button {
+      min-height: 44px;
+      padding: 11px 18px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .settings-panel .settings-primary-action {
+      border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
+      background: var(--accent-surface);
+    }
+    .settings-shortcuts-list { display: grid; gap: 0; margin: 0; }
+    .settings-shortcuts-list > div { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 12px 0; }
+    .settings-shortcuts-list > div + div { border-top: 1px solid var(--border-color); }
+    .settings-shortcuts-list dt { flex: 1 1 220px; font-weight: 600; }
+    .settings-shortcuts-list dd { margin: 0; color: var(--muted-color); }
+    .settings-shortcuts-list kbd { display: inline-block; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--surface-muted); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); }
 
     .native-tools-list {
       display: grid;
@@ -3426,14 +3461,14 @@ template.innerHTML = `
       color: var(--text-color);
     }
     .desktop-notice[role="alert"] > span { flex-basis: 100%; }
-    .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
     .settings-card { margin: 16px 0; }
     .preference-save-status { color: var(--muted-color); font-size: var(--font-control-size); min-height: 20px; }
     .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
     .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
     .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: var(--font-control-size); }
     .skill-group .desktop-table { margin: 0; }
-    .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-caption-size); }
+    .settings-tab { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted-color); font-size: var(--font-control-size); }
     .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 600; }
 
     .rail-actions .tool-button {
@@ -5353,7 +5388,13 @@ template.innerHTML = `
       .desktop-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }
       .desktop-toolbar > button { width: 100%; }
       .settings-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
-      .settings-tab { flex: 0 0 auto; }
+      .settings-tab { flex: 0 0 auto; min-height: 44px; }
+      .settings-panel .settings-card,
+      .settings-panel .host-access-settings { padding: 18px; }
+      .settings-panel .desktop-form-actions,
+      .settings-card-actions { align-items: stretch; flex-direction: column; }
+      .settings-panel .desktop-form-actions > .panel-button,
+      .settings-card-actions > .panel-button { width: 100%; }
 
       .shell {
         display: block;

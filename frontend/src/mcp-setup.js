@@ -6,9 +6,9 @@ const HA_MCP_CAPABILITIES = ["assist_mcp_selection_v1", "mcp_credential_binding_
 const HA_MCP_COPY = Object.freeze({
   not_connected: "Off. Connect only if you want Codex to use Home Assistant tools.",
   unavailable: "Install and load Home Assistant’s native MCP Server integration. Use a Supervisor connection with Enable MCP and Enable local MCP connections enabled in the Bridge App, then refresh connection options.",
-  configured: "Authorisation is saved. New connections allow no tools. Choose allowed tools and refresh server status before use.",
+  configured: "Home Assistant access is saved. Check the server status and choose the tools you want Codex to use before trying it in a chat.",
   paused: "The server is paused and its tools are blocked. Resume it when you are ready to use the allowed tools.",
-  connected: "Ready to use the allowed Home Assistant tools.",
+  connected: "Connected and ready to use the Home Assistant tools you have allowed.",
   expired: "Access has expired. Refresh the existing authorisation before using the server.",
   retry: "Codex is busy or its settings changed. Wait for current work to finish, then refresh status before trying again.",
   reauthorise: "Administrator authorisation is required again. Review the consent below before reconnecting.",
@@ -40,9 +40,9 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
   card.setAttribute("aria-labelledby", "ha-mcp-shortcut-title");
   const title = text(doc, "h3", "Installed Home Assistant MCP", "desktop-subheading");
   title.id = "ha-mcp-shortcut-title";
-  card.append(title, text(doc, "p", "Optional and off by default. This shortcut uses Home Assistant’s native MCP Server integration and its Assist API. Community HA-MCP and other custom servers remain separate choices below.", "desktop-note"));
+  card.append(title, text(doc, "p", "This optional connection uses Home Assistant’s own MCP Server and Assist API. It starts off. Community HA-MCP and other servers have separate settings below."));
   const notice = text(doc, "p", !supported
-    ? "Update the Bridge App and Integration, enable MCP and local MCP connections in the App, then refresh connection options. Manual server setup remains available."
+    ? "Update the Bridge App and Integration, turn on MCP and local MCP connections in the App, then refresh this page. You can still add a server manually."
     : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
   notice.setAttribute("role", "status"); card.append(notice);
   if (state.haMcpError) { const error = text(doc, "p", haMcpShortcutMessage(state.haMcpError), "desktop-error"); error.setAttribute("role", "alert"); card.append(error); }
@@ -68,7 +68,7 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
   }
   if (status?.server_name) {
     if (status.configured) {
-      actions.append(button(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }));
+      const chooseTools = button(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }); chooseTools.classList.add("settings-primary-action"); actions.append(chooseTools);
       const server = state.data.mcp_servers?.find((row) => row.name === status.server_name);
       if (server?.enabled === false && capabilities.includes("mcp_management_v1")) actions.append(button(doc, "Resume", "resume-mcp", { id: status.server_name }));
       actions.append(button(doc, "Refresh authorisation", "ha-mcp-refresh"));
@@ -76,7 +76,7 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
     actions.append(button(doc, status.state === "cleanup_pending" ? "Retry authorisation cleanup" : "Revoke home authorisation", "ha-mcp-disconnect"));
   }
   if (state.haMcpBusy) actions.querySelectorAll("button").forEach((control) => { control.disabled = true; });
-  card.append(actions, text(doc, "p", "Connecting does not enable the Assist conversation agent. Configure Assist separately and select only the tools you intend to make available. Revoking this shortcut leaves unrelated servers unchanged.", "desktop-note"));
+  card.append(actions, text(doc, "p", "Connecting here does not turn on the Assist conversation agent. Set up Assist separately if you want it. Removing this connection leaves your other servers alone."));
   return card;
 }
 
