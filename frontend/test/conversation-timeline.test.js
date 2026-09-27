@@ -8,8 +8,10 @@ describe("conversation timeline projection", () => {
   it("applies queued draft edits and removals across thread and global event sequences", () => {
     const events = [
       event(101, "message.created", { run_id: "active", text: "Plan first" }),
-      event(104, "message.created", { run_id: "keep", text: "Old queued text", queued: true }),
-      event(105, "message.created", { run_id: "remove", text: "Removed draft", queued: true }),
+      event(104, "message.created", { run_id: "keep", text: "Old queued text" }),
+      event(105, "message.created", { run_id: "remove", text: "Removed draft" }),
+      event(106, "run.queued", { run_id: "keep" }),
+      event(107, "run.queued", { run_id: "remove" }),
       event(110, "message.updated", { run_id: "keep", message_sequence: 4, role: "user", text: "Edited queued text" }),
       event(111, "message.removed", { run_id: "remove", message_sequence: 5 }),
     ];
@@ -22,7 +24,8 @@ describe("conversation timeline projection", () => {
   it("does not apply a queued draft reference to another run with a colliding global cursor", () => {
     const messages = projectTranscriptMessages([
       event(4, "message.created", { run_id: "other", text: "Keep this" }),
-      event(104, "message.created", { run_id: "queued", text: "Queued", queued: true }),
+      event(104, "message.created", { run_id: "queued", text: "Queued" }),
+      event(105, "run.queued", { run_id: "queued" }),
       event(110, "message.removed", { run_id: "queued", message_sequence: 4 }),
     ]);
     expect(messages.filter((item) => item.event_type === "message.created").map((item) => item.payload.text)).toEqual(["Keep this"]);
@@ -30,8 +33,9 @@ describe("conversation timeline projection", () => {
 
   it("does not guess a draft target when one run has ambiguous queued message anchors", () => {
     const messages = projectTranscriptMessages([
-      event(104, "message.created", { run_id: "queued", text: "First", queued: true }),
-      event(105, "message.created", { run_id: "queued", text: "Second", queued: true }),
+      event(104, "message.created", { run_id: "queued", text: "First" }),
+      event(105, "message.created", { run_id: "queued", text: "Second" }),
+      event(106, "run.queued", { run_id: "queued" }),
       event(110, "message.removed", { run_id: "queued", message_sequence: 4 }),
     ]);
     expect(messages.filter((item) => item.event_type === "message.created")).toHaveLength(2);

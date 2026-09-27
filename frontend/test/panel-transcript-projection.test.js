@@ -132,8 +132,8 @@ describe("panel transcript projection", () => {
     const initial = [
       event(101, "message.created", { run_id: "run-active", role: "user", text: "Active original prompt" }),
       event(102, "run.started", { run_id: "run-active" }),
-      event(104, "message.created", { run_id: "run-kept", role: "user", text: "Kept draft before edit", queued: true }),
-      event(105, "message.created", { run_id: "run-cancelled", role: "user", text: "cancelleddraft", queued: true }),
+      event(104, "message.created", { run_id: "run-kept", role: "user", text: "Kept draft before edit" }),
+      event(105, "message.created", { run_id: "run-cancelled", role: "user", text: "cancelleddraft" }),
       event(106, "run.queued", { run_id: "run-kept" }),
       event(107, "run.queued", { run_id: "run-cancelled" }),
     ];
@@ -173,5 +173,43 @@ describe("panel transcript projection", () => {
     expect(panel._selectedThreadId).toBe("thread-one");
     expect(panel._activeThread.active_run_id).toBe("run-active");
     expect(panel._runActivityForThread()).toMatchObject({ runId: "run-active", busy: true });
+  });
+
+  it("projects completed broker queue history on reload without duplicate answers or cancelled drafts", () => {
+    const events = [
+      event(4, "message.created", { run_id: "unrelated", role: "user", text: "Keep unrelated history" }),
+      event(5, "message.completed", { run_id: "unrelated", role: "assistant", text: "Unrelated answer" }),
+      event(104, "message.created", { run_id: "kept", role: "user", text: "Original draft" }),
+      event(105, "run.queued", { run_id: "kept" }),
+      event(106, "message.created", { run_id: "removed", role: "user", text: "Removed draft" }),
+      event(107, "run.queued", { run_id: "removed" }),
+      event(110, "run.queue_item_updated", { run_id: "kept", prompt: "Edited draft", revision: 2 }),
+      event(111, "message.updated", { run_id: "kept", role: "user", message_sequence: 4, text: "Edited draft" }),
+      event(112, "message.removed", { run_id: "removed", message_sequence: 6 }),
+      event(113, "run.cancelled", { run_id: "removed" }),
+      event(114, "run.started", { run_id: "kept" }),
+      event(115, "message.created", { run_id: "kept", role: "user", text: "Later active steer" }),
+      event(116, "message.completed", { run_id: "kept", role: "assistant", text: "Edited answer" }),
+      event(117, "run.completed", { run_id: "kept" }),
+    ];
+    const panel = makePanel({ status: "idle", activeRunId: null, events });
+    const messages = () => [...panel.shadowRoot.querySelectorAll("#message-list article.message .bubble")].map((node) => node.textContent.trim());
+    expect(messages()).toEqual(["Keep unrelated history", "Unrelated answer", "Edited draft", "Later active steer", "Edited answer"]);
+    expect(panel._conversationTurns.map((turn) => turn.prompt)).toEqual(["Keep unrelated history", "Edited draft Later active steer"]);
+    expect(panel.shadowRoot.getElementById("message-list").textContent).toContain("Message queued");
+    expect(panel.shadowRoot.getElementById("message-list").textContent).not.toMatch(/Steer queued|Original draft|Removed draft|Run cancelled/u);
+    panel._forceMessageRebuild = true;
+    panel._renderMessages();
+    expect(messages()).toEqual(["Keep unrelated history", "Unrelated answer", "Edited draft", "Later active steer", "Edited answer"]);
+    expect(events[2].payload.text).toBe("Original draft");
+  });
+
+  it("labels queued work without claiming that the active turn was steered", () => {
+    const panel = makePanel();
+    const queued = event(1, "run.queued", { run_id: "next-turn" });
+    expect(panel._renderEvent(queued).textContent).toBe("Message queued");
+    expect(panel._progressItemFromEvent(queued).title).toBe("Message queued");
+    const legacy = event(2, "message.created", { run_id: "legacy", role: "user", text: "Legacy next message", queued: true });
+    expect(panel._renderEvent(legacy).querySelector(".message-state").textContent).toBe("Queued message");
   });
 });

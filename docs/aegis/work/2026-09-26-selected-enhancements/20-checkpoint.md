@@ -113,6 +113,39 @@ checks. Unaffected Bridge, frontend and App gates may be carried only after
 exact canonical input equivalence is recorded. Parent owns publication and
 managed HA-DEV acceptance; no native or phone actions occurred in this follow-up.
 
+## Native queued history projection — 27 September 2026
+
+Parent's signed 1.11.0 DEV queue-restart acceptance proves an edited prompt
+executes once, but transcript and rail show the original prompt and a removed
+draft. A read-only replay of the actual native event receipt reproduces all
+four projection failures while preserving the single assistant completion.
+Corrected broker-shaped fixtures fail four current-source checks across the
+projector, live polling and subscribed event paths.
+
+The canonical UI projector previously indexed queue ownership only through the
+older runner's optional message-created flag. The native broker instead emits
+the run-bound run.queued event; sanitisation retains the flag when present and
+does not remove it from native broker submissions. Adding a producer flag alone
+would leave existing retained history broken. Decision: code-change at the shared
+projection owner, using existing authoritative queue events without changing
+durable records, APIs or permissions. Unique pre-queue ownership still fences
+global cursor/thread-local references; ambiguous draft anchors are not guessed.
+The recorded queue boundary excludes later active-turn steers sharing its run
+identity, so they cannot make the original edited draft ambiguous on reload.
+
+The correction preserves the older runner flag, removes draft-only cancellation
+rows when their draft is removed and uses neutral queued-message labels.
+Completed-history reload tests retain later active steers and each assistant
+answer once, leaving unrelated runs intact. Actual native event replay now
+passes all five checks. Independent scoped review's later-steer finding is
+resolved and its narrowed follow-up review found no remaining blocker.
+Focused projector/panel tests pass 22 cases. Desktop/phone browser fixtures use
+the broker's actual event shape. Paired patch 1.11.1 retains Bridge 0.18.0 and
+Codex 0.157.1 because no backend, runtime, dependency or API contract changes.
+Required local gates, frozen evidence and review are pending. Parent owns
+publication, image builds and native replay against the retained fixture;
+phone/MCP baseline preparation is paused. No new native or public action occurs.
+
 ## In-flight question delivery removal race — 27 September 2026
 
 An admitted HA interval callback can be sending a Companion notification even
