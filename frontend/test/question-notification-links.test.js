@@ -131,10 +131,32 @@ describe("authenticated question notification links", () => {
     expect(panel._selectedThreadId).toBe("thread-one");
     expect(card).not.toBeNull();
     expect(panel.shadowRoot.activeElement).toBe(card);
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ block: "start", inline: "nearest" });
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+
     expect(panel._callWS.mock.calls.map(([operation]) => operation)).toEqual(["list_threads"]);
     expect(panel.shadowRoot.querySelector(".question-link-status")).toBeNull();
+  });
+
+  it("scrolls a linked question inside the conversation without moving the recovery pane", async () => {
+    const panel = makePanel("/?thread=thread-one&interaction=interaction-question-1");
+    await panel._loadThreads();
+    const scroll = panel.shadowRoot.getElementById("conversation-scroll");
+    const pane = panel.shadowRoot.querySelector(".main-pane");
+    const card = panel.shadowRoot.querySelector(".user-input-card");
+    pane.scrollTop = 0;
+    scroll.scrollTop = 40;
+    vi.spyOn(scroll, "getBoundingClientRect").mockReturnValue({ top: 100, bottom: 400 });
+    vi.spyOn(card.closest("[data-interaction-id]"), "getBoundingClientRect").mockReturnValue({ top: 450, bottom: 650 });
+    panel._scrollInteractionTargetIntoView(card);
+    expect(scroll.scrollTop).toBeGreaterThan(40);
+    expect(pane.scrollTop).toBe(0);
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    const input = card.querySelector("input");
+    vi.spyOn(input, "getBoundingClientRect").mockReturnValue({ top: 180, bottom: 210 });
+    const position = scroll.scrollTop;
+    panel._scrollInteractionTargetIntoView(input);
+    expect(scroll.scrollTop).toBe(position);
+    expect(pane.scrollTop).toBe(0);
   });
 
   it.each([
@@ -168,7 +190,7 @@ describe("authenticated question notification links", () => {
     panel._renderInteractions();
 
     expect(panel.shadowRoot.querySelector("input[type='radio']:checked")?.value).toBe("Source only");
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
     expect(panel.shadowRoot.activeElement).toBe(panel.shadowRoot.querySelector(".user-input-card"));
 
     panel._replacePendingInteractions([]);

@@ -102,7 +102,7 @@ describe("usage panel", () => {
   it.each(["direct", "event"])("consumes only the unchanged reviewed duration choice on %s acknowledgement", async (acknowledgement) => {
     const { element, mutation, sending, resolve } = pendingDurationPrompt(60);
     expect(element._callWS).toHaveBeenCalledWith("send_prompt", expect.objectContaining({ max_duration_seconds: 60 }));
-    if (acknowledgement === "event") expect(element._settlePromptMutation(mutation.clientRequestId)).toBe(true);
+    if (acknowledgement === "event") expect(await element._settlePromptMutation(mutation.clientRequestId)).toBe(true);
     resolve({});
     await sending;
     expect(element._durationChoices.has("one")).toBe(false);
@@ -133,7 +133,7 @@ describe("usage panel", () => {
       if (change === "ABA") { element._setDurationChoice("one", 60); expected = 60; }
     }
     expect(element._consumeSubmittedDurationChoice(mutation)).toBe(false);
-    if (acknowledgement === "event") element._settlePromptMutation(mutation.clientRequestId);
+    if (acknowledgement === "event") await element._settlePromptMutation(mutation.clientRequestId);
     resolve({});
     await sending;
     expect(element._durationChoices.get("one")).toBe(expected);
@@ -143,7 +143,7 @@ describe("usage panel", () => {
   it.each(["direct", "event"])("preserves a newer explicit no-limit choice on %s acknowledgement", async (acknowledgement) => {
     const { element, mutation, sending, resolve } = pendingDurationPrompt(60);
     element._setDurationChoice("one", null);
-    if (acknowledgement === "event") element._settlePromptMutation(mutation.clientRequestId);
+    if (acknowledgement === "event") await element._settlePromptMutation(mutation.clientRequestId);
     resolve({});
     await sending;
     expect(element._durationChoices.has("one")).toBe(true);
@@ -156,7 +156,7 @@ describe("usage panel", () => {
     expect(element._callWS.mock.calls[0][1]).not.toHaveProperty("max_duration_seconds");
     expect(mutation.durationChoiceSnapshot.rawChoice).toBeNull();
     element._setDurationChoice("one", 300);
-    if (acknowledgement === "event") element._settlePromptMutation(mutation.clientRequestId);
+    if (acknowledgement === "event") await element._settlePromptMutation(mutation.clientRequestId);
     resolve({});
     await sending;
     expect(element._durationChoices.get("one")).toBe(300);

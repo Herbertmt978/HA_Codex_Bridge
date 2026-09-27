@@ -60890,9 +60890,15 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     const isControl = ["BUTTON", "INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
     const scrollTarget = isControl ? target : interactionCard;
-    if (typeof scrollTarget.scrollIntoView === "function") {
-      scrollTarget.scrollIntoView({ block: isControl ? "nearest" : "start", inline: "nearest" });
-    }
+    const scroll = this.shadowRoot.getElementById("conversation-scroll");
+    if (!scroll?.contains(scrollTarget)) return;
+    const viewport = scroll.getBoundingClientRect();
+    const bounds = scrollTarget.getBoundingClientRect();
+    const padding = Number.parseFloat(getComputedStyle(scroll).scrollPaddingTop) || 0;
+    const top = viewport.top + padding;
+    const bottom = viewport.bottom - padding;
+    const delta = !isControl || bounds.top < top ? bounds.top - top : bounds.bottom > bottom ? bounds.bottom - bottom : 0;
+    scroll.scrollTop += delta;
   }
   _handleFocusOut(event) {
     const nextTarget = event.relatedTarget;
@@ -62882,14 +62888,14 @@ var CodexBridgePanel = class extends HTMLElement {
         } else {
           questionLink.focused = true;
           focusedQuestionLink = true;
-          linkedCard.focus();
+          linkedCard.focus({ preventScroll: true });
         }
       }
     }
     if (newCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
       const active = this.shadowRoot.activeElement;
       if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
-        newCards[0].querySelector("[role='alertdialog']")?.focus();
+        newCards[0].querySelector("[role='alertdialog']")?.focus({ preventScroll: true });
       }
     }
   }
@@ -67671,9 +67677,11 @@ var CodexBridgePanel = class extends HTMLElement {
       const ownerChanged = mutation.ownerKey !== void 0 && mutation.ownerKey !== (this._hass?.user?.id || null);
       const superseded = this._promptMutations.get(threadId) !== mutation && this._promptMutation !== mutation;
       if (ownerChanged || superseded) {
-        void this._removeSentRecoveredDraft(mutation);
+        await this._removeSentRecoveredDraft(mutation);
         return;
       }
+      const draftRemoval = await this._removeSentRecoveredDraft(mutation);
+      if (mutation.ownerKey !== (this._hass?.user?.id || null) || this._promptMutations.get(threadId) !== mutation && this._promptMutation !== mutation) return;
       this._chatContext.clearCaptured(threadId, mutation.chatContext || [], mutation.chatContextRevision);
       this._clearAcceptedWebSearchChoice(mutation);
       this._workspaceContext.clearCaptured(threadId, mutation.workspaceContext || [], mutation.workspaceContextRevision);
@@ -67684,7 +67692,6 @@ var CodexBridgePanel = class extends HTMLElement {
       if (this._promptMutations.get(threadId) === mutation) {
         this._promptMutations.delete(threadId);
       }
-      void this._removeSentRecoveredDraft(mutation);
       const draftUnchanged = mutation.draftEditRevision === this._draftEditRevisions.get(threadId);
       if (draftUnchanged) this._setDraftForThread(threadId, "", { persist: false });
       if (draftUnchanged && threadId === this._selectedThreadId) {
@@ -67692,6 +67699,10 @@ var CodexBridgePanel = class extends HTMLElement {
         this._draft = "";
         this._clearError();
         await this._refreshActiveThread();
+        this._render();
+      }
+      if (draftRemoval?.ok === false && mutation.draftRecoveryStore === this._draftRecoveryStore) {
+        this._setError("Message sent, but its local draft could not be removed from browser storage. Discard the recovered draft before sending again.", { retryable: false });
         this._render();
       }
     } catch (error) {
@@ -67765,15 +67776,18 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _settlePromptMutationFromEvents() {
     const mutation = this._promptMutationForThread(this._selectedThreadId);
-    return Boolean(
-      mutation && this._promptEventObserved(mutation.clientRequestId) && this._settlePromptMutation(mutation.clientRequestId)
-    );
+    if (!mutation || !this._promptEventObserved(mutation.clientRequestId)) return false;
+    void this._settlePromptMutation(mutation.clientRequestId);
+    return true;
   }
-  _settlePromptMutation(clientRequestId) {
+  async _settlePromptMutation(clientRequestId) {
     const mutation = this._promptMutationForThread(this._selectedThreadId);
     if (!mutation || mutation.clientRequestId !== clientRequestId) {
       return false;
     }
+    mutation.state = "reconciling";
+    const draftRemoval = mutation.draftRecoveryStore?.enabled ? await this._removeSentRecoveredDraft(mutation) : void 0;
+    if (mutation.ownerKey !== (this._hass?.user?.id || null) || this._promptMutations.get(mutation.threadId) !== mutation && this._promptMutation !== mutation) return false;
     if (this._promptMutations.get(mutation.threadId) === mutation) {
       this._promptMutations.delete(mutation.threadId);
     }
@@ -67786,7 +67800,6 @@ var CodexBridgePanel = class extends HTMLElement {
     this._clearAcceptedWebSearchChoice(mutation);
     this._consumeSubmittedDurationChoice(mutation);
     this._workspaceContext.clearCaptured(mutation.threadId, mutation.workspaceContext || [], mutation.workspaceContextRevision);
-    void this._removeSentRecoveredDraft(mutation);
     const draftUnchanged = mutation.draftEditRevision === this._draftEditRevisions.get(mutation.threadId);
     if (draftUnchanged) this._setDraftForThread(mutation.threadId, "", { persist: false });
     if (draftUnchanged && mutation.threadId === this._selectedThreadId) {
@@ -67794,8 +67807,11 @@ var CodexBridgePanel = class extends HTMLElement {
       promptInput.value = "";
       this._draft = "";
       this._clearError();
-      this._render();
     }
+    if (draftRemoval?.ok === false && mutation.draftRecoveryStore === this._draftRecoveryStore) {
+      this._setError("Message sent, but its local draft could not be removed from browser storage. Discard the recovered draft before sending again.", { retryable: false });
+    }
+    this._render();
     return true;
   }
   async _removeSentRecoveredDraft(mutation) {
@@ -67804,11 +67820,8 @@ var CodexBridgePanel = class extends HTMLElement {
       const store = mutation.draftRecoveryStore;
       if (!store?.enabled) return;
       const saved = await mutation.draftSave;
-      if (!saved?.ok || !saved.revision) return;
-      const result = await store.removeDraft(mutation.threadId, { expectedRevision: saved.revision });
-      if (!result.ok && store === this._draftRecoveryStore) {
-        this._setError("A sent draft could not be removed from browser storage.");
-      }
+      if (!saved?.ok || !saved.revision) return { ok: false };
+      return store.removeDraft(mutation.threadId, { expectedRevision: saved.revision });
     })();
     return mutation.draftRemoval;
   }

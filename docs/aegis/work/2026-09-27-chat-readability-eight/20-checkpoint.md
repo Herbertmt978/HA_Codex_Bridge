@@ -131,3 +131,9 @@ and served DEV acceptance remain required. No push, release or native change.
 ## Complete assembled test reruns — 27 September 2026
 
 All 1,097 frontend tests across 74 files, 798 Integration tests, 2,643 isolated Bridge tests and eight root restore tests pass. The Bridge run retains 27 platform skips; Windows updater acceptance is separate. Final lint, Ruff, compile, version/lock, syntax and whitespace checks pass. Cross-runtime schema and lifecycle corrections have independent reviews with no remaining findings in their bounded scopes. These local gates do not establish publication or served native acceptance. Exact source freeze, browser, validators, transport and both image builds remain required before push. CB-011 remains partial; CB-037 remains excluded.
+
+## Browser correction qualification — 27 September 2026
+
+The first frozen browser candidate passed 176 cases and failed twelve. Canonical draft settlement now waits for revision-bound IndexedDB deletion before clearing accepted input, preserving owner/newer-edit guards and a storage-only warning on failed cleanup. Question focus scrolls only the existing conversation region, keeping sign-in recovery visible. Browser fixtures now reflect intentional goal/message/code controls, 44px narrow targets, keyboard modality and lazy-image visibility.
+
+All 1102 frontend cases across 74 files pass. The 87 focused draft/question/composer/usage cases and fourteen actual Linux browser correction checks pass without diagnostic overrides. Independent correction review has no actionable findings. The original failed candidate and diagnostic evidence remain retained. A replacement source freeze, full browser gates, validators, transport and both image builds remain required before publication. Native/release acceptance remains unclaimed; production and pending MCP/phone decisions are unchanged.

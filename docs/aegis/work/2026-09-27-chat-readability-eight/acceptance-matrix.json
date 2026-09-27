@@ -3,7 +3,7 @@
   "target": "1.13.0",
   "bridge_target": "0.20.0",
   "codex": "0.157.1",
-  "updated_utc": "2026-09-27T09:34:51.677267+00:00",
+  "updated_utc": "2026-09-27T10:05:39.430873+00:00",
   "items": [
     {
       "id": "CB-002",
@@ -1184,9 +1184,9 @@
     },
     "frontendFull": {
       "state": "passed",
-      "passed": 1097,
+      "passed": 1102,
       "files": 74,
-      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\full-frontend-1130-final\\receipt.json"
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\full-frontend-corrections-final\\receipt.json"
     },
     "bridgeFull": {
       "state": "passed",
@@ -1202,13 +1202,14 @@
     "reviewReports": [
       "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-followup.md",
       "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-readiness-followup.md",
-      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-lifecycle-followup.md"
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-lifecycle-followup.md",
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-corrections-final.md"
     ],
     "native": null,
     "release": null,
     "lintFinal": {
       "state": "passed",
-      "observedUtc": "2026-09-27T09:31:46.851269+00:00",
+      "observedUtc": "2026-09-27T09:31:46.850566+00:00",
       "command": "npm run lint"
     },
     "rootRestore": {
@@ -1224,6 +1225,25 @@
       "state": "passed",
       "passed": 10,
       "evidence": "D:\\CodexTemp\\bridge-chat-eight-20260927\\windows-updater-final.xml"
+    },
+    "frozenBrowserFull": {
+      "state": "failed",
+      "passed": 176,
+      "failed": 12,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\qualification\\candidate1\\results\\final-browser\\receipt.json"
     }
+  },
+  "browser_corrections": {
+    "draft": "Confirmed asynchronous IndexedDB deletion raced immediate reload; wait for captured revision removal before clearing acknowledged composer and preserve storage failures. Both HTTP and event settlement retain owner/newer revision guards.",
+    "interactionScroll": "Confirmed automatic card focus invoked all-ancestor scrolling, moving recovery banner off-screen in short-height pane. Existing conversation region now exclusively owns scripted question scroll.",
+    "testContracts": "Goal summary, message/code action semantics, 44px narrow selects, keyboard focus modality and lazy generated-image visibility updated in their browser fixture owners.",
+    "focusedBrowser": {
+      "passed": 14,
+      "failed": 0,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\browser-corrections-final\\receipt.json",
+      "overrides": false
+    },
+    "native": null,
+    "release": null
   }
 }

@@ -111,7 +111,7 @@ describe("opt-in draft recovery panel ownership", () => {
     const sending = panel._sendPrompt();
     const mutation = panel._promptMutation;
     panel._setDraftForThread("chat", "Sent text"); // A newer edit can contain identical text.
-    if (kind === "event") expect(panel._settlePromptMutation(mutation.clientRequestId)).toBe(true);
+    if (kind === "event") expect(await panel._settlePromptMutation(mutation.clientRequestId)).toBe(true);
     pending.resolve({});
     await sending;
     await mutation.draftRemoval;
@@ -121,17 +121,62 @@ describe("opt-in draft recovery panel ownership", () => {
     expect(panel._draftForThread("chat")).toBe("Sent text");
   });
 
+  it.each(["acknowledgement", "event"])("keeps %s submission locked until the sent draft deletion commits", async (kind) => {
+    const { panel, store } = panelWithStore();
+    const pending = deferred();
+    const removal = deferred();
+    panel._callWS.mockReturnValue(pending.promise);
+    store.removeDraft.mockReturnValue(removal.promise);
+    panel.shadowRoot.getElementById("prompt-input").value = "Sent text";
+    const sending = panel._sendPrompt();
+    const mutation = panel._promptMutation;
+    const settlement = kind === "event" ? panel._settlePromptMutation(mutation.clientRequestId) : null;
+    pending.resolve({});
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.removeDraft).toHaveBeenCalledTimes(1);
+    expect(panel._promptMutation).toBe(mutation);
+    expect(panel.shadowRoot.getElementById("prompt-input").value).toBe("Sent text");
+    removal.resolve({ ok: true, removed: true });
+    await Promise.all([sending, settlement]);
+    expect(panel._promptMutation).toBeNull();
+    expect(panel.shadowRoot.getElementById("prompt-input").value).toBe("");
+  });
+
+  it.each(["acknowledgement", "event"])("keeps a storage warning after %s accepts a message but draft deletion fails", async (kind) => {
+    const { panel, store } = panelWithStore();
+    const pending = deferred();
+    const removal = deferred();
+    panel._callWS.mockReturnValue(pending.promise);
+    store.removeDraft.mockReturnValue(removal.promise);
+    panel.shadowRoot.getElementById("prompt-input").value = "Accepted text";
+    const sending = panel._sendPrompt();
+    const mutation = panel._promptMutation;
+    const settlement = kind === "event" ? panel._settlePromptMutation(mutation.clientRequestId) : null;
+    pending.resolve({});
+    await Promise.resolve();
+    await Promise.resolve();
+    removal.resolve({ ok: false, reason: "storage_unavailable" });
+    await Promise.all([sending, settlement]);
+    expect(panel._promptMutation).toBeNull();
+    expect(panel.shadowRoot.getElementById("prompt-input").value).toBe("");
+    expect(panel.shadowRoot.getElementById("error-strip").textContent).toContain("Message sent, but its local draft could not be removed");
+    expect(panel._callWS).toHaveBeenCalledTimes(1);
+  });
+
   it("waits for the captured save result after an early send acknowledgement", async () => {
     const { panel, store } = panelWithStore();
     const save = deferred();
     store.saveDraft.mockReturnValue(save.promise);
     panel.shadowRoot.getElementById("prompt-input").value = "Sent text";
-    await panel._sendPrompt();
+    const sending = panel._sendPrompt();
+    await Promise.resolve();
     expect(store.removeDraft).not.toHaveBeenCalled();
+    expect(panel.shadowRoot.getElementById("prompt-input").value).toBe("Sent text");
+    expect(panel._promptMutation).not.toBeNull();
     save.resolve({ ok: true, revision: { at: 200, writer: "sender", sequence: 2 } });
-    await save.promise;
-    await Promise.resolve();
-    await Promise.resolve();
+    await sending;
     expect(store.removeDraft).toHaveBeenCalledWith("chat", { expectedRevision: { at: 200, writer: "sender", sequence: 2 } });
   });
 

@@ -214,6 +214,9 @@ for (const theme of ["light", "dark"]) {
     expect(geometry.content).toBeGreaterThan(geometry.height);
     await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).focus();
     await page.keyboard.press("Tab");
+    const goalSummary = panel.locator("#goal-controls summary");
+    await expect(goalSummary).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(scroll).toBeFocused();
     await expect.poll(() => scroll.evaluate((node) => parseFloat(getComputedStyle(node).outlineOffset))).toBe(-2);
     const focus = await scroll.evaluate((node) => {
@@ -231,6 +234,8 @@ for (const theme of ["light", "dark"]) {
     await expect(panel.getByRole("button", { name: "Add to chat", exact: true })).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(scroll).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(goalSummary).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(panel.getByRole("button", { name: "Toggle bottom panel", exact: true })).toBeFocused();
     await expect.poll(async () => (await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
@@ -250,6 +255,9 @@ test("design language: non-empty conversation scroll keeps native keys and tab o
   const scroll = panel.getByRole("region", { name: "Conversation", exact: true });
   await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).focus();
   await page.keyboard.press("Tab");
+  const goalSummary = panel.locator("#goal-controls summary");
+  await expect(goalSummary).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(scroll).toBeFocused();
   await scroll.evaluate((node) => { node.scrollTop = 0; });
   await page.keyboard.press("PageDown");
@@ -263,6 +271,8 @@ test("design language: non-empty conversation scroll keeps native keys and tab o
   await expect(copy).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(scroll).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(goalSummary).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(panel.getByRole("button", { name: "Toggle bottom panel", exact: true })).toBeFocused();
 });

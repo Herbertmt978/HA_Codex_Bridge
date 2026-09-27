@@ -217,6 +217,7 @@ for (const width of [390, 1280]) {
       });
 
       const search = panel.getByRole("combobox", { name: "Web search" });
+      if (width === 390) await panel.locator("#composer-diagnostics > summary").click();
       await expect(search).toBeVisible();
       await expect(panel.getByRole("button", { name: "Discard draft", exact: true })).toBeVisible();
       const actionButtons = article.locator(".message-actions button");
@@ -228,7 +229,7 @@ for (const width of [390, 1280]) {
         expect(box.x + box.width).toBeLessThanOrEqual(width);
       }
       const searchBox = await search.boundingBox();
-      expect(searchBox.height).toBe(32);
+      expect(searchBox.height).toBe(width === 390 ? 44 : 32);
       expect(searchBox.x + searchBox.width).toBeLessThanOrEqual(width);
 
       const codeBlock = article.locator(".code-block");
@@ -241,7 +242,9 @@ for (const width of [390, 1280]) {
       expect(await code.textContent()).toBe(exactBefore);
       expect(await code.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
       const copyCode = codeBlock.getByRole("button", { name: "Copy original code", exact: true });
+      await page.keyboard.press("Tab");
       await copyCode.focus();
+      await expect(copyCode).toBeFocused();
       const focusStyle = await copyCode.evaluate((button) => {
         const style = getComputedStyle(button);
         return { height: button.getBoundingClientRect().height, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
