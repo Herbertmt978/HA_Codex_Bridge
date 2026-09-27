@@ -25,7 +25,7 @@ from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 from .codex_app_server import mcp_config_is_disabled
 from .assist_mcp import isolation_config, require_assist_layers, validate_selection
-from .mcp_local_policy import LocalMcpError
+from .mcp_local_policy import LocalMcpError, canonical_local_url
 from .mcp_relay import McpRelay, McpRelayRecoveryError
 from .mcp_stdio_adapter import StdioAdapterError, StdioMcpAdapter
 from .stdio_package_catalogue import (
@@ -86,6 +86,11 @@ class McpNotFoundError(McpManagerError):
 class McpConflictError(McpManagerError):
     code = "mcp_config_conflict"
     retryable = True
+
+
+class CommunityMcpBindingConflictError(McpConflictError):
+    code = "community_mcp_connection_changed"
+    retryable = False
 
 
 class McpCredentialBindingConflictError(McpConflictError):
@@ -614,6 +619,7 @@ class McpManager:
         authentication: object = None,
         auth_acknowledged: bool = False,
         require_tool_selection: bool = False,
+        reuse_local_connection: bool = False,
     ) -> dict[str, object]:
         self._require_enabled()
         self._require_elicitation_handler()
@@ -652,6 +658,10 @@ class McpManager:
         with self._mutation_lease():
             with self._lock:
                 definitions, version = self._read_definitions()
+                if reuse_local_connection:
+                    existing = self._community_match(definitions, normalized_name, url)
+                    if existing is not None:
+                        return self._community_view(existing, reused=True)
                 if normalized_name in definitions:
                     raise McpConflictError()
                 if len(definitions) >= _MAX_SERVERS:
@@ -680,9 +690,69 @@ class McpManager:
                         except Exception:
                             raise McpUnavailableError() from None
                     raise
-                self._reload()
+                try:
+                    self._reload()
+                except McpManagerError:
+                    # The write committed, but runtime activation is uncertain.
+                    # Retain the private binding for restart reconciliation while
+                    # deactivating this endpoint and blocking new work now.
+                    self._require_recovery(definition.name)
+                    raise McpRecoveryRequiredError() from None
                 self._active_names = self._active_names | {definition.name}
         return self._view_for_created(definition)
+
+    def community_connection(self, *, name: object, url: object,
+                             connect: bool = False, acknowledged: bool = False) -> dict[str, object]:
+        """Bind private discovery to one approved endpoint, without exposing its path."""
+        self._require_enabled()
+        self._require_elicitation_handler()
+        if self._relay is None or not self._relay.local_enabled:
+            raise McpLocalDisabledError()
+        normalized = _validate_name(name)
+        if re.fullmatch(r"ha-community-[a-f0-9]{12}", normalized) is None:
+            raise McpValidationError()
+        try:
+            canonical = canonical_local_url(url)
+        except LocalMcpError:
+            raise McpValidationError() from None
+        if type(connect) is not bool or type(acknowledged) is not bool or acknowledged != connect:
+            raise McpValidationError()
+        if connect:
+            result = self.create_server(name=normalized, url=canonical, local=True,
+                                        local_acknowledged=True, require_tool_selection=True,
+                                        reuse_local_connection=True)
+            # Reuse returns only this fixed projection; creation returns the ordinary view.
+            return {"state": result.get("state", "configured"), "server_name": result.get("server_name", normalized),
+                    "reused": result.get("reused", False)}
+        with self._lock:
+            definitions, _ = self._read_definitions()
+            existing = self._community_match(definitions, normalized, canonical)
+            return self._community_view(existing, reused=True) if existing is not None else {
+                "state": "not_connected", "server_name": None, "reused": False}
+
+    @staticmethod
+    def _community_match(definitions: Mapping[str, McpServerDefinition], name: str,
+                         url: str) -> McpServerDefinition | None:
+        """Never infer endpoint identity from a display name or silently retarget it."""
+        target = urlsplit(url)
+        # Quick connect cannot prove that a manually named binding belongs to
+        # another installation after its host changes. Refuse other eligible
+        # bindings on the supported App port; manual setup remains available.
+        previous_paths = [item for item in definitions.values()
+                          if item.local and item.relayed and not item.stdio and item.auth_mode == "none"
+                          and urlsplit(item.url).scheme == target.scheme and urlsplit(item.url).port == target.port
+                          and item.url != url]
+        matches = [item for item in definitions.values()
+                   if item.local and item.relayed and not item.stdio
+                   and item.auth_mode == "none" and item.url == url]
+        if previous_paths or len(matches) > 1 or (name in definitions and definitions[name] not in matches):
+            raise CommunityMcpBindingConflictError()
+        return matches[0] if matches else None
+
+    @staticmethod
+    def _community_view(definition: McpServerDefinition, *, reused: bool) -> dict[str, object]:
+        return {"state": "configured" if definition.enabled else "paused",
+                "server_name": definition.name, "reused": reused}
 
     def available_stdio_packages(self) -> list[dict[str, object]]:
         self._require_enabled()

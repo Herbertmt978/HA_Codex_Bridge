@@ -48,6 +48,49 @@ runtime discovery; unavailable status has a separate refresh message.
 
 ## Choose a Home Assistant MCP server
 
+### Connect an installed community HA-MCP App
+
+Paired App and Integration 1.12.0 add **Installed community HA-MCP** in
+Settings → MCP servers. On Supervisor installations, this detects one already
+running Home Assistant MCP Server App. Review its version and the displayed
+Home Assistant host and port, acknowledge the connection risks, then choose
+**Connect installed HA-MCP**. The existing private connection path is obtained
+server-side; you do not need to copy it into the panel. The Bridge retains a
+copy in its existing private connection registry and backups.
+
+An exact existing local connection is reused with its pause state and tool
+permissions preserved. A new connection allows no tools. Use **Choose allowed
+tools**, then enable MCP in the regular chat's conversation settings. Select
+servers for Assist separately if you also want voice access; the shortcut does
+not enable Assist or change its selection.
+
+The shortcut does not install, start or reconfigure the community App. Multiple
+matching Apps, an unsupported destination or a missing saved connection path
+require the existing manual setup guide. The companion `ha_mcp_tools`
+integration alone is insufficient: it may provide File & YAML services without
+running a server. Another unauthenticated local connection on the same App port
+also requires manual review and setup, because the shortcut cannot safely
+identify its owner after a host change. Community in-process servers and webhook OAuth installations
+remain on the manual connection path.
+
+If saving succeeds but runtime reload cannot be confirmed, the Bridge blocks
+new work and connection actions. Restart the Codex Bridge App, then refresh
+Settings and review the retained connection and tool selection. The shortcut
+never retries that uncertain operation automatically.
+
+If the App's connection path or destination changes, refresh Settings. A saved
+connection is never silently retargeted. Remove the old Bridge connection and
+review the current destination before reconnecting; a replacement again starts
+with no allowed tools. Removing the connection leaves the community App and
+its other clients running. Local HTTP sends the secret path without encryption;
+protect the network and both Apps' backups. The server's own permissions still
+apply, including access beyond Assist's exposed entities.
+
+HA Assistant Chats remains at the bottom of the sidebar, below Projects, and
+starts collapsed. Expand the section to open an Assist conversation.
+
+### Home Assistant's native MCP Server
+
 Home Assistant's own **MCP Server** integration can be connected from Bridge
 settings without copying a URL or token. Enable the App's MCP and local MCP
 options, install that HA integration, then explicitly authorise the native

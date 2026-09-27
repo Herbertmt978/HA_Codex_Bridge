@@ -5,6 +5,7 @@ import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
 import { HA_MCP_GUIDE, renderHaMcpShortcut, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm, renderMcpToolPermissions, renderStdioPackages } from "./mcp-setup.js";
+import { renderCommunityMcp } from "./community-mcp.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -441,6 +442,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    panel.append(renderCommunityMcp(documentRef, state, config?.capabilities));
     panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
@@ -564,7 +566,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
 const renderedFeatureInputs = new WeakMap();
 
 function featureDraftInputs(state) {
-  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged });
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged, communityMcpAcknowledged: state.communityMcpAcknowledged });
 }
 
 export function syncDesktopFeatureDrafts(container, state) {
@@ -580,6 +582,12 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
   container.onchange = (event) => {
+    if (event.target?.matches?.("[data-community-mcp-acknowledged]")) {
+      state.communityMcpAcknowledged = event.target.checked;
+      const connect = container.querySelector('[data-desktop-action="community-mcp-connect"]');
+      if (connect) connect.disabled = !event.target.checked || Boolean(state.communityMcpBusy);
+      syncDesktopFeatureDrafts(container, state);
+    }
     if (event.target?.matches?.("[data-ha-mcp-acknowledged]")) {
       state.haMcpAcknowledged = event.target.checked;
       const connect = container.querySelector('[data-desktop-action="ha-mcp-connect"]');
@@ -601,7 +609,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   // Input handlers sync the draft snapshot because those edits are already in
   // the DOM. Programmatic draft resets must still invalidate the rendered view.
   const inputs = JSON.stringify({
-    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, haMcpAcknowledged: undefined, mcpToolInventory: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, haMcpAcknowledged: undefined, communityMcpAcknowledged: undefined, mcpToolInventory: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
     mcpInventoryRevision: state.mcpToolInventory?.catalogue_revision,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,

@@ -397,3 +397,13 @@ def test_problem_record_preserves_safe_mcp_elicitation_unavailable_code() -> Non
     assert problem.code == "mcp_elicitation_unavailable"
     assert problem.retryable is True
     assert "private-provider-detail" not in repr(problem)
+
+
+def test_problem_record_preserves_community_binding_conflict_without_details() -> None:
+    problem = ProblemRecord.from_payload(409, {"detail": {
+        "code": "community_mcp_connection_changed", "retryable": False,
+        "message": "private-provider-detail",
+    }})
+    assert problem.code == "community_mcp_connection_changed"
+    assert problem.retryable is False
+    assert "private-provider-detail" not in repr(problem)

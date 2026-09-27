@@ -2,6 +2,23 @@
 
 All notable App changes are recorded here.
 
+## 1.12.0
+
+- Keeps HA Assistant Chats at the bottom of the sidebar, below Projects,
+  collapsed by default with an accessible expand control.
+
+- Connects an already installed community HA-MCP App from Settings after
+  administrator consent, with its identity and non-secret destination displayed.
+  Discovers the existing private path server-side and uses the current private
+  registry and local relay; new connections allow no tools.
+- Reuses an exact approved connection with its pause state and tool selection
+  preserved. Changed destinations or paths require explicit removal and reconnect.
+  Assist selection and each chat's MCP enablement remain separate controls.
+- Blocks new work and connection retries until App restart if runtime reload
+  fails after a saved connection; retains private configuration for recovery.
+- Pairs App, Integration and panel `1.12.0` with Bridge `0.19.0` and unchanged
+  Codex `0.157.1`; the private quick-connect API is capability-gated.
+
 ## 1.11.1
 
 - Projects native queued-message edits and removals into the transcript and

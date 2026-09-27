@@ -857,6 +857,7 @@ def create_app(
                 feature_capabilities.append("mcp_credential_binding_v1")
                 if resolved_local_mcp.local_enabled:
                     feature_capabilities.append("mcp_local_v1")
+                    feature_capabilities.append("community_mcp_quick_connect_v1")
             if resolved_stdio_mcp is not None:
                 feature_capabilities.append("mcp_stdio_v1")
         if browser_dynamic_tools_enabled:
