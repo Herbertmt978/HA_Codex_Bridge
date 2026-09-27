@@ -200,3 +200,8 @@ corrected aggregate journeys pass on Linux. The archive exporter now disables
 Windows newline conversion and verifies every file against its Git object.
 Failed preliminary gate receipts are retained. Fresh frozen full gates, native
 passage selection, queue/duration, child control and scoped cleanup remain owed.
+
+
+## Final compact browser correction
+
+The third frozen compact candidate passed all 1,107 frontend unit tests, lint, builds, generated-file equality and syntax checks. Its full Linux browser run passed 210 of 213 cases. Two duration-control tests toggled an already-open menu after keyboard submission; opening now follows the actual expanded state. The minimum-pane test now restores the real viewport descriptor, waits for rendered geometry and proves pointer capture before dragging. It retains the height-growth assertion and adds cleanup evidence. These changes affect tests only. All five affected duration/pane journeys pass on Linux. Full frozen qualification and independent review remain required before publication. Earlier failed receipts remain intact.

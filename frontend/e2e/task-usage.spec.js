@@ -68,7 +68,8 @@ for (const width of [1280, 390]) {
       try {
         const page = await context.newPage();
         const panel = await preparePanel(page, { theme, owner: `cb060-${width}-${theme}` });
-        await panel.getByRole("button", { name: /^Turn options/ }).click();
+        const turnOptions = panel.getByRole("button", { name: /^Turn options/ });
+        if (await turnOptions.getAttribute("aria-expanded") !== "true") await turnOptions.click();
         const duration = panel.getByRole("combobox", { name: "Elapsed-time limit", exact: true });
         await expect(duration).toHaveValue("");
         await expect(panel.getByText("Partial results retained after the elapsed-time stop.", { exact: false })).toBeVisible();
@@ -77,7 +78,7 @@ for (const width of [1280, 390]) {
         if (width === 390) await send.tap(); else await send.press("Enter");
         await expect.poll(() => page.evaluate(() => window.__cb060UsageFixture.calls.filter((item) => item.type === "codex_bridge/send_prompt").length)).toBe(1);
         expect(await page.evaluate(() => window.__cb060UsageFixture.calls.find((item) => item.type === "codex_bridge/send_prompt"))).not.toHaveProperty("max_duration_seconds");
-        await panel.getByRole("button", { name: /^Turn options/ }).click();
+        if (await turnOptions.getAttribute("aria-expanded") !== "true") await turnOptions.click();
         await expect(duration).toBeEnabled();
         await duration.focus();
         await duration.press("Home");
@@ -97,7 +98,7 @@ for (const width of [1280, 390]) {
         if (width === 390) await send.tap(); else await send.press("Enter");
         await expect.poll(() => page.evaluate(() => window.__cb060UsageFixture.calls.filter((item) => item.type === "codex_bridge/send_prompt").length)).toBe(2);
         expect(await page.evaluate(() => window.__cb060UsageFixture.calls.filter((item) => item.type === "codex_bridge/send_prompt")[1].max_duration_seconds)).toBe(60);
-        await panel.getByRole("button", { name: /^Turn options/ }).click();
+        if (await turnOptions.getAttribute("aria-expanded") !== "true") await turnOptions.click();
         await expect(duration).toHaveValue("");
         await panel.getByRole("button", { name: "Toggle bottom panel", exact: true }).click();
         const open = panel.getByRole("button", { name: "Usage history", exact: true });

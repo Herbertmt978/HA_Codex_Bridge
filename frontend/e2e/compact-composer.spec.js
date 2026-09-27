@@ -415,14 +415,24 @@ for(const width of [1280,390]) for(const theme of ['light','dark']) {
 
 test('minimum pane keeps its divider usable with visible controls in a panned viewport',async({page})=>{
   const panel=await openCompact(page,390,'light');
-  await panel.evaluate(p=>{p._toggleBottomPanel();p.shadowRoot.getElementById('git-review-button').hidden=false;p.shadowRoot.getElementById('task-usage-button').hidden=false;Object.defineProperty(window,'visualViewport',{configurable:true,value:{offsetTop:200,height:300}});p._bottomPaneResize.resize();});
+  await panel.evaluate(p=>{p._toggleBottomPanel();p.shadowRoot.getElementById('git-review-button').hidden=false;p.shadowRoot.getElementById('task-usage-button').hidden=false;window.__compactOriginalViewportDescriptor=Object.getOwnPropertyDescriptor(window,'visualViewport');Object.defineProperty(window,'visualViewport',{configurable:true,value:{offsetTop:200,height:300}});p._bottomPaneResize.resize();});
   const handle=panel.getByRole('separator',{name:'Resize file preview and terminal'});
   await handle.focus();await handle.press('Home');
   expect((await handle.boundingBox()).height).toBeGreaterThanOrEqual(8);
-  await panel.evaluate(()=>{delete window.visualViewport;});
-  await page.setViewportSize({width:390,height:900});
-  await panel.evaluate(p=>p._bottomPaneResize.resize());
+  await panel.evaluate(p=>{
+    const descriptor=window.__compactOriginalViewportDescriptor;
+    if(descriptor) Object.defineProperty(window,'visualViewport',descriptor); else delete window.visualViewport;
+    delete window.__compactOriginalViewportDescriptor;
+    p._bottomPaneResize.resize();
+  });
+  await expect.poll(async()=>Math.round((await panel.locator('#bottom-panel').boundingBox()).height)).toBe(Number(await handle.getAttribute('aria-valuenow')));
+  await expect.poll(async()=>Number(await handle.getAttribute('aria-valuemax'))).toBeGreaterThan(Number(await handle.getAttribute('aria-valuemin')));
+  await handle.scrollIntoViewIfNeeded();
   const box=await handle.boundingBox();
-  await page.mouse.move(box.x+50,box.y+4);await page.mouse.down();await page.mouse.move(box.x+50,box.y-60);await page.mouse.up();
+  await page.mouse.move(box.x+50,box.y+4);await page.mouse.down();
+  await expect(panel.locator('.bottom-pane-drag-shield')).toBeVisible();
+  expect(await panel.evaluate(p=>Boolean(p._bottomPaneResize.drag))).toBe(true);
+  await page.mouse.move(box.x+50,box.y-60,{steps:5});await page.mouse.up();
   await expect.poll(async()=>Number(await handle.getAttribute('aria-valuenow'))).toBeGreaterThan(Number(await handle.getAttribute('aria-valuemin')));
+  await expect(panel.locator('.bottom-pane-drag-shield')).toBeHidden();
 });
