@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 import os
 from threading import Event, Thread
 from types import SimpleNamespace
+from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -270,6 +271,68 @@ def _manager(
     if resolver is not None:
         options["resolver"] = resolver
     return McpManager(client, gate, **options), client, gate
+
+
+def test_assist_selection_masks_every_effective_server_and_retains_tool_policy(tmp_path: Path) -> None:
+    approved = {"home": {"url": "https://mcp.vendor.example/mcp", "enabled_tools": ["lights"]},
+                "other": {"url": "https://other.vendor.example/mcp"}}
+    effective = {**approved, "workspace-command": {"command": "untrusted"}}
+    manager, client, gate = _manager(_config(approved), _config(effective))
+    execution_cwd = tmp_path / "private"
+    result = manager.assist_thread_config(tmp_path, ["home"], execution_cwd=execution_cwd)
+    assert result["mcp_servers"] == {
+        "home": {"url": "https://mcp.vendor.example/mcp", "enabled": True, "enabled_tools": ["lights"]},
+        "other": {"enabled": False}, "workspace-command": {"enabled": False},
+    }
+    assert result["features.apps"] is False and result["features.plugins"] is False
+    assert client.calls[-1].params == {"includeLayers": True, "cwd": str(tmp_path)}
+    assert result["project_root_markers"] == []
+    assert result["projects"][str(execution_cwd.resolve())]["trust_level"] == "untrusted"
+    assert result["permissions"]["ha_observe"]["filesystem"][str(tmp_path.resolve())] == "read"
+    assert [call.method for call in client.calls] == ["config/read", "config/read"]
+    assert gate.leases == []
+
+
+@pytest.mark.parametrize("change", [
+    {"enabled": False}, {"enabled_tools": ["admin"]},
+    {"url": "https://different.vendor.example/mcp"}, {"command": "unsafe"},
+])
+def test_assist_rejects_workspace_override_of_selected_server(tmp_path: Path, change: dict) -> None:
+    approved = {"home": {"url": "https://mcp.vendor.example/mcp", "enabled_tools": ["lights"]}}
+    manager, _, _ = _manager(_config(approved), _config({"home": {**approved["home"], **change}}))
+    with pytest.raises(McpUnavailableError):
+        manager.assist_thread_config(tmp_path, ["home"], execution_cwd=tmp_path / "private")
+
+
+def test_assist_empty_selection_isolated_even_when_global_mcp_disabled(tmp_path: Path) -> None:
+    servers = {"saved": {"url": "https://mcp.vendor.example/mcp", "enabled": False}}
+    manager, _, _ = _manager(_config(servers), _config(servers), enabled=False)
+    assert manager.assist_thread_config(tmp_path, [], execution_cwd=tmp_path / "private")["mcp_servers"] == {"saved": {"enabled": False}}
+
+
+@pytest.mark.parametrize("servers", [
+    {}, {"home": {"url": "https://mcp.vendor.example/mcp", "enabled": False}},
+])
+def test_assist_cannot_revive_removed_or_paused_servers(tmp_path: Path, servers: dict) -> None:
+    manager, _, _ = _manager(_config(servers), _config(servers))
+    with pytest.raises(McpUnavailableError):
+        manager.assist_thread_config(tmp_path, ["home"], execution_cwd=tmp_path / "private")
+
+
+def test_assist_continuation_uses_fresh_reduced_tool_permissions(tmp_path: Path) -> None:
+    first = {"home": {"url": "https://mcp.vendor.example/mcp", "enabled_tools": ["lights", "scripts"]}}
+    reduced = {"home": {**first["home"], "enabled_tools": ["lights"]}}
+    manager, _, _ = _manager(_config(first), _config(first), _config(reduced), _config(reduced))
+    assert manager.assist_thread_config(tmp_path, ["home"], execution_cwd=tmp_path / "private")["mcp_servers"]["home"]["enabled_tools"] == ["lights", "scripts"]
+    assert manager.assist_thread_config(tmp_path, ["home"], execution_cwd=tmp_path / "private")["mcp_servers"]["home"]["enabled_tools"] == ["lights"]
+
+
+@pytest.mark.parametrize("selection", [["home", "home"], ["http://local/mcp"], ["HOME"], [1], ["x"] * 33])
+def test_assist_rejects_malformed_selection_before_native_io(tmp_path: Path, selection: list) -> None:
+    manager, client, _ = _manager()
+    with pytest.raises(McpValidationError):
+        manager.assist_thread_config(tmp_path, selection, execution_cwd=tmp_path / "private")
+    assert client.calls == []
 
 
 def test_create_uses_native_cas_write_then_reload_and_releases_gate() -> None:

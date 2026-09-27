@@ -30,6 +30,11 @@ function render(panel) {
   panel._renderNavigationEmptyState();
 }
 
+function expandAssistant(panel) {
+  const toggle = panel.shadowRoot.querySelector('#assistant-section [data-section="assistant"]');
+  if (toggle?.getAttribute("aria-expanded") !== "true") toggle.click();
+}
+
 const rows = (panel, section) => [...panel.shadowRoot.querySelectorAll(`${section} .chat-row`)].map((row) => row.dataset.chatThreadId);
 
 describe("HA Assistant Chats sidebar group", () => {
@@ -38,6 +43,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("groups only the explicit public Assist marker and preserves mixed and empty ordinary projects", () => {
     const panel = setup();
+    expandAssistant(panel);
     panel._threads.push(thread("string-marker", "mixed", { schedule_eligible: "false" }));
     render(panel);
     expect(rows(panel, "#assistant-section")).toEqual(["assistant-direct", "assistant-mixed", "assistant-project"]);
@@ -52,6 +58,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("gives Assist grouping precedence over pin and custom sections without mutating membership or files", () => {
     const panel = setup();
+    expandAssistant(panel);
     const snapshot = structuredClone(panel._threads);
     expect(rows(panel, "#chat-navigation-sections")).toEqual([]);
     for (const item of panel._threads) expect(panel.shadowRoot.querySelectorAll(`[data-chat-thread-id="${item.thread_id}"]`)).toHaveLength(1);
@@ -62,6 +69,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("works without chat-operations capability and hides the absent Assist group for legacy data", () => {
     const panel = setup({ supported: false });
+    expandAssistant(panel);
     expect(rows(panel, "#assistant-section")).toHaveLength(3);
     panel._threads = panel._threads.map((item) => { const legacy = { ...item }; delete legacy.schedule_eligible; return legacy; });
     render(panel);
@@ -72,6 +80,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("retains explicit and project-inherited archives only in the Assist archive disclosure", () => {
     const panel = setup();
+    expandAssistant(panel);
     panel._threads[0].archived_at = "2026-09-26T12:00:00Z";
     panel._projects[1].archived_at = "2026-09-26T12:00:00Z";
     panel._threads.push(thread("normal-archive", "mixed", { archived_at: "2026-09-26T12:00:00Z" }));
@@ -110,10 +119,29 @@ describe("HA Assistant Chats sidebar group", () => {
     expect(panel.shadowRoot.getElementById("rail-search-empty").hidden).toBe(false);
   });
 
+  it("places HA Assistant Chats below project sections and starts collapsed until expanded", () => {
+    const panel = setup();
+    const toggle = () => panel.shadowRoot.querySelector('#assistant-section [data-section="assistant"]');
+    const sectionOrder = [...panel.shadowRoot.querySelector(".rail-sections").children]
+      .filter((element) => element.classList.contains("rail-section"))
+      .map((element) => element.id);
+    expect(sectionOrder).toEqual(["direct-section", "project-section", "archived-section", "assistant-section"]);
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+    expect(panel.shadowRoot.getElementById("assistant-chat-list").hidden).toBe(true);
+    expect(rows(panel, "#assistant-section")).toHaveLength(0);
+
+    toggle().click();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    expect(panel.shadowRoot.getElementById("assistant-chat-list").hidden).toBe(false);
+    expect(rows(panel, "#assistant-section")).toHaveLength(3);
+  });
+
   it("maintains accessible collapse state across polling renders and temporary search expansion", () => {
     const panel = setup();
     const toggle = () => panel.shadowRoot.querySelector('#assistant-section [data-section="assistant"]');
     expect(toggle().getAttribute("aria-controls")).toBe("assistant-chat-list");
+    toggle().click();
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
     toggle().click();
     expect(toggle().getAttribute("aria-expanded")).toBe("false");
     expect(panel.shadowRoot.getElementById("assistant-chat-list").hidden).toBe(true);
@@ -130,6 +158,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("uses the canonical owned chat menu without selecting or marking the Assist chat read", async () => {
     const panel = setup();
+    expandAssistant(panel);
     panel._selectedThreadId = "normal";
     panel._threads[0].unread = true;
     render(panel);
@@ -148,6 +177,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("renders untrusted chat and archived project names as text", () => {
     const panel = setup();
+    expandAssistant(panel);
     panel._threads[1].title = '<img src=x onerror="alert(1)">';
     panel._projects[1].name = '<script>alert(1)</script>';
     panel._projects[1].archived_at = "2026-09-26T12:00:00Z";
@@ -169,6 +199,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it.each([false, true])("keeps Assist-only project selection and canonical action routes inside the Assist group, archived: %s", (archived) => {
     const panel = setup();
+    expandAssistant(panel);
     if (archived) { panel._projects[1].archived_at = "2026-09-26T12:00:00Z"; panel._collapsedSections.assistantArchived = false; }
     render(panel);
     const group = panel.shadowRoot.getElementById("assistant-section");
@@ -196,6 +227,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("preserves Assist project collapse and expands its matching chat for a project-name search", () => {
     const panel = setup();
+    expandAssistant(panel);
     const projectToggle = () => panel.shadowRoot.querySelector('#assistant-section [data-action="toggle-project-collapse"][data-project-id="assistant-only"]');
     const projectList = () => panel.shadowRoot.getElementById(projectToggle().getAttribute("aria-controls"));
     projectToggle().click();
@@ -216,6 +248,7 @@ describe("HA Assistant Chats sidebar group", () => {
 
   it("shows project controls without duplicating a chat when all its Assist chats are individually archived", () => {
     const panel = setup();
+    expandAssistant(panel);
     panel._threads[1].archived_at = "2026-09-26T12:00:00Z";
     render(panel);
     expect(panel.shadowRoot.querySelector('#assistant-section [data-action="archive-project"][data-project-id="assistant-only"]')).not.toBeNull();

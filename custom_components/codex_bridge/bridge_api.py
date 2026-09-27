@@ -1824,10 +1824,22 @@ class BridgeApiClient:
     async def async_replace_mcp_credential(self, name: str, payload: dict[str, Any] | None) -> dict[str, Any]:
         self._require_mcp_capability()
         self.require_capability("mcp_credentials_v1")
+        if payload is not None and any(key in payload for key in ("expected_url", "expected_token_sha256")):
+            self.require_capability("mcp_credential_binding_v1")
         return await self._async_json(
             "DELETE" if payload is None else "PUT",
             f"/mcp/servers/{_path_segment(name)}/credential",
             json_body=_bounded_mapping(payload) if payload is not None else None,
+        )
+
+    async def async_remove_managed_mcp(self, name: str, payload: dict[str, Any]) -> None:
+        self._require_mcp_capability()
+        self.require_capability("mcp_credential_binding_v1")
+        if set(payload) != {"expected_url", "expected_token_sha256"}:
+            raise ValueError("Managed MCP binding is required")
+        await self._async_no_content(
+            "POST", f"/mcp/servers/{_path_segment(name)}/managed/remove",
+            json_body=_bounded_mapping(payload), expected_status={204},
         )
 
     async def async_manage_mcp(self, name: str, payload: dict[str, Any], *, state: bool = False) -> dict[str, Any]:

@@ -1,4 +1,5 @@
 from inspect import iscoroutinefunction
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -6,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -28,12 +30,17 @@ from .const import (
     DOMAIN,
     EVENT_CURSOR_STORAGE_VERSION,
     CONF_WEB_SEARCH_MODE,
+    CONF_ASSIST_MCP_SERVERS,
 )
 from .event_broker import EventBroker
 from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
+from .question_notifications import QuestionNotificationCoordinator
+from .question_notification_settings import question_notification_settings
 from .http import async_register_http_views
+from .ha_mcp_shortcut import HaMcpShortcut
+from .assist_settings import assist_mcp_selection
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
 from .runtime import CodexBridgeRuntime, normalize_web_search_mode
@@ -42,6 +49,7 @@ from .task_events import TaskEventForwarder
 from .websocket_api import async_register_websocket_commands
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.CONVERSATION]
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -112,6 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         discovery_uuid=entry.data.get(CONF_DISCOVERY_UUID),
         api_version=client.negotiated_api_version or 0,
         capabilities=tuple(getattr(ready, "capabilities", ())),
+        question_notification_settings=question_notification_settings(entry.options),
         web_search_mode=normalize_web_search_mode(
             entry.options.get(CONF_WEB_SEARCH_MODE),
             connection_type=connection_type,
@@ -159,9 +168,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 runtime,
                 Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.automation_notifications"),
             )
+        if connection_type != CONNECTION_TYPE_EXTERNAL_LEGACY:
+            runtime.question_notifications = QuestionNotificationCoordinator(
+                hass, runtime,
+                Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications"),
+            )
         runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
     try:
+        if connection_type == CONNECTION_TYPE_SUPERVISOR:
+            async def select_owned_mcp(name: str, selected: bool) -> None:
+                previous = assist_mcp_selection(entry.options.get(CONF_ASSIST_MCP_SERVERS, []))
+                if previous is None:
+                    raise ValueError("Assist MCP selection is invalid")
+                names = set(previous)
+                if selected:
+                    if len(names) >= 32 and name not in names:
+                        raise ValueError("Assist MCP selection is full")
+                    names.add(name)
+                else:
+                    names.discard(name)
+                hass.config_entries.async_update_entry(
+                    entry, options={**entry.options, CONF_ASSIST_MCP_SERVERS: sorted(names)}
+                )
+                async_dispatcher_send(hass, f"{DOMAIN}.{entry.entry_id}.assist_settings")
+
+            runtime.ha_mcp_shortcut = HaMcpShortcut(
+                hass, entry.entry_id, client, connection_type=connection_type,
+                supports_capability=runtime.supports_capability,
+                selection_callback=select_owned_mcp,
+            )
+            await runtime.ha_mcp_shortcut.async_setup()
         if not hass.services.has_service(DOMAIN, "start_task"):
             async_register_task_services(hass)
         if not domain_data[DATA_VIEWS_REGISTERED]:
@@ -186,6 +223,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             and runtime.supports_capability("automation_notifications_v1")
         ):
             await runtime.automation_notifications.async_start()
+        if runtime.question_notifications is not None and runtime.supports_capability("interactions_v2"):
+            await runtime.question_notifications.async_start()
         if runtime.entity_coordinator is not None:
             await runtime.entity_coordinator.async_refresh()
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -199,6 +238,72 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clear this entry's question notices and revoke its managed MCP grant."""
+    async def clear_questions() -> None:
+        domain_data = hass.data.get(DOMAIN)
+        entries = domain_data.get(DATA_ENTRIES) if isinstance(domain_data, dict) else None
+        runtime = entries.get(entry.entry_id) if isinstance(entries, dict) else None
+        if runtime is not None:
+            # A cancelled/failed unload may still own an admitted delivery. HA
+            # can proceed to remove without another unload, so drain that owner
+            # before a fresh coordinator takes its saved ledger.
+            await runtime.async_close()
+            entries.pop(entry.entry_id, None)
+        # Normal unload preserves delivery claims for restart. Permanent removal
+        # has no runtime to reconcile them, including on an external connection.
+        coordinator = QuestionNotificationCoordinator(
+            hass, None,
+            Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications"),
+        )
+        if not await coordinator.async_permanently_remove():
+            _LOGGER.warning("Question notification removal is incomplete; its cleanup ledger was retained")
+
+    if entry.data.get(CONF_CONNECTION_TYPE) != CONNECTION_TYPE_SUPERVISOR:
+        await clear_questions()
+        return
+
+    async def detach(_name: str, _selected: bool) -> None:
+        return None
+
+    # HA has already removed the entry. Revoke local authority before any
+    # service or network wait, even if a previous unload was interrupted.
+    local = HaMcpShortcut(
+        hass, entry.entry_id, None, connection_type=CONNECTION_TYPE_SUPERVISOR,
+        supports_capability=lambda _value: False, selection_callback=detach,
+    )
+    try:
+        await local.async_remove()
+    finally:
+        # Revoke local authority before waiting for any notification service.
+        await clear_questions()
+    try:
+        client = BridgeApiClient(
+            async_get_clientsession(hass), entry.data[CONF_BRIDGE_URL],
+            entry.data[CONF_BRIDGE_TOKEN],
+        )
+    except (BridgeApiError, KeyError):
+        return
+    capabilities: tuple[str, ...] = ()
+    try:
+        ready = await client.async_ready()
+        capabilities = tuple(ready.capabilities)
+    except BridgeApiError:
+        pass
+
+    shortcut = HaMcpShortcut(
+        hass, entry.entry_id, client, connection_type=CONNECTION_TYPE_SUPERVISOR,
+        supports_capability=lambda value: value in capabilities,
+        selection_callback=detach,
+    )
+    try:
+        await shortcut.async_remove()
+    finally:
+        close = getattr(client, "async_close", None)
+        if close is not None:
+            await close()
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data = hass.data.get(DOMAIN)
     if not domain_data:
@@ -208,9 +313,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if runtime is not None and runtime.entity_coordinator is not None:
         if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
             return False
-    runtime = domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
     if runtime is not None:
         await runtime.async_close()
+        # Preserve the draining owner on cancellation/error, so permanent
+        # removal cannot race a still-admitted timer or mobile action.
+        domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
     if not domain_data[DATA_ENTRIES]:
         async_remove_panel(hass)
         domain_data[DATA_PANEL_REGISTERED] = False

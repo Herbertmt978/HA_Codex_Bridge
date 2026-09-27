@@ -579,6 +579,8 @@ def test_paired_new_connection_starts_with_no_allowed_tools():
     created = manager.create_server(name="scoped", url="https://tools.example.com/mcp",
                                     require_tool_selection=True)
     assert created["tool_policy"] == "selected"
+    assert created["enabled"] is True
+    assert native.servers["scoped"].get("enabled", True) is True
     assert native.servers["scoped"]["enabled_tools"] == []
     legacy = manager.create_server(name="legacy", url="https://legacy.example.com/mcp")
     assert legacy["tool_policy"] == "all"

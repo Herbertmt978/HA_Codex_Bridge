@@ -37,13 +37,49 @@ function snippet(value) {
 export function projectTranscriptMessages(events = []) {
   const edits = new Map();
   const removed = new Set();
+  const removedQueuedRuns = new Set();
+  const messages = new Map();
+  const queuedByRun = new Map();
   for (const event of events) {
-    if (event?.event_type === "message.removed" && Number.isSafeInteger(event.payload?.message_sequence)) removed.add(event.payload.message_sequence);
-    if (event?.event_type === "message.updated" && Number.isSafeInteger(event.payload?.message_sequence) && typeof event.payload?.text === "string") {
-      edits.set(event.payload.message_sequence, event.payload.text);
+    if (!["message.created", "message.completed"].includes(event?.event_type)) continue;
+    messages.set(event.sequence, event);
+    const runId = event.payload?.run_id;
+    if (event.event_type === "message.created" && event.payload?.queued === true && typeof runId === "string" && runId) {
+      queuedByRun.set(runId, queuedByRun.has(runId) ? null : event);
     }
   }
-  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence)
+  const targetSequence = (event) => {
+    const reference = event.payload?.message_sequence;
+    if (!Number.isSafeInteger(reference) || reference <= 0) return null;
+    const runId = event.payload?.run_id;
+    let target = messages.get(reference);
+    if (typeof runId === "string" && runId) {
+      if (target?.payload?.run_id !== runId) target = null;
+      // API v1 orders events by global cursor; queue references use the
+      // thread-local message sequence. Each queued run owns one draft.
+      // A unique run-bound draft bridges those namespaces without matching
+      // another run's coincidentally equal cursor or an ambiguous anchor.
+      target ||= queuedByRun.get(runId);
+    }
+    return target?.sequence ?? null;
+  };
+  for (const event of events) {
+    if (!["message.removed", "message.updated"].includes(event?.event_type)) continue;
+    const sequence = targetSequence(event);
+    if (sequence === null) continue;
+    if (event.event_type === "message.removed") {
+      removed.add(sequence);
+      const target = messages.get(sequence);
+      if (target?.event_type === "message.created" && target.payload?.queued === true && typeof target.payload?.run_id === "string") {
+        removedQueuedRuns.add(target.payload.run_id);
+      }
+    }
+    if (event.event_type === "message.updated" && typeof event.payload?.text === "string") {
+      edits.set(sequence, event.payload.text);
+    }
+  }
+  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence))
+    && !(["run.queued", "run.dequeued", "run.cancelled"].includes(event?.event_type) && removedQueuedRuns.has(event.payload?.run_id))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence)
     ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
 }
 

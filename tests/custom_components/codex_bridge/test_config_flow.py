@@ -27,6 +27,7 @@ from custom_components.codex_bridge.const import (
     CONF_ASSIST_MODEL,
     CONF_ASSIST_REASONING,
     CONF_ASSIST_INSTRUCTIONS,
+    CONF_ASSIST_MCP_SERVERS,
     CONF_WEB_SEARCH_MODE,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
@@ -125,6 +126,11 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
         CONF_ASSIST_MODEL: "",
         CONF_ASSIST_REASONING: "",
         CONF_ASSIST_INSTRUCTIONS: "",
+        CONF_ASSIST_MCP_SERVERS: [],
+        "question_notifications_enabled": False,
+        "question_notifications_persistent": True,
+        "question_notifications_preview": False,
+        "question_notifications_targets": [],
     }
     result = await flow.async_step_init({CONF_WEB_SEARCH_MODE: "disabled"})
 
@@ -138,6 +144,11 @@ async def test_supervisor_options_use_live_by_default_and_only_accept_live_or_of
         CONF_ASSIST_MODEL: "",
         CONF_ASSIST_REASONING: "",
         CONF_ASSIST_INSTRUCTIONS: "",
+        CONF_ASSIST_MCP_SERVERS: [],
+        "question_notifications_enabled": False,
+        "question_notifications_persistent": True,
+        "question_notifications_preview": False,
+        "question_notifications_targets": [],
     }
 
     enabled = await flow.async_step_init({
@@ -170,6 +181,11 @@ async def test_supervisor_options_remain_available_before_login_capability_recov
         CONF_ASSIST_MODEL: "",
         CONF_ASSIST_REASONING: "",
         CONF_ASSIST_INSTRUCTIONS: "",
+        CONF_ASSIST_MCP_SERVERS: [],
+        "question_notifications_enabled": False,
+        "question_notifications_persistent": True,
+        "question_notifications_preview": False,
+        "question_notifications_targets": [],
     }
 
 
@@ -230,6 +246,44 @@ async def test_assist_settings_validate_per_model_reasoning_and_plain_instructio
         assert invalid_pair["errors"] == {"base": "assist_model_unavailable"}
         too_long = await flow.async_step_init({**base, CONF_ASSIST_INSTRUCTIONS: "x" * 4097})
         assert too_long["errors"] == {"base": "assist_instructions_invalid"}
+
+
+async def test_assist_mcp_choices_preserve_unavailable_names_and_reject_paused(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+        options={CONF_ASSIST_MCP_SERVERS: ["missing", "paused"]},
+    )
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass, flow.handler = hass, entry.entry_id
+    with patch.object(flow, "_assist_projects", new=AsyncMock(return_value={"prj": "Assist"})), patch.object(
+        flow, "_assist_models", new=AsyncMock(return_value={})
+    ), patch.object(
+        flow,
+        "_assist_mcp_servers",
+        new=AsyncMock(return_value={"active": ("HA MCP", True), "paused": ("Clock", False)}),
+    ):
+        form = await flow.async_step_init()
+        schema = form["data_schema"]
+        assert schema({})[CONF_ASSIST_MCP_SERVERS] == ["missing", "paused"]
+        selector_options = next(
+            value.config["options"]
+            for key, value in schema.schema.items()
+            if getattr(key, "schema", key) == CONF_ASSIST_MCP_SERVERS
+        )
+        assert {row["value"]: row["label"] for row in selector_options} == {
+            "active": "HA MCP (enabled)",
+            "missing": "missing (unavailable)",
+            "paused": "Clock (paused)",
+        }
+        refused = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live",
+            CONF_ASSIST_ENABLED: True,
+            CONF_ASSIST_PROJECT_ID: "prj",
+            CONF_ASSIST_MCP_SERVERS: ["paused"],
+        })
+        assert refused["errors"] == {"base": "assist_mcp_unavailable"}
 
 
 async def test_unavailable_saved_assist_choice_is_preserved_and_not_substituted(hass):
@@ -648,3 +702,68 @@ async def test_host_discovery_pairs_only_the_matching_private_companion(hass, ca
             client.async_pair_host_worker.assert_not_called()
     assert payload["token"] not in caplog.text
     assert TOKEN not in caplog.text
+
+
+async def test_question_notification_options_require_current_registered_admin_devices(hass):
+    entry = MockConfigEntry(domain=DOMAIN, title="Codex Bridge App", data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR})
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    with patch("custom_components.codex_bridge.config_flow.async_resolve_question_recipients", new=AsyncMock(return_value=[])):
+        invalid = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live", "question_notifications_enabled": True,
+            "question_notifications_targets": ["revoked_phone"],
+        })
+        assert invalid["errors"] == {"base": "question_notifications_invalid"}
+        no_destination = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live", "question_notifications_enabled": True,
+            "question_notifications_persistent": False,
+        })
+        assert no_destination["errors"] == {"base": "question_notifications_invalid"}
+        persistent = await flow.async_step_init({
+            CONF_WEB_SEARCH_MODE: "live", "question_notifications_enabled": True,
+            "question_notifications_persistent": True,
+        })
+        assert persistent["type"] is FlowResultType.CREATE_ENTRY
+        assert persistent["data"]["question_notifications_enabled"] is True
+        assert persistent["data"]["question_notifications_preview"] is False
+
+
+@pytest.mark.parametrize("change", ["assist_mcp", "notification_preview"])
+async def test_assist_mcp_and_question_options_preserve_each_other(hass, change):
+    entry = MockConfigEntry(domain=DOMAIN,
+        data={CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR},
+        options={CONF_ASSIST_ENABLED: True, CONF_ASSIST_PROJECT_ID: "prj",
+            CONF_ASSIST_MCP_SERVERS: ["home"], CONF_ASSIST_INSTRUCTIONS: "Keep answers concise.",
+            "question_notifications_enabled": True,
+            "question_notifications_persistent": True,
+            "question_notifications_preview": False,
+            "question_notifications_targets": []})
+    entry.add_to_hass(hass)
+    flow = CodexBridgeOptionsFlow()
+    flow.hass, flow.handler = hass, entry.entry_id
+    submitted = {CONF_WEB_SEARCH_MODE: "live", CONF_ASSIST_ENABLED: True,
+                 CONF_ASSIST_PROJECT_ID: "prj"}
+    if change == "assist_mcp":
+        submitted[CONF_ASSIST_MCP_SERVERS] = ["custom"]
+    else:
+        submitted["question_notifications_preview"] = True
+    with (
+        patch.object(flow, "_assist_projects", new=AsyncMock(return_value={"prj": "Assist"})),
+        patch.object(flow, "_assist_models", new=AsyncMock(return_value={})),
+        patch.object(flow, "_assist_mcp_servers", new=AsyncMock(return_value={
+            "home": ("HA MCP", True), "custom": ("Custom MCP", True)})),
+        patch("custom_components.codex_bridge.config_flow.async_resolve_question_recipients", new=AsyncMock(return_value=[])),
+    ):
+        result = await flow.async_step_init(submitted)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    options = result["data"]
+    assert options[CONF_ASSIST_ENABLED] is True
+    assert options[CONF_ASSIST_PROJECT_ID] == "prj"
+    assert options[CONF_ASSIST_MCP_SERVERS] == (["custom"] if change == "assist_mcp" else ["home"])
+    assert options[CONF_ASSIST_INSTRUCTIONS] == "Keep answers concise."
+    assert options["question_notifications_enabled"] is True
+    assert options["question_notifications_persistent"] is True
+    assert options["question_notifications_preview"] is (change == "notification_preview")
+    assert options["question_notifications_targets"] == []

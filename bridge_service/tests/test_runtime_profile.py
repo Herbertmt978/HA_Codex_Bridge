@@ -249,6 +249,7 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         *(("account_profiles_v1", "account_profile_details_v1") if os.name != "nt" else ()),
         "host_access_v1",
         "workspace_terminal_v1",
+        "assist_mcp_selection_v1",
         "discord_channel_v1",
     )
     assert app.state.host_access.status()["enabled"] is False
@@ -279,6 +280,15 @@ def test_home_assistant_profile_wires_admin_capability_surfaces(tmp_path) -> Non
         codex_home=codex_home, enable_mcp=True, enable_local_mcp=True,
     )
     assert "mcp_local_v1" in local.state.feature_capabilities
+    assert "mcp_credential_binding_v1" in local.state.feature_capabilities
+    assert "assist_mcp_selection_v1" in local.state.feature_capabilities
+    readiness = TestClient(local).get("/ready", headers={
+        "Authorization": "Bearer secret", "X-Codex-Bridge-Api": "1",
+    })
+    assert readiness.status_code == 200
+    assert {"mcp_credential_binding_v1", "assist_mcp_selection_v1"} <= set(
+        readiness.json()["capabilities"]
+    )
     assert "mcp_elicitation_v1" in local.state.feature_capabilities
     from codex_bridge_service.models import BridgeReadinessRecord, ComponentVersionRecord
     record = BridgeReadinessRecord(bridge=ComponentVersionRecord(version="0.9.0"), capabilities=local.state.feature_capabilities)

@@ -345,6 +345,7 @@ class CodexAppServerClient:
         enable_mcp: bool = False,
         enable_experimental_api: bool = False,
         working_directory: Path | None = None,
+        thread_unload_delay_seconds: int | None = None,
         protocol_contract: AppServerProtocolContract
         | None = _DEFAULT_PROTOCOL_CONTRACT,
     ) -> None:
@@ -353,6 +354,12 @@ class CodexAppServerClient:
         # Standalone command/exec resolves permission-profile workspace roots
         # at process startup. A later request cwd does not narrow those roots.
         self.working_directory = working_directory
+        if thread_unload_delay_seconds is not None and (
+            type(thread_unload_delay_seconds) is not int
+            or not 0 <= thread_unload_delay_seconds <= 60
+        ):
+            raise ValueError("thread unload delay must be between zero and 60 seconds")
+        self.thread_unload_delay_seconds = thread_unload_delay_seconds
         self.client_name = _validate_client_info(client_name, "client name")
         self.client_title = _validate_client_info(client_title, "client title")
         self.client_version = _validate_client_info(client_version, "client version")
@@ -918,13 +925,21 @@ class CodexAppServerClient:
                     except ProtocolContractError:
                         raise AppServerProtocolError() from None
                 self._write_message(generation, initialized_message)
-                if self._mcp_startup_state == "masked":
+                if self._mcp_startup_state == "masked" or self.thread_unload_delay_seconds is not None:
                     config = self._request_for_generation(
                         generation, "config/read", {"includeLayers": False},
                         timeout_seconds=self.initialize_timeout_seconds,
                         require_ready=False,
                     )
-                    if not isinstance(config, Mapping) or not mcp_config_is_disabled(config.get("config")):
+                    effective = config.get("config") if isinstance(config, Mapping) else None
+                    if not isinstance(effective, Mapping):
+                        raise AppServerUnavailableError()
+                    if self._mcp_startup_state == "masked" and not mcp_config_is_disabled(effective):
+                        raise AppServerUnavailableError()
+                    if self.thread_unload_delay_seconds is not None and (
+                        type(effective.get("thread_unload_delay_secs")) is not int
+                        or effective["thread_unload_delay_secs"] != self.thread_unload_delay_seconds
+                    ):
                         raise AppServerUnavailableError()
                 with self._state_lock:
                     if (
@@ -1043,6 +1058,8 @@ class CodexAppServerClient:
             # servers. Disable each saved entry, then verify the effective
             # config before exposing this generation to any application call.
             command.extend(self._mcp_bootstrap_overrides())
+        if self.thread_unload_delay_seconds is not None:
+            command.extend(("-c", f"thread_unload_delay_secs={self.thread_unload_delay_seconds}"))
         command.extend(("app-server", "--stdio"))
         kwargs: dict[str, Any] = {
             "stdin": subprocess.PIPE,

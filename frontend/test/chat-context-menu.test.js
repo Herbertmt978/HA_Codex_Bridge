@@ -77,6 +77,25 @@ describe("shared chat context actions", () => {
     expect(panel._callWS).not.toHaveBeenCalled();
   });
 
+  it("preserves HA conversation routing while retaining ordinary metadata actions", async () => {
+    const { panel, menu, show } = setup();
+    panel._threads[1].assist_origin = true;
+    await show();
+    const routes = [...menu.menu.querySelectorAll('[data-chat-action="submenu"]')]
+      .filter((item) => ["project", "fork"].includes(item._chatValue));
+    expect(routes).toHaveLength(2);
+    for (const item of routes) {
+      expect(item.disabled).toBe(true);
+      expect(item.title).toContain("Home Assistant manages");
+    }
+    panel._callWS.mockClear();
+    await menu.perform("fork");
+    await menu.perform("move", "other");
+    expect(panel._callWS).not.toHaveBeenCalled();
+    await menu.perform("pin");
+    expect(panel._callWS).toHaveBeenCalledWith("update_thread", expect.objectContaining({ pinned: true }));
+  });
+
   it.each([["pin", { pinned: true }], ["unread", { unread: true }], ["section", { section_id: "work" }]])("sends only the chosen revision-bound %s metadata", async (action, update) => {
     const { panel, menu, show } = setup(); await show(); await menu.perform(action, "work");
     expect(panel._callWS).toHaveBeenCalledWith("update_thread", { thread_id: "two", navigation_revision: 1, ...update });

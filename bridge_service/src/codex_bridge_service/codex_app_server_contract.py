@@ -50,6 +50,7 @@ _CLIENT_RESPONSE_TYPES = {
     "modelProvider/capabilities/read": "ModelProviderCapabilitiesReadResponse",
     "thread/start": "ThreadStartResponse",
     "thread/resume": "ThreadResumeResponse",
+    "thread/unsubscribe": "ThreadUnsubscribeResponse",
     "thread/fork": "ThreadForkResponse",
     "thread/read": "ThreadReadResponse",
     "thread/list": "ThreadListResponse",

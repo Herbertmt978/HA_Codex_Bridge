@@ -4,7 +4,7 @@ import { selection } from "./selection.js";
 import { modelChoices, reasoningChoices } from "./model-choices.js";
 import { DEFAULT_PREFERENCES } from "./panel-preferences.js";
 import { HOST_MODE, HOST_LABEL } from "./host-access.js";
-import { HA_MCP_GUIDE, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm, renderMcpToolPermissions, renderStdioPackages } from "./mcp-setup.js";
+import { HA_MCP_GUIDE, renderHaMcpShortcut, renderMcpSetup, renderMcpCredentialForm, renderMcpConnectionForm, renderMcpToolPermissions, renderStdioPackages } from "./mcp-setup.js";
 export { buildAutomationPayload, buildAutomationUpdatePayload } from "./scheduled-tasks.js";
 
 const DESTINATIONS = Object.freeze([
@@ -441,9 +441,10 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
-    recommendation.append(text(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App, then follow the connection guide."));
+    recommendation.append(text(documentRef, "h3", "Community HA-MCP and custom servers", "desktop-subheading"), text(documentRef, "p", "Community HA-MCP is a separate optional server with its own tools and permissions, which may include configuration access beyond Assist’s exposed entities. You can also connect another compatible server. Review its access before choosing tools; root host access is separate."));
     const guide = text(documentRef, "a", "HA-MCP installation and Bridge connection guide");
     guide.href = HA_MCP_GUIDE;
     guide.target = "_blank"; guide.rel = "noopener noreferrer"; guide.style.color = "inherit";
@@ -468,14 +469,20 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       const controls = text(documentRef, "div", "", "mcp-connection-actions");
       td.append(controls);
       const id = row.name || ""; const oauth = row.auth === "oauth_required" || row.auth === "oauth";
+      const managedHome = id === state.data.ha_mcp_shortcut?.server_name;
       if (management) {
         const paused = row.enabled === false;
         controls.append(button(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
         const edit = button(documentRef, "Edit connection", "edit-mcp-connection", { id });
         edit.disabled = !paused; edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
-        controls.append(edit, text(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (!managedHome) controls.append(edit);
+        controls.append(text(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
         if (toolPermissions) controls.append(button(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
         if (row.failure) controls.append(text(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
+      }
+      if (managedHome) {
+        controls.append(text(documentRef, "span", "Managed Home Assistant authorisation · revoke using the shortcut above", "desktop-action-note"));
+        return;
       }
       controls.append(button(documentRef, "Remove server", "remove-mcp", { id }));
       if (credentials && ["bearer", "headers"].includes(row.auth)) {
@@ -557,7 +564,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
 const renderedFeatureInputs = new WeakMap();
 
 function featureDraftInputs(state) {
-  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged });
 }
 
 export function syncDesktopFeatureDrafts(container, state) {
@@ -573,6 +580,12 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
   container.onchange = (event) => {
+    if (event.target?.matches?.("[data-ha-mcp-acknowledged]")) {
+      state.haMcpAcknowledged = event.target.checked;
+      const connect = container.querySelector('[data-desktop-action="ha-mcp-connect"]');
+      if (connect) connect.disabled = !event.target.checked || Boolean(state.haMcpBusy);
+      syncDesktopFeatureDrafts(container, state);
+    }
     if (event.target?.matches?.("[data-mcp-tool]")) {
       state.mcpToolDraft = [...container.querySelectorAll("[data-mcp-tool]:checked")].map((input) => input.dataset.mcpTool);
     }
@@ -588,7 +601,7 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   // Input handlers sync the draft snapshot because those edits are already in
   // the DOM. Programmatic draft resets must still invalidate the rendered view.
   const inputs = JSON.stringify({
-    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, mcpToolInventory: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
+    destination, state: { ...state, formDraft: undefined, agentsDrafts: undefined, haMcpAcknowledged: undefined, mcpToolInventory: undefined, hostAccessGrant: undefined, hostUnattendedApproved: undefined, previewGeneration: undefined, createRequestId: undefined, nextRuns: undefined }, timezone, hasActiveProject, activeProjectId,
     mcpInventoryRevision: state.mcpToolInventory?.catalogue_revision,
     nativeTools: destination === "settings" ? getNativeToolsViewModel(status, config) : null,
     settingsModels: destination === "settings" ? settings.models : null,

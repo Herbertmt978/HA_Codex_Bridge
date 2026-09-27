@@ -19,6 +19,7 @@ import {
 } from "./pdf-preview.js";
 import { getRunActivityViewModel, getSafeRunFailureMessage } from "./run-activity.js";
 import { projectConversationTurns, projectTranscriptMessages, readConversationBookmarks, saveConversationBookmarks } from "./conversation-timeline.js";
+import { activePlanText, projectCompletedPlanMessages } from "./plan-content.js";
 import { InlineImageController, inlineImageCss, isInlineImage } from "./inline-images.js";
 import {
   PDF_MIME_TYPE,
@@ -38,12 +39,12 @@ import { getOnboardingViewModel, renderOnboarding } from "./views/onboarding.js"
 import { getRuntimeStripViewModel, renderRuntimeStrip } from "./views/runtime-strip.js";
 import { collectUserInputAnswers, getUserInputViewModel, renderUserInput } from "./views/user-input.js";
 import { DESTINATIONS, buildAutomationPayload, buildAutomationUpdatePayload, createDesktopFeatureState, normalizeDesktopError, normalizeDesktopList, normalizeMarketplacesResponse, normalizePluginsResponse, normalizeSkillsResponse, renderDesktopFeatureSurface, syncDesktopFeatureDrafts } from "./desktop-features.js";
-import { readMcpCredential, clearMcpSecrets, validStdioPackage } from "./mcp-setup.js";
+import { readMcpCredential, clearMcpSecrets, validStdioPackage, supportsHaMcpShortcut, normalizeHaMcpShortcut } from "./mcp-setup.js";
 import { proposeAutomationEditDescription, proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 
-const PANEL_VERSION = "1.10.1";
+const PANEL_VERSION = "1.11.0";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -109,6 +110,8 @@ const GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 const ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
 const ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
 const ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000]);
+const QUESTION_LINK_INTERACTION_ID = /^[A-Za-z0-9_.:-]{1,128}$/u;
+const QUESTION_LINK_THREAD_ID = /^[A-Za-z0-9_.:-]{1,200}$/u;
 
 function isGeneratedImageArtifact(artifact) {
   return artifact?.source === "generated_image";
@@ -3327,7 +3330,7 @@ template.innerHTML = `
       line-height: 1.45;
       overflow-wrap: anywhere;
     }
-    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 60%, var(--text-color) 40%); }
     .desktop-notice[role="alert"] {
       display: flex;
       align-items: center;
@@ -5744,9 +5747,9 @@ template.innerHTML = `
       <div class="section-scroll">
         <div class="rail-sections">
           <section class="rail-section" id="direct-section"></section>
-          <section class="rail-section" id="assistant-section"></section>
           <section class="rail-section flat" id="project-section"></section>
           <section class="rail-section" id="archived-section"></section>
+          <section class="rail-section" id="assistant-section"></section>
           <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
         </div>
       </div>
@@ -6028,6 +6031,7 @@ class CodexBridgePanel extends HTMLElement {
     this._selectedProjectId = null;
     this._selectedThreadId = null;
     this._sharedThreadChecked = false;
+    this._questionDeepLink = null;
     this._contextVisible = true;
     this._bottomPanelOpen = false;
     this._activityView = false;
@@ -6165,6 +6169,7 @@ class CodexBridgePanel extends HTMLElement {
     this._interactionAnswers = new Map();
     this._announcedInteractionIds = new Set();
     this._interactionExpiryTimer = null;
+    this._suppressInteractionFocusScroll = false;
     this._promptMutations = new Map();
     this._cancellingThreads = new Set();
     this._promptMutation = null;
@@ -6174,7 +6179,7 @@ class CodexBridgePanel extends HTMLElement {
     this._expandedProjectActions = {};
     this._collapsedSections = {
       direct: false,
-      assistant: false,
+      assistant: true,
       assistantArchived: true,
       archived: true,
     };
@@ -7344,7 +7349,9 @@ class CodexBridgePanel extends HTMLElement {
     const target = event.target;
     const timelineItem = target instanceof HTMLElement && target.matches(".timeline-item");
     if (!timelineItem) this._showTooltipForTarget(target);
-    this._scrollInteractionTargetIntoView(target);
+    if (!this._suppressInteractionFocusScroll) {
+      this._scrollInteractionTargetIntoView(target);
+    }
     if (timelineItem) {
       window.clearTimeout(this._timelineCloseTimer);
       this._timelinePreviewSequence = target.dataset.sequence;
@@ -7816,6 +7823,16 @@ class CodexBridgePanel extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (supportsHaMcpShortcut(capabilities) && !state.haMcpBusy) {
+          const shortcut = await this._readHaMcpShortcut();
+          if (!isCurrentSettingsRequest()) return;
+          state.data.ha_mcp_shortcut = shortcut.status;
+          state.haMcpError = shortcut.error;
+        } else if (!supportsHaMcpShortcut(capabilities)) {
+          delete state.data.ha_mcp_shortcut;
+          state.haMcpAcknowledged = false;
+          state.haMcpError = "";
+        }
         if (capabilities.includes("mcp_stdio_v1")) {
           try {
             state.data.stdio_packages = normalizeDesktopList(await this._callWS("list_stdio_packages"));
@@ -8006,6 +8023,10 @@ class CodexBridgePanel extends HTMLElement {
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
+    if (["ha-mcp-connect", "ha-mcp-refresh", "ha-mcp-disconnect"].includes(action)) {
+      if (destination !== "settings") return;
+      return this._haMcpShortcutMutation(action.slice(7), state);
+    }
     if (["save-agents", "delete-agents"].includes(action)) {
       const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
       const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
@@ -8384,6 +8405,53 @@ class CodexBridgePanel extends HTMLElement {
     catch (error) { state.error = normalizeDesktopError(error); }
     finally { state.loading = false; }
     return mutationSucceeded;
+  }
+
+  async _readHaMcpShortcut() {
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(30000),
+      });
+      const status = response.ok ? normalizeHaMcpShortcut(await response.json()) : null;
+      return { status, error: status ? "" : "unknown" };
+    } catch { return { status: null, error: "unknown" }; }
+  }
+
+  async _haMcpShortcutMutation(operation, state) {
+    if (!supportsHaMcpShortcut(this._config?.capabilities) || state.loading || state.haMcpBusy) return false;
+    if (!["connect", "disconnect", "refresh"].includes(operation)) return false;
+    if (operation === "connect" && this.shadowRoot.querySelector("[data-ha-mcp-acknowledged]")?.checked !== true) return false;
+    state.haMcpBusy = true; state.haMcpError = ""; state.haMcpAcknowledged = false; state.notice = "";
+    this._renderDesktopSurface();
+    const payload = operation === "connect" ? { operation, acknowledged: true } : { operation };
+    try {
+      // This mutation is sent once. An uncertain result requires a status read.
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(250000),
+      });
+      const result = await response.json().catch(() => null);
+      const status = response.ok ? normalizeHaMcpShortcut(result) : null;
+      if (!status) {
+        state.haMcpError = ["unavailable", "retry", "reauthorise", "cleanup_pending", "invalid_journal"].includes(result?.code) ? result.code : "unknown";
+        return false;
+      }
+      state.data.ha_mcp_shortcut = status;
+      state.notice = operation === "disconnect" ? "Home authorisation revoked. Unrelated MCP servers and their permissions are unchanged."
+        : operation === "connect" ? "Home Assistant connected with no tools allowed. Choose the permitted tools before use."
+        : "Existing Home Assistant authorisation refreshed. Its paused state and allowed tools are preserved.";
+      if (status.state === "cleanup_pending") state.notice = "Home authorisation revoked. Server cleanup is pending; retry when Codex is idle.";
+      else if (["retry", "reauthorise", "unavailable"].includes(status.state)) { state.notice = ""; state.haMcpError = status.state; }
+      state.haMcpBusy = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.haMcpError = "unknown";
+      return false;
+    } finally {
+      state.haMcpBusy = false;
+      this._renderDesktopSurface();
+    }
   }
 
   async _mcpCredentialMutation(payload, state, form) {
@@ -9017,9 +9085,38 @@ class CodexBridgePanel extends HTMLElement {
 
   _renderInteractions() {
     const region = this.shadowRoot.getElementById("interaction-region");
+    const questionLink = this._questionDeepLink;
+    const previousFocus = this.shadowRoot.activeElement;
+    const restoreQuestionFocus = Boolean(
+      questionLink?.focused
+      && questionLink.threadId === this._selectedThreadId
+      && previousFocus?.closest?.("[data-interaction-id]")?.dataset.interactionId === questionLink.interactionId
+    );
     region.replaceChildren();
     if (!this._selectedThreadId || !this._isSupervisorConnection()) {
       return;
+    }
+
+    const questionLinkApplies = questionLink && questionLink.threadId === this._selectedThreadId;
+    const linkedInteraction = questionLinkApplies && questionLink.interactionId
+      ? this._pendingInteractions.find((interaction) => (
+        interaction.thread_id === questionLink.threadId
+        && interaction.interaction_id === questionLink.interactionId
+        && interaction.kind === "user_input"
+        && interaction.status === "pending"
+      ))
+      : null;
+    let questionLinkStatus = questionLinkApplies && questionLink.invalid
+      ? "This question link is invalid. The chat is open."
+      : null;
+    if (!linkedInteraction && questionLinkApplies && questionLink.ready && !questionLink.invalid) {
+      questionLinkStatus = "This question is no longer available. The chat is open.";
+    }
+    if (questionLinkStatus) {
+      const status = this._textElement("p", "question-link-status", questionLinkStatus);
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      region.append(status);
     }
 
     const visibleInteractions = this._pendingInteractions.filter(
@@ -9123,7 +9220,29 @@ class CodexBridgePanel extends HTMLElement {
       }
     }
     this._scheduleInteractionExpiryRefresh();
-    if (newCards.length) {
+    let focusedQuestionLink = false;
+    let restoredQuestionFocus = false;
+    if (linkedInteraction && (!questionLink.focused || restoreQuestionFocus)) {
+      const linkedCard = [...region.querySelectorAll("[data-interaction-id]")]
+        .find((card) => card.dataset.interactionId === questionLink.interactionId)
+        ?.querySelector("[role='alertdialog']");
+      if (linkedCard) {
+        if (questionLink.focused) {
+          restoredQuestionFocus = true;
+          this._suppressInteractionFocusScroll = true;
+          try {
+            linkedCard.focus({ preventScroll: true });
+          } finally {
+            this._suppressInteractionFocusScroll = false;
+          }
+        } else {
+          questionLink.focused = true;
+          focusedQuestionLink = true;
+          linkedCard.focus();
+        }
+      }
+    }
+    if (newCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
       const active = this.shadowRoot.activeElement;
       if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
         newCards[0].querySelector("[role='alertdialog']")?.focus();
@@ -9448,7 +9567,8 @@ class CodexBridgePanel extends HTMLElement {
       !kind ||
       !Number.isSafeInteger(value.event_id) ||
       value.event_id < 0 ||
-      value.status !== "pending" ||
+      // The pending-list route omits unset defaults, including pending status.
+      (Object.hasOwn(value, "status") && value.status !== "pending") ||
       !expiresAt ||
       !value.display ||
       typeof value.display !== "object" ||
@@ -9975,42 +10095,44 @@ class CodexBridgePanel extends HTMLElement {
     list.id = "assistant-chat-list";
     list.className = "chat-list direct-chat-list";
     list.hidden = collapsed;
-    const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
-    const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
-    for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
-    for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
+    if (!collapsed) {
+      const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
+      const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
+      for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
+      for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
 
-    const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
-    if (archived.length) {
-      const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
-      const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
-      archiveToggle.dataset.section = "assistantArchived";
-      archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
-      archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
-      const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
-      archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
-      archiveToggle.append(archiveTitle);
-      list.append(archiveToggle);
-      const archiveList = document.createElement("div");
-      archiveList.id = "assistant-archived-chat-list";
-      archiveList.className = "chat-list";
-      archiveList.hidden = archiveCollapsed;
-      const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
-      const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
-      for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
-      const restoredProjectActions = new Set();
-      for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
-        archiveList.append(this._threadRow(thread, { archived: true }));
-        const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
-        if (project && !restoredProjectActions.has(project.project_id)) {
-          restoredProjectActions.add(project.project_id);
-          const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
-          restore.dataset.projectId = String(project.project_id);
-          this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
-          archiveList.append(restore);
+      const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
+      if (archived.length) {
+        const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
+        const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
+        archiveToggle.dataset.section = "assistantArchived";
+        archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
+        archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
+        const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
+        archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
+        archiveToggle.append(archiveTitle);
+        list.append(archiveToggle);
+        const archiveList = document.createElement("div");
+        archiveList.id = "assistant-archived-chat-list";
+        archiveList.className = "chat-list";
+        archiveList.hidden = archiveCollapsed;
+        const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
+        const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
+        for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
+        const restoredProjectActions = new Set();
+        for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
+          archiveList.append(this._threadRow(thread, { archived: true }));
+          const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
+          if (project && !restoredProjectActions.has(project.project_id)) {
+            restoredProjectActions.add(project.project_id);
+            const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
+            restore.dataset.projectId = String(project.project_id);
+            this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
+            archiveList.append(restore);
+          }
         }
+        list.append(archiveList);
       }
-      list.append(archiveList);
     }
     section.append(list);
   }
@@ -10958,7 +11080,10 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
 
-    const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
+    const threadChanged = this._renderedThreadId !== this._selectedThreadId;
+    const shouldRebuild = this._forceMessageRebuild || threadChanged;
+    const previousScrollTop = scrollContainer.scrollTop;
+    const shouldStick = threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80;
     if (shouldRebuild) {
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
@@ -10966,9 +11091,7 @@ class CodexBridgePanel extends HTMLElement {
       messageList.replaceChildren();
     }
 
-    const shouldStick =
-      shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
-    const transcriptEvents = projectTranscriptMessages(this._events);
+    const transcriptEvents = projectTranscriptMessages(projectCompletedPlanMessages(this._events));
     const eventsToRender =
       this._renderedSequence === 0
         ? transcriptEvents
@@ -11000,6 +11123,8 @@ class CodexBridgePanel extends HTMLElement {
 
     if (shouldStick) {
       this._scrollMessagesToBottom();
+    } else if (shouldRebuild) {
+      scrollContainer.scrollTop = previousScrollTop;
     }
   }
 
@@ -11015,12 +11140,12 @@ class CodexBridgePanel extends HTMLElement {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const relevant = new Set(["message.created", "message.completed", "message.updated", "message.removed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const relevant = new Set(["message.created", "message.completed", "message.updated", "message.removed", "item.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
     const sameThread = this._timelineProjectedThread === this._selectedThreadId;
     const unchangedPrefix = this._timelineEvents === this._events || (this._timelineEventCount > 0
       && this._events[this._timelineEventCount - 1] === this._timelineLastEvent);
     const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
-    const turns = changed ? (this._selectedThreadId ? projectConversationTurns(this._events) : []) : this._conversationTurns;
+    const turns = changed ? (this._selectedThreadId ? projectConversationTurns(projectCompletedPlanMessages(this._events)) : []) : this._conversationTurns;
     this._timelineEvents = this._events;
     this._timelineProjectedThread = this._selectedThreadId;
     this._timelineEventCount = this._events.length;
@@ -11265,8 +11390,9 @@ class CodexBridgePanel extends HTMLElement {
 
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
-    const text = this._streamingAssistantText(activity);
-    const isStreaming = activity.assistantState === "streaming";
+    const plan = this._streamingPlanText(activity);
+    const text = this._streamingAssistantText(activity, plan);
+    const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if ((!isStreaming && !isPartial) || !text) {
       existing?.remove();
@@ -11277,7 +11403,7 @@ class CodexBridgePanel extends HTMLElement {
       "assistant",
       text,
       isPartial ? "partial" : "streaming",
-      isPartial ? "Partial response" : ""
+      isPartial ? "Partial response" : plan && text === plan ? "Plan" : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
@@ -11292,8 +11418,8 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
-  _streamingAssistantText(activity) {
-    if (!["streaming", "partial"].includes(activity.assistantState)) return "";
+  _streamingAssistantText(activity, plan = this._streamingPlanText(activity)) {
+    if (!["streaming", "partial"].includes(activity.assistantState)) return plan;
     let text = "";
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
@@ -11311,7 +11437,14 @@ class CodexBridgePanel extends HTMLElement {
       text = chunk.startsWith(text) && chunk.length > text.length ? chunk : `${text}${chunk}`;
       if (text.length > 200000) text = text.slice(-200000);
     }
-    return text;
+    return text || plan;
+  }
+
+  _streamingPlanText(activity) {
+    if (!activity.busy || !activity.runId) return "";
+    const item = this._events.findLast((event) => event.event_type === "item.started"
+      && event.payload?.item_type === "plan" && event.payload?.run_id === activity.runId);
+    return item ? activePlanText(this._events, activity.runId, item.payload.item_id) : "";
   }
 
   _scrollMessagesToBottom() {
@@ -11337,7 +11470,7 @@ class CodexBridgePanel extends HTMLElement {
     }
     if (event.event_type === "message.completed") {
       if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
-      return this._renderMessage("assistant", payload.text, event.sequence);
+      return this._renderMessage("assistant", payload.text, event.sequence, payload.plan === true ? "Plan" : "");
     }
     if (
       event.event_type === "item.completed"
@@ -11346,7 +11479,7 @@ class CodexBridgePanel extends HTMLElement {
     ) {
       return this._renderGeneratedImageFailure(event);
     }
-    if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
+    if (["message.delta", "plan.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
       return null;
     }
     if (event.event_type === "run.started" || event.event_type === "run.completed") {
@@ -12887,13 +13020,30 @@ class CodexBridgePanel extends HTMLElement {
       : listedThreads;
     if (!this._sharedThreadChecked) {
       this._sharedThreadChecked = true;
-      const sharedId = new URL(window.location.href).searchParams.get("thread");
+      const parameters = new URL(window.location.href).searchParams;
+      const sharedId = parameters.get("thread");
+      if (parameters.has("interaction")) {
+        const interactionId = parameters.get("interaction");
+        const validThreadId = typeof sharedId === "string" && QUESTION_LINK_THREAD_ID.test(sharedId);
+        const validInteractionId = typeof interactionId === "string" && QUESTION_LINK_INTERACTION_ID.test(interactionId);
+        this._questionDeepLink = {
+          threadId: validThreadId ? sharedId : null,
+          interactionId: validInteractionId ? interactionId : null,
+          invalid: !validThreadId || !validInteractionId,
+          ready: false,
+          focused: false,
+        };
+      }
       const shared = this._threads.find((thread) => thread.thread_id === sharedId);
       if (shared) {
         this._setSelectedThreadId(shared.thread_id);
         this._selectedProjectId = shared.project_id;
-      } else if (sharedId) {
+      } else if (sharedId && !this._questionDeepLink) {
         throw new Error("This shared chat is no longer available on this Home Assistant.");
+      } else if (this._questionDeepLink && sharedId) {
+        this._questionDeepLink.threadId = null;
+        this._questionDeepLink.invalid = this._questionDeepLink.invalid
+          || !QUESTION_LINK_THREAD_ID.test(sharedId);
       }
     }
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
@@ -12902,6 +13052,9 @@ class CodexBridgePanel extends HTMLElement {
     if (!this._selectedThreadId) {
       const firstActive = this._threads.find((thread) => this._threadIsPrimaryActive(thread));
       this._setSelectedThreadId(firstActive?.thread_id || null);
+    }
+    if (this._questionDeepLink && !this._questionDeepLink.threadId) {
+      this._questionDeepLink.threadId = this._selectedThreadId;
     }
     if (!this._selectedProjectId && this._threads.length) {
       this._selectedProjectId = this._threads[0].project_id;
@@ -12998,6 +13151,9 @@ class CodexBridgePanel extends HTMLElement {
         this._clearArtifactRefreshRetry();
       }
       this._replacePendingInteractions(interactions);
+      if (this._questionDeepLink?.threadId === threadId) {
+        this._questionDeepLink.ready = true;
+      }
       this._mergeStatus(status);
       this._threadRefreshGraceUntil = 0;
       this._forceMessageRebuild = true;
@@ -14984,6 +15140,9 @@ class CodexBridgePanel extends HTMLElement {
         this._events = batch.state.events;
         this._sequence = batch.state.cursor;
         hasInteractionEvents = batch.accepted.some((event) => INTERACTION_EVENT_TYPES.has(event.event_type));
+        if (batch.accepted.some((event) => ["message.updated", "message.removed"].includes(event.event_type))) {
+          this._forceMessageRebuild = true;
+        }
         this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();

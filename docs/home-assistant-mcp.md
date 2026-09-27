@@ -48,6 +48,19 @@ runtime discovery; unavailable status has a separate refresh message.
 
 ## Choose a Home Assistant MCP server
 
+Home Assistant's own **MCP Server** integration can be connected from Bridge
+settings without copying a URL or token. Enable the App's MCP and local MCP
+options, install that HA integration, then explicitly authorise the native
+connection in **Settings → MCP servers**. It starts with no tools allowed.
+Choose the permitted tools before use. The connection is selected for Assist;
+review the agent's settings separately. See [Assist home control](home-assistant-assist.md#home-control)
+for authority, renewal and revocation behaviour.
+
+This shortcut does not install an integration or replace the custom-server
+form. The community HA-MCP option below and other compatible servers remain
+available, including servers with broader permissions than HA's native Assist
+API. Keep those permission boundaries explicit when selecting tools for voice.
+
 For managing Home Assistant from Codex, we recommend considering
 [HA-MCP](https://github.com/homeassistant-ai/ha-mcp). This community project
 provides tools for finding entities, checking states, controlling devices and

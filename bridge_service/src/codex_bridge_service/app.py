@@ -252,6 +252,10 @@ def create_app(
                 # One bounded callback worker preserves app-server FIFO order.
                 callback_workers=1,
                 enable_mcp=enable_mcp,
+                # Assist explicitly detaches idle provider sessions so a new
+                # turn cannot inherit old MCP permissions. Ordinary subscribed
+                # chats are unaffected by this native unload delay.
+                thread_unload_delay_seconds=0,
                 # Negotiate namespace support, but register privileged tools
                 # only for a run with a current explicit host grant. This flag
                 # alone changes no sandbox or App privileges.
@@ -324,13 +328,22 @@ def create_app(
                     return
             runner_start = getattr(resolved_runner, "start", None)
             if callable(runner_start):
-                await asyncio.to_thread(runner_start)
+                if isinstance(resolved_runner, RuntimeBroker):
+                    await asyncio.to_thread(
+                        runner_start, defer_recovered_queued_runs=True
+                    )
+                else:
+                    await asyncio.to_thread(runner_start)
             # Recover and settle any private runtime checkpoint before the
             # authoritative account binding runs. A changed account can then
             # detach a provider thread restored by crash recovery before the
             # application becomes request-ready.
             if resolved_auth_coordinator is not None:
                 await asyncio.to_thread(resolved_auth_coordinator.start)
+            if isinstance(resolved_runner, RuntimeBroker):
+                await asyncio.to_thread(
+                    resolved_runner.resume_recovered_queued_runs
+                )
             if resolved_discord is not None:
                 await resolved_discord.start()
             account_details = getattr(_app.state, "account_profile_details", None)
@@ -841,6 +854,7 @@ def create_app(
             feature_capabilities.append("mcp_tool_permissions_v1")
             if resolved_local_mcp is not None:
                 feature_capabilities.append("mcp_credentials_v1")
+                feature_capabilities.append("mcp_credential_binding_v1")
                 if resolved_local_mcp.local_enabled:
                     feature_capabilities.append("mcp_local_v1")
             if resolved_stdio_mcp is not None:
@@ -916,6 +930,11 @@ def create_app(
             and getattr(auth_status, "auth_required", True) is False
         )
 
+    def provider_account_owner_marker() -> str | None:
+        """Return the private account binding used to fence queued recovery."""
+
+        return storage.codex_account_owner_marker()
+
     resolved_runner = (
         runner_factory(storage)
         if runner_factory is not None
@@ -932,6 +951,7 @@ def create_app(
             browser_dynamic_tools_enabled=browser_dynamic_tools_enabled,
             host_access=resolved_host_access,
             provider_admission_check=provider_account_admission_ready,
+            provider_account_owner_marker=provider_account_owner_marker,
             auth_failure_listener=getattr(
                 resolved_auth_coordinator, "report_auth_failure", None
             ),
@@ -970,6 +990,13 @@ def create_app(
             "plan_mode_v1",
         )
         app.state.feature_capabilities = tuple(negotiated_capabilities)
+    if (
+        isinstance(resolved_runner, RuntimeBroker)
+        and resolved_mcp_manager is not None
+        and resolved_mcp_manager.elicitation_handler_registered
+        and resolved_runner.supports_assist_mcp_selection
+    ):
+        app.state.feature_capabilities += ("assist_mcp_selection_v1",)
     if resolved_runtime_profile is RuntimeProfile.HOME_ASSISTANT:
         resolved_discord = DiscordChannelManager(app, Path(root_path))
         app.state.discord_channel = resolved_discord

@@ -50,8 +50,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "Codex task settings",
-        "description": "Choose task permissions and optionally expose a dedicated project to Assist. Assist runs in observe mode without web search or host access. People using voice have no verified HA identity; enable that separately only when everyone with access to Assist may hear answers from this project. Assist is unavailable while MCP is enabled in the App.",
+        "title": "Codex Bridge settings",
+        "description": "Choose task permissions and optionally expose a dedicated project to Assist. Assist reads that workspace and uses only its selected MCP servers, without web search or host access. Selected servers may control devices or services; configure their permissions in Codex Bridge MCP settings. Voice has no verified HA identity and needs separate consent. Question notices are off by default. Choose registered administrator devices for replies; generic notices keep question text private unless previews are enabled. Complex questions open the chat. Notification replies never approve execution or access.",
         "data": {
           "web_search_mode": "Web search",
           "allow_unattended_task_actions": "Allow unattended task actions from automations",
@@ -60,14 +60,21 @@
           "assist_allow_voice_without_user": "Allow voice requests without a signed-in HA user",
           "assist_model": "Assist model",
           "assist_reasoning": "Assist reasoning level",
-          "assist_instructions": "Assist instructions (plain text, up to 4,096 characters)"
+          "assist_instructions": "Assist instructions (plain text, up to 4,096 characters)",
+          "assist_mcp_servers": "MCP servers available to Assist",
+          "question_notifications_enabled": "Notify when Codex asks a question",
+          "question_notifications_persistent": "Show questions in Home Assistant notifications",
+          "question_notifications_preview": "Show question text and choice labels on selected devices",
+          "question_notifications_targets": "Companion devices for question replies"
         }
       }
     },
     "error": {
       "assist_project_required": "Choose an active project before enabling Assist. Create a dedicated project in Codex Bridge if none is listed.",
       "assist_model_unavailable": "This model and reasoning combination is not advertised by the signed-in Codex account. Choose a supported combination or use the project defaults. Saved unavailable choices are not replaced automatically.",
-      "assist_instructions_invalid": "Use plain-text Assist instructions of up to 4,096 characters. Templates are not evaluated."
+      "assist_instructions_invalid": "Use plain-text Assist instructions of up to 4,096 characters. Templates are not evaluated.",
+      "assist_mcp_unavailable": "Selected Assist MCP servers must be configured and enabled. Review paused or unavailable servers in Codex Bridge MCP settings.",
+      "question_notifications_invalid": "Choose up to eight currently registered administrator Companion devices and at least one notification destination. Remove unavailable devices before enabling question notices."
     },
     "abort": {
       "supervisor_only": "Native web search settings are available only for the Home Assistant App connection.",

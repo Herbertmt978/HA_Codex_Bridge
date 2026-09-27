@@ -1,5 +1,5 @@
 import { createReadStream } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
@@ -83,6 +83,118 @@ test.afterAll(async () => {
     server.close((error) => (error ? reject(error) : resolveClose()));
   });
 });
+
+for (const width of [390, 1280]) for (const theme of ["light", "dark"]) {
+  test(`installed HA MCP shortcut requires consent and starts deny-all at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.addInitScript(() => { window.shortcutNativeFetch = window.fetch.bind(window); });
+    const serverName = "ha-assist-123456789abc";
+    let shortcutStatus = { state: "not_connected", code: "not_connected", available: false,
+      configured: false, server_name: null, requires_tool_selection: true };
+    const requests = [];
+    let releaseConnect;
+    const connectGate = new Promise((resolveConnect) => { releaseConnect = resolveConnect; });
+    await page.route("**/api/codex_bridge/mcp/home_assistant", async (route) => {
+      const request = route.request();
+      const payload = request.method() === "POST" ? request.postDataJSON() : null;
+      requests.push({ method: request.method(), payload, authenticated: request.headers().authorization === "Bearer synthetic-shortcut-ha-token" });
+      if (payload) {
+        await connectGate;
+        shortcutStatus = { state: "configured", code: "configured", available: false,
+          configured: true, server_name: serverName, requires_tool_selection: true };
+        await page.evaluate((name) => { window.shortcutServer = { name, enabled: true, enabled_tools: [], tool_policy: "selected", auth: "bearer", startup: "ready", tool_count: 0, revision: "a".repeat(64) }; }, serverName);
+      }
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(shortcutStatus) });
+    });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate((value) => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._preferences = { ...panel._preferences, theme: value };
+      panel._applyPreferences();
+      panel._config.capabilities = ["assist_mcp_selection_v1", "mcp_credential_binding_v1", "mcp_local_v1", "mcp_credentials_v1", "mcp_admin_v1", "mcp_tool_permissions_v1", "mcp_management_v1"];
+      window.shortcutServer = null;
+      window.shortcutAuthRequests = [];
+      window.shortcutToolRequests = [];
+      panel._hass = { ...panel._hass, fetchWithAuth: async (url, init) => {
+        window.shortcutAuthRequests.push({ method: init.method || "GET", path: url, mode: init.mode, redirect: init.redirect });
+        return window.shortcutNativeFetch(url, { ...init, headers: { ...init.headers, authorization: "Bearer synthetic-shortcut-ha-token" } });
+      } };
+      const originalWs = panel._callWS.bind(panel);
+      panel._callWS = (method, args) => {
+        if (method === "list_mcp") return Promise.resolve({ items: window.shortcutServer ? [{ ...window.shortcutServer }] : [] });
+        if (method === "list_mcp_tools") {
+          window.shortcutToolRequests.push(args);
+          return Promise.resolve({ server: args.name, endpoint: "Home Assistant Assist", mode: "selected", enabled_tools: [], catalogue_available: true,
+            revision: "a".repeat(64), catalogue_revision: "b".repeat(64), stale_tools: [], tools: [{ name: "read_state", description: "Read an exposed entity", read_only: true }] });
+        }
+        return originalWs(method, args);
+      };
+      panel._selectDesktopDestination("settings");
+    }, theme);
+    const panel = page.locator("codex-bridge-panel");
+    await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
+    const card = panel.locator(".mcp-ha-shortcut");
+    const consent = card.getByRole("checkbox");
+    const connect = card.getByRole("button", { name: "Connect Home Assistant", exact: true });
+    await expect(consent).not.toBeChecked();
+    await expect(connect).toBeDisabled();
+    expect(requests.map(({ method }) => method)).toEqual(["GET"]);
+    expect(requests.every(({ authenticated }) => authenticated)).toBe(true);
+    expect(await page.evaluate(() => window.shortcutServer)).toBeNull();
+    await expect(card).toContainText("normal activity expiry");
+    await expect(card).toContainText("renews short-lived access tokens hourly");
+    await consent.check();
+    await consent.focus();
+    await consent.evaluate((node) => { window.shortcutConsentNode = node; });
+    await panel.evaluate((element) => { element.hass = { ...element.hass, states: { ...element.hass.states } }; element._render(true); });
+    await expect(consent).toBeChecked();
+    await expect(consent).toBeFocused();
+    expect(await consent.evaluate((node) => node === window.shortcutConsentNode)).toBe(true);
+    const offBounds = await card.boundingBox();
+    expect(offBounds.x).toBeGreaterThanOrEqual(0);
+    expect(offBounds.x + offBounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await panel.screenshot({ path: testInfo.outputPath("home-assistant-mcp-consent.png") });
+    await connect.click();
+    await expect.poll(() => requests.filter(({ method }) => method === "POST").length).toBe(1);
+    await expect(connect).toBeDisabled();
+    await expect(consent).not.toBeChecked();
+    // Stress the delegated action after a first click, even though the native
+    // disabled control already prevents a second physical click.
+    await connect.dispatchEvent("click");
+    expect(await page.evaluate(() => window.shortcutAuthRequests.filter(({ method }) => method === "POST").length)).toBe(1);
+    releaseConnect();
+    await expect(card.getByRole("button", { name: "Revoke home authorisation", exact: true })).toBeVisible();
+    await expect(panel.getByText("Home Assistant connected with no tools allowed. Choose the permitted tools before use.", { exact: true })).toBeVisible();
+    await expect(card).toContainText("New connections allow no tools");
+    await expect(card).not.toContainText("paused");
+    await expect(card.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    expect(await panel.evaluate((element) => element._desktopFeatures.settings.data.ha_mcp_shortcut.state)).toBe("configured");
+    expect(await page.evaluate(() => ({ enabled: window.shortcutServer.enabled, tools: window.shortcutServer.enabled_tools }))).toEqual({ enabled: true, tools: [] });
+    expect(requests.filter(({ method }) => method === "POST").map(({ payload }) => payload)).toEqual([{ operation: "connect", acknowledged: true }]);
+    expect(await page.evaluate(() => window.shortcutAuthRequests.every(({ mode, redirect }) => mode === "same-origin" && redirect === "error"))).toBe(true);
+    const configuredBounds = await card.boundingBox();
+    expect(configuredBounds.x).toBeGreaterThanOrEqual(0);
+    expect(configuredBounds.x + configuredBounds.width).toBeLessThanOrEqual(width);
+    await panel.screenshot({ path: testInfo.outputPath("home-assistant-mcp-configured-deny-all.png") });
+    await card.getByRole("button", { name: "Choose allowed tools", exact: true }).click();
+    await expect(panel.getByRole("group", { name: "Allowed tools", exact: true })).toBeVisible();
+    await expect(panel.getByRole("checkbox", { name: /read_state/ })).not.toBeChecked();
+    expect(await page.evaluate(() => window.shortcutToolRequests)).toEqual([{ name: serverName }]);
+    const toolBounds = await panel.locator(".mcp-tool-permissions").boundingBox();
+    expect(toolBounds.x).toBeGreaterThanOrEqual(0);
+    expect(toolBounds.x + toolBounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    const toolsForm = panel.locator(".mcp-tool-permissions");
+    await toolsForm.scrollIntoViewIfNeeded();
+    await toolsForm.screenshot({ path: testInfo.outputPath("home-assistant-mcp-tool-selection.png") });
+    const receiptPath = testInfo.outputPath("home-assistant-mcp-shortcut-acceptance.json");
+    await writeFile(receiptPath, JSON.stringify({ boundary: "local_browser_harness", width, theme, authenticated_requests: requests.every(({ authenticated }) => authenticated), initial_post_count: 0, final_connect_post_count: requests.filter(({ method }) => method === "POST").length, fixture_initial_enabled: true, fixture_initial_enabled_tools: [], initial_state: "configured", stable_consent_node: true, viewport_fit: true, axe_violations: 0 }, null, 2));
+    await testInfo.attach("home-assistant-mcp-shortcut-acceptance", { contentType: "application/json", path: receiptPath });
+  });
+}
 
 test("refreshes HA-owned HTTP authentication during PNG upload and image reads without reload or replay", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1280, height: 844 });
@@ -2612,6 +2724,25 @@ test("shows inline command approvals and user questions through the HA websocket
   expect(answers[0].payload.client_request_id).toMatch(/^[A-Za-z0-9_.:-]{1,256}$/);
 });
 
+test("opens an authenticated question link on its pending card without submitting anything", async ({ page }) => {
+  await page.goto(`${origin}/frontend/e2e/panel-harness.html?thread=thr_vba_1&interaction=int_question_harness`);
+
+  const panel = page.locator("codex-bridge-panel");
+  const question = panel.locator('[data-interaction-id="int_question_harness"]');
+  const questionCard = question.locator(".user-input-card");
+  await expect(question).toBeVisible();
+  await expect(questionCard).toBeFocused();
+
+  const mutationCalls = await page.evaluate(() => window.__codexHarness.calls
+    .filter((call) => call.kind === "ws" && [
+      "codex_bridge/answer_interaction",
+      "codex_bridge/decide_interaction",
+      "codex_bridge/send_prompt",
+    ].includes(call.type))
+    .map((call) => call.type));
+  expect(mutationCalls).toEqual([]);
+});
+
 test("answers an MCP form and opens an explicit HTTPS authorisation link", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
@@ -4210,6 +4341,14 @@ for (const width of [390, 1440]) {
     const group = panel.locator("#assistant-section");
     await expect(group.locator(".section-name").first()).toHaveText("HA Assistant Chats");
     await expect(group.locator(".section-count").first()).toHaveText("3");
+    const toggle = group.locator('[data-section="assistant"]');
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(group.locator("#assistant-chat-list")).toBeHidden();
+    await expect(group.locator(".chat-row")).toHaveCount(0);
+    expect(await panel.locator(".rail-sections > .rail-section").evaluateAll((sections) => sections.map((section) => section.id)))
+      .toEqual(["direct-section", "project-section", "archived-section", "assistant-section"]);
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(group.locator(".chat-row")).toHaveCount(3);
     await expect(panel.locator('#project-section [data-project-id="prj_ytdlp"]')).toHaveCount(0);
     await expect(panel.locator('#project-section [data-chat-thread-id="thr_vba_2"]')).toHaveCount(1);
@@ -4221,7 +4360,6 @@ for (const width of [390, 1440]) {
     expect(await group.locator(".section-name").first().evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`ha-assistant-group-${width}.png`) });
 
-    const toggle = group.locator('[data-section="assistant"]');
     await toggle.focus();
     await page.keyboard.press("Enter");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -4249,8 +4387,8 @@ for (const width of [390, 1440]) {
     await menuControl.click();
     await expect(menu).toBeVisible();
     await expect.poll(() => panel.evaluate((element) => element._chatContextMenu.trigger === element.shadowRoot.querySelector('[data-chat-thread-id="thr_direct"] .thread-actions-toggle'))).toBe(true);
-    if (width === 390) { await menuControl.focus(); await page.keyboard.press("Enter"); }
-    else await menuControl.click();
+    await menuControl.focus();
+    await page.keyboard.press("Enter");
     await expect(menu).toBeHidden();
     await expect(menuControl).toHaveAttribute("aria-expanded", "false");
     await menuControl.click();
@@ -4327,6 +4465,7 @@ for (const width of [390, 1440]) {
     };
     await openDrawer();
     const group = panel.locator("#assistant-section");
+    await group.locator('[data-section="assistant"]').click();
     const shell = group.locator(".project-shell");
     const header = shell.locator('[data-action="select-project"]');
     const actions = shell.locator(".project-secondary-actions");
@@ -4687,5 +4826,101 @@ for (const width of [1440, 390]) {
     expect(searched.payload).toEqual({ query: "assistant history", include_archived: false, limit: 50 });
     await panel.locator('[data-action="open-search-result"]').click();
     await expect(panel.locator('#message-list [data-sequence="30000"] h1')).toHaveText("Found earlier response");
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`native Plan and queue transcript remain coherent at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      const event = (sequence, event_type, payload) => ({ sequence, event_type, payload, thread_id: panel._selectedThreadId });
+      panel._pendingInteractions = [];
+      panel._activeThread = { ...panel._activeThread, attachments: [], status: "running", active_run_id: "native-plan", collaboration_mode: "plan" };
+      panel._events = Array.from({ length: 25 }, (_, index) => [
+        event(10 + index * 2, "message.created", { run_id: `earlier-${index}`, text: `Earlier request ${index}` }),
+        event(11 + index * 2, "message.completed", { run_id: `earlier-${index}`, text: `Earlier answer ${index}` }),
+      ]).flat();
+      panel._events.push(
+        event(101, "message.created", { run_id: "native-plan", text: "Prepare the release plan" }),
+        event(102, "run.started", { run_id: "native-plan" }),
+        event(103, "item.started", { run_id: "native-plan", item_id: "plan-item", item_type: "plan" }),
+        event(104, "plan.delta", { run_id: "native-plan", item_id: "plan-item", delta: "# Release plan\n\n", byte_offset: 0, chunk_index: 0 }),
+        event(105, "plan.delta", { run_id: "native-plan", item_id: "plan-item", delta: "- Check the configuration\n- Verify the release\n\n<script>window.__planUnsafe=true</script>", byte_offset: 0, chunk_index: 0 }),
+      );
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    const panel = page.locator("codex-bridge-panel");
+    await expect(panel.locator('[data-streaming-message="true"] h1')).toHaveText("Release plan");
+    await expect(panel.locator('[data-streaming-message="true"] .message-state')).toHaveText("Plan");
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._events = [...panel._events,
+        { sequence: 106, event_type: "item.completed", payload: { run_id: "native-plan", item_id: "plan-item", item_type: "plan" } },
+        { sequence: 107, event_type: "run.completed", payload: { run_id: "native-plan" } },
+      ];
+      panel._activeThread = { ...panel._activeThread, status: "idle", active_run_id: null };
+      panel._render(true);
+    });
+    await expect(panel.locator('[data-streaming-message="true"]')).toHaveCount(0);
+    await expect(panel.locator('.message.assistant[data-sequence="106"] h1')).toHaveText("Release plan");
+    await expect(panel.locator('.message.assistant[data-sequence="106"] li')).toHaveCount(2);
+    await expect(panel.locator('.message.assistant[data-sequence="106"] script')).toHaveCount(0);
+    expect(await page.evaluate(() => window.__planUnsafe)).toBeUndefined();
+    expect(await panel.evaluate((element) => element._conversationTurns.at(-1).response)).toContain("Release plan");
+    expect(await panel.evaluate((element) => element._conversationTurns.at(-1).outcomeLabel)).toBe("");
+    await settleConversationRender(page);
+    await expect(panel.locator('.message.assistant[data-sequence="106"] h1')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`native-plan-completed-${width}.png`), animations: "disabled" });
+
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._events = [...panel._events,
+        { sequence: 201, event_type: "message.created", payload: { run_id: "active-plan", text: "Plan still waiting" } },
+        { sequence: 202, event_type: "run.started", payload: { run_id: "active-plan" } },
+        { sequence: 204, event_type: "message.created", payload: { run_id: "keep-draft", queued: true, text: "Original queued draft" } },
+        { sequence: 205, event_type: "message.created", payload: { run_id: "remove-draft", queued: true, text: "Remove this queued draft" } },
+      ];
+      panel._activeThread = { ...panel._activeThread, status: "running", active_run_id: "active-plan" };
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    await settleConversationRender(page);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel.shadowRoot.getElementById("conversation-scroll").scrollTop = 120;
+      panel._events = [...panel._events,
+        { sequence: 206, event_type: "message.updated", payload: { run_id: "keep-draft", message_sequence: 4, text: "Edited queued draft" } },
+        { sequence: 207, event_type: "message.removed", payload: { run_id: "remove-draft", message_sequence: 5 } },
+        { sequence: 208, event_type: "run.cancelled", payload: { run_id: "remove-draft" } },
+      ];
+      panel._forceMessageRebuild = true;
+      panel._render(true);
+    });
+    await expect(panel.locator("#message-list")).toContainText("Edited queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Original queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Remove this queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Run cancelled");
+    expect(await panel.evaluate((element) => element._events.some((event) => event.event_type === "run.cancelled" && event.payload.run_id === "remove-draft"))).toBe(true);
+    expect(await panel.evaluate((element) => element._runActivityForThread().runId)).toBe("active-plan");
+    expect(await panel.evaluate((element) => element._runActivityForThread().busy)).toBe(true);
+    expect(await panel.locator("#conversation-scroll").evaluate((element) => element.scrollTop)).toBe(120);
+    await page.evaluate(() => {
+      const panel = document.querySelector("codex-bridge-panel");
+      // Replay the persisted public event stream as on a fresh page load.
+      panel._events = structuredClone(panel._events);
+      panel._renderedThreadId = null;
+      panel._render(true);
+    });
+    await expect(panel.locator("#message-list")).toContainText("Edited queued draft");
+    await expect(panel.locator("#message-list")).not.toContainText("Remove this queued draft");
+    await expect(panel.locator('.message.assistant[data-sequence="106"] h1')).toHaveText("Release plan");
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await settleConversationRender(page);
+    await expect(panel.locator('.message.user[data-sequence="204"]')).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`native-queue-replayed-${width}.png`), animations: "disabled" });
   });
 }

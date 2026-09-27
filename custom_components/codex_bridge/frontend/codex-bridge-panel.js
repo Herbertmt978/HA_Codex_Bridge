@@ -1119,6 +1119,7 @@ function renderAssistantMarkdown(document2, source, { createCodeBlock } = {}) {
   fragment.plainText = plainParts.filter(Boolean).join("\n\n");
   return fragment;
 }
+var assistantMarkdownMaxLength = MAX_MARKDOWN_LENGTH;
 var assistantMarkdownStyles = `
   .assistant-markdown-paragraph { margin: 0 0 0.8em; overflow-wrap: anywhere; }
   .assistant-markdown-paragraph:last-child { margin-bottom: 0; }
@@ -32684,13 +32685,44 @@ function snippet(value) {
 function projectTranscriptMessages(events = []) {
   const edits = /* @__PURE__ */ new Map();
   const removed = /* @__PURE__ */ new Set();
+  const removedQueuedRuns = /* @__PURE__ */ new Set();
+  const messages = /* @__PURE__ */ new Map();
+  const queuedByRun = /* @__PURE__ */ new Map();
   for (const event of events) {
-    if (event?.event_type === "message.removed" && Number.isSafeInteger(event.payload?.message_sequence)) removed.add(event.payload.message_sequence);
-    if (event?.event_type === "message.updated" && Number.isSafeInteger(event.payload?.message_sequence) && typeof event.payload?.text === "string") {
-      edits.set(event.payload.message_sequence, event.payload.text);
+    if (!["message.created", "message.completed"].includes(event?.event_type)) continue;
+    messages.set(event.sequence, event);
+    const runId = event.payload?.run_id;
+    if (event.event_type === "message.created" && event.payload?.queued === true && typeof runId === "string" && runId) {
+      queuedByRun.set(runId, queuedByRun.has(runId) ? null : event);
     }
   }
-  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence) ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
+  const targetSequence = (event) => {
+    const reference = event.payload?.message_sequence;
+    if (!Number.isSafeInteger(reference) || reference <= 0) return null;
+    const runId = event.payload?.run_id;
+    let target = messages.get(reference);
+    if (typeof runId === "string" && runId) {
+      if (target?.payload?.run_id !== runId) target = null;
+      target ||= queuedByRun.get(runId);
+    }
+    return target?.sequence ?? null;
+  };
+  for (const event of events) {
+    if (!["message.removed", "message.updated"].includes(event?.event_type)) continue;
+    const sequence2 = targetSequence(event);
+    if (sequence2 === null) continue;
+    if (event.event_type === "message.removed") {
+      removed.add(sequence2);
+      const target = messages.get(sequence2);
+      if (target?.event_type === "message.created" && target.payload?.queued === true && typeof target.payload?.run_id === "string") {
+        removedQueuedRuns.add(target.payload.run_id);
+      }
+    }
+    if (event.event_type === "message.updated" && typeof event.payload?.text === "string") {
+      edits.set(sequence2, event.payload.text);
+    }
+  }
+  return events.filter((event) => !(["message.created", "message.completed"].includes(event?.event_type) && removed.has(event.sequence)) && !(["run.queued", "run.dequeued", "run.cancelled"].includes(event?.event_type) && removedQueuedRuns.has(event.payload?.run_id))).map((event) => event?.event_type === "message.created" && edits.has(event.sequence) ? { ...event, payload: { ...event.payload, text: edits.get(event.sequence) } } : event);
 }
 function projectConversationTurns(events = []) {
   const turns = [];
@@ -32773,6 +32805,95 @@ function projectConversationTurns(events = []) {
       markerWidth: conversationMarkerWidth(turn.contentLength)
     };
   });
+}
+
+// frontend/src/plan-content.js
+var PLAN_ITEM_TYPE = "plan";
+function stringId(value) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+function itemKey(runId, itemId) {
+  return `${runId.length}:${runId}${itemId}`;
+}
+function eventIdentity(event, index) {
+  if (Number.isSafeInteger(event?.sequence)) return `sequence:${event.sequence}`;
+  if (typeof event?.cursor === "string" || Number.isSafeInteger(event?.cursor)) return `cursor:${event.cursor}`;
+  return `index:${index}`;
+}
+function orderedEvents(events) {
+  if (!Array.isArray(events)) return [];
+  const ordered = events.map((event, index) => ({ event, index }));
+  if (ordered.every(({ event }) => Number.isSafeInteger(event?.sequence)) && ordered.some(({ event }, index) => index > 0 && event.sequence < ordered[index - 1].event.sequence)) {
+    ordered.sort((left, right) => left.event.sequence - right.event.sequence || left.index - right.index);
+  }
+  return ordered.map(({ event }) => event);
+}
+function uniqueEvents(ordered) {
+  const seen = /* @__PURE__ */ new Set();
+  return ordered.filter((event, index) => {
+    const identity = eventIdentity(event, index);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+function projectPlanContent(events) {
+  const states = /* @__PURE__ */ new Map();
+  const completed = /* @__PURE__ */ new Map();
+  const endedRuns = /* @__PURE__ */ new Set();
+  const ordered = orderedEvents(events);
+  for (const event of uniqueEvents(ordered)) {
+    const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
+    const runId = stringId(payload.run_id);
+    const itemId = stringId(payload.item_id);
+    const key = runId && itemId ? itemKey(runId, itemId) : null;
+    if (["run.completed", "run.cancelled", "run.failed", "run.interrupted"].includes(event?.event_type) && runId) {
+      endedRuns.add(runId);
+    }
+    if (event?.event_type === "item.started" && payload.item_type === PLAN_ITEM_TYPE && key) {
+      states.set(key, { runId, itemId, text: "" });
+      endedRuns.delete(runId);
+      continue;
+    }
+    if (event?.event_type === "plan.delta" && key && typeof payload.delta === "string") {
+      const state = states.get(key);
+      if (state && !endedRuns.has(runId) && state.text.length < assistantMarkdownMaxLength) {
+        state.text += payload.delta.slice(0, assistantMarkdownMaxLength - state.text.length);
+      }
+      continue;
+    }
+    if (event?.event_type === "item.completed" && payload.item_type === PLAN_ITEM_TYPE && key) {
+      const state = states.get(key);
+      states.delete(key);
+      if (state && !endedRuns.has(runId) && state.text.length > 0) completed.set(event, {
+        run_id: runId,
+        item_id: itemId,
+        role: "assistant",
+        text: state.text,
+        plan: true
+      });
+    }
+  }
+  return { ordered, completed, states, endedRuns };
+}
+function projectCompletedPlanMessages(events = []) {
+  const { ordered, completed } = projectPlanContent(events);
+  const projected = [];
+  for (const event of ordered) {
+    projected.push(event);
+    const payload = completed.get(event);
+    if (payload) projected.push({ ...event, event_type: "message.completed", payload });
+  }
+  return projected;
+}
+function activePlanText(events = [], runId, itemId) {
+  const wantedRunId = stringId(runId);
+  const wantedItemId = stringId(itemId);
+  if (!wantedRunId || !wantedItemId) return "";
+  const { states, endedRuns } = projectPlanContent(events);
+  const key = itemKey(wantedRunId, wantedItemId);
+  const state = states.get(key);
+  return state && !endedRuns.has(wantedRunId) ? state.text : "";
 }
 
 // frontend/src/inline-images.js
@@ -34717,6 +34838,88 @@ function scheduleRunHistory(runs, timezone) {
 
 // frontend/src/mcp-setup.js
 var HA_MCP_GUIDE = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/home-assistant-mcp.md";
+var HA_MCP_CAPABILITIES = ["assist_mcp_selection_v1", "mcp_credential_binding_v1", "mcp_local_v1", "mcp_credentials_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"];
+var HA_MCP_COPY = Object.freeze({
+  not_connected: "Off. Connect only if you want Codex to use Home Assistant tools.",
+  unavailable: "Install and load Home Assistant’s native MCP Server integration. Use a Supervisor connection with Enable MCP and Enable local MCP connections enabled in the Bridge App, then refresh connection options.",
+  configured: "Authorisation is saved. New connections allow no tools. Choose allowed tools and refresh server status before use.",
+  paused: "The server is paused and its tools are blocked. Resume it when you are ready to use the allowed tools.",
+  connected: "Ready to use the allowed Home Assistant tools.",
+  expired: "Access has expired. Refresh the existing authorisation before using the server.",
+  retry: "Codex is busy or its settings changed. Wait for current work to finish, then refresh status before trying again.",
+  reauthorise: "Administrator authorisation is required again. Review the consent below before reconnecting.",
+  cleanup_pending: "Home authorisation was revoked. Retry cleanup when Codex is idle; the saved server may still be listed.",
+  invalid_journal: "Authorisation recovery needs attention. Check the Integration diagnostics; no new authorisation was created."
+});
+function supportsHaMcpShortcut(capabilities = []) {
+  return Array.isArray(capabilities) && HA_MCP_CAPABILITIES.every((capability) => capabilities.includes(capability));
+}
+function normalizeHaMcpShortcut(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || typeof value.state !== "string" || !Object.hasOwn(HA_MCP_COPY, value.state) || !["available", "configured", "requires_tool_selection"].every((key) => typeof value[key] === "boolean") || value.server_name !== null && (typeof value.server_name !== "string" || !/^ha-assist-[a-f0-9]{12}$/u.test(value.server_name))) return null;
+  return {
+    state: value.state,
+    code: value.state,
+    available: value.available,
+    configured: value.configured,
+    server_name: value.server_name,
+    requires_tool_selection: value.requires_tool_selection
+  };
+}
+function haMcpShortcutMessage(code2) {
+  return Object.hasOwn(HA_MCP_COPY, code2) ? HA_MCP_COPY[code2] : "Could not confirm Home Assistant authorisation. Refresh status before retrying; this action was not replayed.";
+}
+function renderHaMcpShortcut(doc, state, capabilities = []) {
+  const supported = supportsHaMcpShortcut(capabilities);
+  const status = normalizeHaMcpShortcut(state.data.ha_mcp_shortcut);
+  const card = text(doc, "section", "", "schedule-card settings-card mcp-ha-shortcut");
+  card.setAttribute("aria-labelledby", "ha-mcp-shortcut-title");
+  const title = text(doc, "h3", "Installed Home Assistant MCP", "desktop-subheading");
+  title.id = "ha-mcp-shortcut-title";
+  card.append(title, text(doc, "p", "Optional and off by default. This shortcut uses Home Assistant’s native MCP Server integration and its Assist API. Community HA-MCP and other custom servers remain separate choices below.", "desktop-note"));
+  const notice = text(doc, "p", !supported ? "Update the Bridge App and Integration, enable MCP and local MCP connections in the App, then refresh connection options. Manual server setup remains available." : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
+  notice.setAttribute("role", "status");
+  card.append(notice);
+  if (state.haMcpError) {
+    const error = text(doc, "p", haMcpShortcutMessage(state.haMcpError), "desktop-error");
+    error.setAttribute("role", "alert");
+    card.append(error);
+  }
+  if (!supported) return card;
+  const actions = text(doc, "div", "", "desktop-form-actions");
+  const connectable = status && ["not_connected", "reauthorise"].includes(status.state);
+  if (connectable) {
+    const warning = text(doc, "div", "", "mcp-local-warning");
+    const detail = text(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.");
+    detail.id = "ha-mcp-consent-detail";
+    const consent = text(doc, "label", "", "mcp-consent");
+    const checkbox = doc.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.dataset.haMcpAcknowledged = "";
+    checkbox.setAttribute("aria-describedby", detail.id);
+    checkbox.checked = state.haMcpAcknowledged === true;
+    checkbox.disabled = Boolean(state.haMcpBusy);
+    consent.append(checkbox, text(doc, "span", "I authorise Codex to use my administrator identity for the allowed tools and accept these connection and backup risks."));
+    warning.append(text(doc, "strong", "Allow Codex to control Home Assistant?"), detail, consent);
+    card.append(warning);
+    const connect = button2(doc, status.state === "reauthorise" ? "Reauthorise Home Assistant" : "Connect Home Assistant", "ha-mcp-connect");
+    connect.disabled = state.haMcpBusy || !checkbox.checked;
+    actions.append(connect);
+  }
+  if (status?.server_name) {
+    if (status.configured) {
+      actions.append(button2(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }));
+      const server = state.data.mcp_servers?.find((row) => row.name === status.server_name);
+      if (server?.enabled === false && capabilities.includes("mcp_management_v1")) actions.append(button2(doc, "Resume", "resume-mcp", { id: status.server_name }));
+      actions.append(button2(doc, "Refresh authorisation", "ha-mcp-refresh"));
+    }
+    actions.append(button2(doc, status.state === "cleanup_pending" ? "Retry authorisation cleanup" : "Revoke home authorisation", "ha-mcp-disconnect"));
+  }
+  if (state.haMcpBusy) actions.querySelectorAll("button").forEach((control2) => {
+    control2.disabled = true;
+  });
+  card.append(actions, text(doc, "p", "Connecting does not enable the Assist conversation agent. Configure Assist separately and select only the tools you intend to make available. Revoking this shortcut leaves unrelated servers unchanged.", "desktop-note"));
+  return card;
+}
 function validStdioPackage(item) {
   return item && typeof item.package_id === "string" && item.package_id.length > 0 && typeof item.revision === "string" && item.revision.length > 0 && typeof item.title === "string" && item.title.length > 0 && typeof item.source === "string" && item.source.startsWith("https://") && typeof item.licence === "string" && item.licence.length > 0 && item.python === "3.14" && Array.isArray(item.tools) && item.tools.length > 0 && item.tools.length <= 128 && item.tools.every((tool) => typeof tool === "string" && tool.length > 0 && tool.length <= 128) && /^[a-f0-9]{64}$/iu.test(item.digest || "") && Array.isArray(item.entrypoint) && item.entrypoint.length >= 2 && item.entrypoint.length <= 8 && item.entrypoint.every((part) => typeof part === "string" && part.length > 0 && part.length <= 160 && !Array.from(part).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) && item.network === "none" && item.files === "none" && Array.isArray(item.environment) && item.environment.length === 0;
 }
@@ -35603,9 +35806,10 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text2(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
+    panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
     recommendation.className = "desktop-note";
-    recommendation.append(text2(documentRef, "h3", "Home Assistant control", "desktop-subheading"), text2(documentRef, "p", "HA-MCP is a recommended optional server for Home Assistant devices and automations. It does not require root host access. Enable MCP in the Bridge App, then follow the connection guide."));
+    recommendation.append(text2(documentRef, "h3", "Community HA-MCP and custom servers", "desktop-subheading"), text2(documentRef, "p", "Community HA-MCP is a separate optional server with its own tools and permissions, which may include configuration access beyond Assist’s exposed entities. You can also connect another compatible server. Review its access before choosing tools; root host access is separate."));
     const guide = text2(documentRef, "a", "HA-MCP installation and Bridge connection guide");
     guide.href = HA_MCP_GUIDE;
     guide.target = "_blank";
@@ -35631,15 +35835,21 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       td.append(controls);
       const id = row.name || "";
       const oauth = row.auth === "oauth_required" || row.auth === "oauth";
+      const managedHome = id === state.data.ha_mcp_shortcut?.server_name;
       if (management) {
         const paused = row.enabled === false;
         controls.append(button3(documentRef, paused ? "Resume" : "Pause", paused ? "resume-mcp" : "pause-mcp", { id }));
         const edit = button3(documentRef, "Edit connection", "edit-mcp-connection", { id });
         edit.disabled = !paused;
         edit.title = paused ? "Edit the paused connection" : "Pause this server before editing";
-        controls.append(edit, text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
+        if (!managedHome) controls.append(edit);
+        controls.append(text2(documentRef, "span", row.status_unavailable ? "Status unavailable · refresh to retry" : `${Number.isSafeInteger(row.tool_count) ? row.tool_count : 0} tools · ${Number.isSafeInteger(row.resource_count) ? row.resource_count : 0} resources`, "desktop-action-note"));
         if (toolPermissions) controls.append(button3(documentRef, row.tool_policy === "selected" ? "Review allowed tools" : "Choose allowed tools", "edit-mcp-tools", { id }));
         if (row.failure) controls.append(text2(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
+      }
+      if (managedHome) {
+        controls.append(text2(documentRef, "span", "Managed Home Assistant authorisation · revoke using the shortcut above", "desktop-action-note"));
+        return;
       }
       controls.append(button3(documentRef, "Remove server", "remove-mcp", { id }));
       if (credentials && ["bearer", "headers"].includes(row.auth)) {
@@ -35730,7 +35940,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
 }
 var renderedFeatureInputs = /* @__PURE__ */ new WeakMap();
 function featureDraftInputs(state) {
-  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts });
+  return JSON.stringify({ formDraft: state.formDraft, agentsDrafts: state.agentsDrafts, haMcpAcknowledged: state.haMcpAcknowledged });
 }
 function syncDesktopFeatureDrafts(container, state) {
   const rendered = renderedFeatureInputs.get(container);
@@ -35744,6 +35954,12 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
   container.onchange = (event) => {
+    if (event.target?.matches?.("[data-ha-mcp-acknowledged]")) {
+      state.haMcpAcknowledged = event.target.checked;
+      const connect = container.querySelector('[data-desktop-action="ha-mcp-connect"]');
+      if (connect) connect.disabled = !event.target.checked || Boolean(state.haMcpBusy);
+      syncDesktopFeatureDrafts(container, state);
+    }
     if (event.target?.matches?.("[data-mcp-tool]")) {
       state.mcpToolDraft = [...container.querySelectorAll("[data-mcp-tool]:checked")].map((input2) => input2.dataset.mcpTool);
     }
@@ -35756,7 +35972,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   };
   const inputs = JSON.stringify({
     destination,
-    state: { ...state, formDraft: void 0, agentsDrafts: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
+    state: { ...state, formDraft: void 0, agentsDrafts: void 0, haMcpAcknowledged: void 0, mcpToolInventory: void 0, hostAccessGrant: void 0, hostUnattendedApproved: void 0, previewGeneration: void 0, createRequestId: void 0, nextRuns: void 0 },
     timezone,
     hasActiveProject,
     activeProjectId,
@@ -36263,6 +36479,12 @@ var ChatContextMenu = class {
         node2._chatValue = entry.value;
         node2.disabled = this.busy.has(this.threadId) || this.uncertain.has(this.threadId) && !["back", "refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown", "submenu"].includes(entry.action);
         if (["move", "fork"].includes(entry.action) && this.panel._runActivityForThread(this.thread()).busy) node2.disabled = true;
+        const assistOwned = this.thread()?.assist_origin === true;
+        const changesAssistRoute = ["move", "fork"].includes(entry.action) || entry.action === "submenu" && ["project", "fork"].includes(entry.value);
+        if (assistOwned && changesAssistRoute) {
+          node2.title = "Home Assistant manages this conversation's project and history. Start a regular chat for independent work.";
+          node2.disabled = true;
+        } else node2.removeAttribute("title");
         if (entry.action === "section" && !this.sectionsLoaded) node2.disabled = true;
         node2.hidden = entry.action === "back" && !this.compact;
         if (entry.action === "submenu") {
@@ -36335,7 +36557,7 @@ var ChatContextMenu = class {
       this.status.className = "chat-menu-status";
       this.status.setAttribute("role", "status");
     }
-    const notice = this.notice || (this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
+    const notice = this.notice || (this.thread()?.assist_origin === true ? "Home Assistant manages this conversation's project and history. Start a regular chat for independent work." : this.page === "project" ? "Review the move and choose any project files to copy. Originals are retained." : this.page === "fork" ? "Creates a new conversation in this project's existing workspace, using the same signed-in account." : "");
     if (this.status.textContent !== notice) this.status.textContent = notice;
     const statusParent = this.submenu || this.menu;
     if (this.status.parentNode !== statusParent) statusParent.append(this.status);
@@ -36450,6 +36672,7 @@ var ChatContextMenu = class {
     }
     if (["pin", "unread", "section", "move", "fork", "create-section", "rename-section", "remove-section"].includes(action) && !this.supported) return;
     if (["move", "fork"].includes(action) && this.panel._runActivityForThread(thread).busy) return;
+    if (thread.assist_origin === true && (["move", "fork"].includes(action) || action === "submenu" && ["project", "fork"].includes(value))) return;
     if (action === "move" && !this.panel._projects.some((project) => project.project_id === value && project.kind === "project" && !project.archived_at && project.project_id !== thread.project_id)) return;
     if (this.uncertain.has(thread.thread_id) && !["refresh", "open", "copy-title", "copy-link", "copy-text", "copy-markdown"].includes(action)) return;
     if (action === "rename") {
@@ -36820,7 +37043,7 @@ var ChatContextMenu = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.10.1";
+var PANEL_VERSION = "1.11.0";
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -36885,6 +37108,8 @@ var GENERATED_IMAGE_PREVIEW_MAX_LABEL = "8 MB";
 var ARTIFACT_RESERVATION_CONFLICT_CODE = "reservation_conflict";
 var ARTIFACT_REFRESH_RETRY_MAX_ATTEMPTS = 3;
 var ARTIFACT_REFRESH_RETRY_DELAYS_MS = Object.freeze([500, 1e3, 2e3]);
+var QUESTION_LINK_INTERACTION_ID = /^[A-Za-z0-9_.:-]{1,128}$/u;
+var QUESTION_LINK_THREAD_ID = /^[A-Za-z0-9_.:-]{1,200}$/u;
 function isGeneratedImageArtifact(artifact) {
   return artifact?.source === "generated_image";
 }
@@ -40070,7 +40295,7 @@ template.innerHTML = `
       line-height: 1.45;
       overflow-wrap: anywhere;
     }
-    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 70%, var(--text-color) 30%); }
+    .desktop-notice { color: color-mix(in srgb, var(--brand-emerald) 60%, var(--text-color) 40%); }
     .desktop-notice[role="alert"] {
       display: flex;
       align-items: center;
@@ -42487,9 +42712,9 @@ template.innerHTML = `
       <div class="section-scroll">
         <div class="rail-sections">
           <section class="rail-section" id="direct-section"></section>
-          <section class="rail-section" id="assistant-section"></section>
           <section class="rail-section flat" id="project-section"></section>
           <section class="rail-section" id="archived-section"></section>
+          <section class="rail-section" id="assistant-section"></section>
           <div class="rail-search-empty" id="rail-search-empty" role="status" hidden></div>
         </div>
       </div>
@@ -42768,6 +42993,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._selectedProjectId = null;
     this._selectedThreadId = null;
     this._sharedThreadChecked = false;
+    this._questionDeepLink = null;
     this._contextVisible = true;
     this._bottomPanelOpen = false;
     this._activityView = false;
@@ -42905,6 +43131,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._interactionAnswers = /* @__PURE__ */ new Map();
     this._announcedInteractionIds = /* @__PURE__ */ new Set();
     this._interactionExpiryTimer = null;
+    this._suppressInteractionFocusScroll = false;
     this._promptMutations = /* @__PURE__ */ new Map();
     this._cancellingThreads = /* @__PURE__ */ new Set();
     this._promptMutation = null;
@@ -42914,7 +43141,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._expandedProjectActions = {};
     this._collapsedSections = {
       direct: false,
-      assistant: false,
+      assistant: true,
       assistantArchived: true,
       archived: true
     };
@@ -44040,7 +44267,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const target = event.target;
     const timelineItem = target instanceof HTMLElement && target.matches(".timeline-item");
     if (!timelineItem) this._showTooltipForTarget(target);
-    this._scrollInteractionTargetIntoView(target);
+    if (!this._suppressInteractionFocusScroll) {
+      this._scrollInteractionTargetIntoView(target);
+    }
     if (timelineItem) {
       window.clearTimeout(this._timelineCloseTimer);
       this._timelinePreviewSequence = target.dataset.sequence;
@@ -44478,6 +44707,16 @@ var CodexBridgePanel = class extends HTMLElement {
         } else {
           state.data.mcp_servers = [];
         }
+        if (supportsHaMcpShortcut(capabilities) && !state.haMcpBusy) {
+          const shortcut = await this._readHaMcpShortcut();
+          if (!isCurrentSettingsRequest()) return;
+          state.data.ha_mcp_shortcut = shortcut.status;
+          state.haMcpError = shortcut.error;
+        } else if (!supportsHaMcpShortcut(capabilities)) {
+          delete state.data.ha_mcp_shortcut;
+          state.haMcpAcknowledged = false;
+          state.haMcpError = "";
+        }
         if (capabilities.includes("mcp_stdio_v1")) {
           try {
             state.data.stdio_packages = normalizeDesktopList(await this._callWS("list_stdio_packages"));
@@ -44669,6 +44908,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const destination = this._activeDestination;
     const state = this._desktopFeatures[destination];
     if (!state) return;
+    if (["ha-mcp-connect", "ha-mcp-refresh", "ha-mcp-disconnect"].includes(action)) {
+      if (destination !== "settings") return;
+      return this._haMcpShortcutMutation(action.slice(7), state);
+    }
     if (["save-agents", "delete-agents"].includes(action)) {
       const renderedScope = this.shadowRoot.querySelector('[data-desktop-field="agents_scope"]')?.value;
       const scope = dataset.agentsScope || renderedScope || state.agentsScope || "";
@@ -45134,6 +45377,62 @@ var CodexBridgePanel = class extends HTMLElement {
       state.loading = false;
     }
     return mutationSucceeded;
+  }
+  async _readHaMcpShortcut() {
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(3e4)
+      });
+      const status = response.ok ? normalizeHaMcpShortcut(await response.json()) : null;
+      return { status, error: status ? "" : "unknown" };
+    } catch {
+      return { status: null, error: "unknown" };
+    }
+  }
+  async _haMcpShortcutMutation(operation, state) {
+    if (!supportsHaMcpShortcut(this._config?.capabilities) || state.loading || state.haMcpBusy) return false;
+    if (!["connect", "disconnect", "refresh"].includes(operation)) return false;
+    if (operation === "connect" && this.shadowRoot.querySelector("[data-ha-mcp-acknowledged]")?.checked !== true) return false;
+    state.haMcpBusy = true;
+    state.haMcpError = "";
+    state.haMcpAcknowledged = false;
+    state.notice = "";
+    this._renderDesktopSurface();
+    const payload = operation === "connect" ? { operation, acknowledged: true } : { operation };
+    try {
+      const response = await this._fetchHaApi("/api/codex_bridge/mcp/home_assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(25e4)
+      });
+      const result = await response.json().catch(() => null);
+      const status = response.ok ? normalizeHaMcpShortcut(result) : null;
+      if (!status) {
+        state.haMcpError = ["unavailable", "retry", "reauthorise", "cleanup_pending", "invalid_journal"].includes(result?.code) ? result.code : "unknown";
+        return false;
+      }
+      state.data.ha_mcp_shortcut = status;
+      state.notice = operation === "disconnect" ? "Home authorisation revoked. Unrelated MCP servers and their permissions are unchanged." : operation === "connect" ? "Home Assistant connected with no tools allowed. Choose the permitted tools before use." : "Existing Home Assistant authorisation refreshed. Its paused state and allowed tools are preserved.";
+      if (status.state === "cleanup_pending") state.notice = "Home authorisation revoked. Server cleanup is pending; retry when Codex is idle.";
+      else if (["retry", "reauthorise", "unavailable"].includes(status.state)) {
+        state.notice = "";
+        state.haMcpError = status.state;
+      }
+      state.haMcpBusy = false;
+      await this._loadDesktopDestination("settings", { force: true });
+      return true;
+    } catch {
+      state.haMcpError = "unknown";
+      return false;
+    } finally {
+      state.haMcpBusy = false;
+      this._renderDesktopSurface();
+    }
   }
   async _mcpCredentialMutation(payload, state, form) {
     if (!this._config?.capabilities?.includes("mcp_credentials_v1") || state.loading) return false;
@@ -45742,9 +46041,26 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _renderInteractions() {
     const region = this.shadowRoot.getElementById("interaction-region");
+    const questionLink = this._questionDeepLink;
+    const previousFocus = this.shadowRoot.activeElement;
+    const restoreQuestionFocus = Boolean(
+      questionLink?.focused && questionLink.threadId === this._selectedThreadId && previousFocus?.closest?.("[data-interaction-id]")?.dataset.interactionId === questionLink.interactionId
+    );
     region.replaceChildren();
     if (!this._selectedThreadId || !this._isSupervisorConnection()) {
       return;
+    }
+    const questionLinkApplies = questionLink && questionLink.threadId === this._selectedThreadId;
+    const linkedInteraction = questionLinkApplies && questionLink.interactionId ? this._pendingInteractions.find((interaction) => interaction.thread_id === questionLink.threadId && interaction.interaction_id === questionLink.interactionId && interaction.kind === "user_input" && interaction.status === "pending") : null;
+    let questionLinkStatus = questionLinkApplies && questionLink.invalid ? "This question link is invalid. The chat is open." : null;
+    if (!linkedInteraction && questionLinkApplies && questionLink.ready && !questionLink.invalid) {
+      questionLinkStatus = "This question is no longer available. The chat is open.";
+    }
+    if (questionLinkStatus) {
+      const status = this._textElement("p", "question-link-status", questionLinkStatus);
+      status.setAttribute("role", "status");
+      status.setAttribute("aria-live", "polite");
+      region.append(status);
     }
     const visibleInteractions = this._pendingInteractions.filter(
       (interaction) => interaction.thread_id === this._selectedThreadId
@@ -45843,7 +46159,27 @@ var CodexBridgePanel = class extends HTMLElement {
       }
     }
     this._scheduleInteractionExpiryRefresh();
-    if (newCards.length) {
+    let focusedQuestionLink = false;
+    let restoredQuestionFocus = false;
+    if (linkedInteraction && (!questionLink.focused || restoreQuestionFocus)) {
+      const linkedCard = [...region.querySelectorAll("[data-interaction-id]")].find((card) => card.dataset.interactionId === questionLink.interactionId)?.querySelector("[role='alertdialog']");
+      if (linkedCard) {
+        if (questionLink.focused) {
+          restoredQuestionFocus = true;
+          this._suppressInteractionFocusScroll = true;
+          try {
+            linkedCard.focus({ preventScroll: true });
+          } finally {
+            this._suppressInteractionFocusScroll = false;
+          }
+        } else {
+          questionLink.focused = true;
+          focusedQuestionLink = true;
+          linkedCard.focus();
+        }
+      }
+    }
+    if (newCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
       const active = this.shadowRoot.activeElement;
       if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
         newCards[0].querySelector("[role='alertdialog']")?.focus();
@@ -46115,7 +46451,8 @@ var CodexBridgePanel = class extends HTMLElement {
     const kind = ["command_approval", "file_change_approval", "user_input", "mcp_form", "mcp_url"].includes(value.kind) ? value.kind : null;
     const expiresAt = typeof value.expires_at === "string" && value.expires_at.length <= 64 && Number.isFinite(Date.parse(value.expires_at)) ? value.expires_at : null;
     const allowed = Array.isArray(value.allowed_actions) ? [...new Set(value.allowed_actions.filter((action) => ["accept", "decline", "cancel", "answer"].includes(action)))].slice(0, 4) : [];
-    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (["user_input", "mcp_form"].includes(kind) ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
+    if (!interactionId || actualThreadId !== threadId || !kind || !Number.isSafeInteger(value.event_id) || value.event_id < 0 || // The pending-list route omits unset defaults, including pending status.
+    Object.hasOwn(value, "status") && value.status !== "pending" || !expiresAt || !value.display || typeof value.display !== "object" || Array.isArray(value.display) || (["user_input", "mcp_form"].includes(kind) ? !allowed.includes("answer") : !allowed.some((action) => ["accept", "decline", "cancel"].includes(action)))) {
       return null;
     }
     return {
@@ -46590,41 +46927,43 @@ var CodexBridgePanel = class extends HTMLElement {
     list.id = "assistant-chat-list";
     list.className = "chat-list direct-chat-list";
     list.hidden = collapsed;
-    const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
-    const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
-    for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
-    for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
-    const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
-    if (archived.length) {
-      const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
-      const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
-      archiveToggle.dataset.section = "assistantArchived";
-      archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
-      archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
-      const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
-      archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
-      archiveToggle.append(archiveTitle);
-      list.append(archiveToggle);
-      const archiveList = document.createElement("div");
-      archiveList.id = "assistant-archived-chat-list";
-      archiveList.className = "chat-list";
-      archiveList.hidden = archiveCollapsed;
-      const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
-      const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
-      for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
-      const restoredProjectActions = /* @__PURE__ */ new Set();
-      for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
-        archiveList.append(this._threadRow(thread, { archived: true }));
-        const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
-        if (project && !restoredProjectActions.has(project.project_id)) {
-          restoredProjectActions.add(project.project_id);
-          const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
-          restore.dataset.projectId = String(project.project_id);
-          this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
-          archiveList.append(restore);
+    if (!collapsed) {
+      const assistantProjects = this._projects.filter((project) => project.kind !== "direct" && this._projectHasOnlyAssistantChats(project) && threads.some((thread) => thread.project_id === project.project_id));
+      const assistantProjectIds = new Set(assistantProjects.map((project) => project.project_id));
+      for (const thread of threads.filter((item) => this._threadIsPrimaryActive(item) && !assistantProjectIds.has(item.project_id))) list.append(this._threadRow(thread));
+      for (const project of assistantProjects.filter((item) => !item.archived_at)) list.append(this._projectSection(project, { assistant: true }));
+      const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
+      if (archived.length) {
+        const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
+        const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
+        archiveToggle.dataset.section = "assistantArchived";
+        archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
+        archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
+        const archiveTitle = this._sectionTitleLine(archiveCollapsed ? icons.chevronRight : icons.chevronDown, icons.archive, "Archived");
+        archiveTitle.append(this._textElement("span", "section-count", ` ${archived.length} `));
+        archiveToggle.append(archiveTitle);
+        list.append(archiveToggle);
+        const archiveList = document.createElement("div");
+        archiveList.id = "assistant-archived-chat-list";
+        archiveList.className = "chat-list";
+        archiveList.hidden = archiveCollapsed;
+        const archivedAssistantProjects = assistantProjects.filter((item) => item.archived_at);
+        const archivedAssistantProjectIds = new Set(archivedAssistantProjects.map((project) => project.project_id));
+        for (const project of archivedAssistantProjects) archiveList.append(this._projectSection(project, { assistant: true, archived: true, includeArchivedThreads: true }));
+        const restoredProjectActions = /* @__PURE__ */ new Set();
+        for (const thread of archived.filter((item) => !archivedAssistantProjectIds.has(item.project_id))) {
+          archiveList.append(this._threadRow(thread, { archived: true }));
+          const project = this._projects.find((item) => item.project_id === thread.project_id && item.archived_at);
+          if (project && !restoredProjectActions.has(project.project_id)) {
+            restoredProjectActions.add(project.project_id);
+            const restore = this._actionButton("rail-menu-item", "restore-project", `Restore ${project.name || "archived"} project`);
+            restore.dataset.projectId = String(project.project_id);
+            this._setTrustedButtonContent(restore, icons.restore, `Restore ${project.name || "archived"} project`);
+            archiveList.append(restore);
+          }
         }
+        list.append(archiveList);
       }
-      list.append(archiveList);
     }
     section2.append(list);
   }
@@ -47481,15 +47820,17 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderConversationTimeline();
       return;
     }
-    const shouldRebuild = this._forceMessageRebuild || this._renderedThreadId !== this._selectedThreadId;
+    const threadChanged = this._renderedThreadId !== this._selectedThreadId;
+    const shouldRebuild = this._forceMessageRebuild || threadChanged;
+    const previousScrollTop = scrollContainer.scrollTop;
+    const shouldStick = threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80;
     if (shouldRebuild) {
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
       this._forceMessageRebuild = false;
       messageList.replaceChildren();
     }
-    const shouldStick = shouldRebuild || scrollContainer.scrollHeight - scrollContainer.clientHeight - scrollContainer.scrollTop < 80;
-    const transcriptEvents = projectTranscriptMessages(this._events);
+    const transcriptEvents = projectTranscriptMessages(projectCompletedPlanMessages(this._events));
     const eventsToRender = this._renderedSequence === 0 ? transcriptEvents : transcriptEvents.filter((item) => item.sequence > this._renderedSequence);
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
@@ -47513,6 +47854,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._renderConversationTimeline();
     if (shouldStick) {
       this._scrollMessagesToBottom();
+    } else if (shouldRebuild) {
+      scrollContainer.scrollTop = previousScrollTop;
     }
   }
   _isConversationTimelineCompact() {
@@ -47525,11 +47868,11 @@ var CodexBridgePanel = class extends HTMLElement {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
     const track = this.shadowRoot.getElementById("conversation-timeline-track");
     if (!navigation || !track) return;
-    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "message.updated", "message.removed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
+    const relevant = /* @__PURE__ */ new Set(["message.created", "message.completed", "message.updated", "message.removed", "item.completed", "run.queued", "run.started", "run.dequeued", "run.queue_cleared", "run.completed", "run.cancelled", "run.failed", "run.interrupted"]);
     const sameThread = this._timelineProjectedThread === this._selectedThreadId;
     const unchangedPrefix = this._timelineEvents === this._events || this._timelineEventCount > 0 && this._events[this._timelineEventCount - 1] === this._timelineLastEvent;
     const changed = !sameThread || !unchangedPrefix || this._events.slice(this._timelineEventCount || 0).some((event) => relevant.has(event.event_type));
-    const turns = changed ? this._selectedThreadId ? projectConversationTurns(this._events) : [] : this._conversationTurns;
+    const turns = changed ? this._selectedThreadId ? projectConversationTurns(projectCompletedPlanMessages(this._events)) : [] : this._conversationTurns;
     this._timelineEvents = this._events;
     this._timelineProjectedThread = this._selectedThreadId;
     this._timelineEventCount = this._events.length;
@@ -47769,8 +48112,9 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
-    const text3 = this._streamingAssistantText(activity);
-    const isStreaming = activity.assistantState === "streaming";
+    const plan = this._streamingPlanText(activity);
+    const text3 = this._streamingAssistantText(activity, plan);
+    const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if (!isStreaming && !isPartial || !text3) {
       existing?.remove();
@@ -47781,7 +48125,7 @@ var CodexBridgePanel = class extends HTMLElement {
       "assistant",
       text3,
       isPartial ? "partial" : "streaming",
-      isPartial ? "Partial response" : ""
+      isPartial ? "Partial response" : plan && text3 === plan ? "Plan" : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
@@ -47795,8 +48139,8 @@ var CodexBridgePanel = class extends HTMLElement {
       messageList.append(article);
     }
   }
-  _streamingAssistantText(activity) {
-    if (!["streaming", "partial"].includes(activity.assistantState)) return "";
+  _streamingAssistantText(activity, plan = this._streamingPlanText(activity)) {
+    if (!["streaming", "partial"].includes(activity.assistantState)) return plan;
     let text3 = "";
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
@@ -47812,7 +48156,12 @@ var CodexBridgePanel = class extends HTMLElement {
       text3 = chunk.startsWith(text3) && chunk.length > text3.length ? chunk : `${text3}${chunk}`;
       if (text3.length > 2e5) text3 = text3.slice(-2e5);
     }
-    return text3;
+    return text3 || plan;
+  }
+  _streamingPlanText(activity) {
+    if (!activity.busy || !activity.runId) return "";
+    const item = this._events.findLast((event) => event.event_type === "item.started" && event.payload?.item_type === "plan" && event.payload?.run_id === activity.runId);
+    return item ? activePlanText(this._events, activity.runId, item.payload.item_id) : "";
   }
   _scrollMessagesToBottom() {
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || this.shadowRoot.getElementById("message-list");
@@ -47835,12 +48184,12 @@ var CodexBridgePanel = class extends HTMLElement {
     }
     if (event.event_type === "message.completed") {
       if (isStandaloneArtifactLink(payload.text, this._artifacts)) return null;
-      return this._renderMessage("assistant", payload.text, event.sequence);
+      return this._renderMessage("assistant", payload.text, event.sequence, payload.plan === true ? "Plan" : "");
     }
     if (event.event_type === "item.completed" && payload.item_type === "imageGeneration" && payload.status === "failed") {
       return this._renderGeneratedImageFailure(event);
     }
-    if (["message.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
+    if (["message.delta", "plan.delta", "reasoning.summary_delta", "plan.updated", "patch.updated", "item.started", "item.completed"].includes(event.event_type)) {
       return null;
     }
     if (event.event_type === "run.started" || event.event_type === "run.completed") {
@@ -49223,13 +49572,29 @@ var CodexBridgePanel = class extends HTMLElement {
     ) ? [preserveThread, ...listedThreads] : listedThreads;
     if (!this._sharedThreadChecked) {
       this._sharedThreadChecked = true;
-      const sharedId = new URL(window.location.href).searchParams.get("thread");
+      const parameters = new URL(window.location.href).searchParams;
+      const sharedId = parameters.get("thread");
+      if (parameters.has("interaction")) {
+        const interactionId = parameters.get("interaction");
+        const validThreadId = typeof sharedId === "string" && QUESTION_LINK_THREAD_ID.test(sharedId);
+        const validInteractionId = typeof interactionId === "string" && QUESTION_LINK_INTERACTION_ID.test(interactionId);
+        this._questionDeepLink = {
+          threadId: validThreadId ? sharedId : null,
+          interactionId: validInteractionId ? interactionId : null,
+          invalid: !validThreadId || !validInteractionId,
+          ready: false,
+          focused: false
+        };
+      }
       const shared = this._threads.find((thread) => thread.thread_id === sharedId);
       if (shared) {
         this._setSelectedThreadId(shared.thread_id);
         this._selectedProjectId = shared.project_id;
-      } else if (sharedId) {
+      } else if (sharedId && !this._questionDeepLink) {
         throw new Error("This shared chat is no longer available on this Home Assistant.");
+      } else if (this._questionDeepLink && sharedId) {
+        this._questionDeepLink.threadId = null;
+        this._questionDeepLink.invalid = this._questionDeepLink.invalid || !QUESTION_LINK_THREAD_ID.test(sharedId);
       }
     }
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
@@ -49238,6 +49603,9 @@ var CodexBridgePanel = class extends HTMLElement {
     if (!this._selectedThreadId) {
       const firstActive = this._threads.find((thread) => this._threadIsPrimaryActive(thread));
       this._setSelectedThreadId(firstActive?.thread_id || null);
+    }
+    if (this._questionDeepLink && !this._questionDeepLink.threadId) {
+      this._questionDeepLink.threadId = this._selectedThreadId;
     }
     if (!this._selectedProjectId && this._threads.length) {
       this._selectedProjectId = this._threads[0].project_id;
@@ -49326,6 +49694,9 @@ var CodexBridgePanel = class extends HTMLElement {
         this._clearArtifactRefreshRetry();
       }
       this._replacePendingInteractions(interactions);
+      if (this._questionDeepLink?.threadId === threadId) {
+        this._questionDeepLink.ready = true;
+      }
       this._mergeStatus(status);
       this._threadRefreshGraceUntil = 0;
       this._forceMessageRebuild = true;
@@ -51153,6 +51524,9 @@ var CodexBridgePanel = class extends HTMLElement {
         this._events = batch.state.events;
         this._sequence = batch.state.cursor;
         hasInteractionEvents = batch.accepted.some((event) => INTERACTION_EVENT_TYPES.has(event.event_type));
+        if (batch.accepted.some((event) => ["message.updated", "message.removed"].includes(event.event_type))) {
+          this._forceMessageRebuild = true;
+        }
         this._settlePromptMutationFromEvents();
         if (batch.controls.includes("snapshot")) {
           this._stopEventSubscription();

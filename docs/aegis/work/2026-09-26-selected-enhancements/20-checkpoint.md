@@ -40,3 +40,100 @@ automatic App updates paused until separate rollout approval. Existing owned DEV
 fixtures and the stale Git token are retained for patch verification. VM 103
 remains running as found; CT105 has been restored stopped. Disposable test output
 and live receipts remain under `D:/CodexTemp/bridge-enhancements-20260926`.
+
+## Combined Assist and native corrections — 27 September 2026
+
+The combined local candidate pairs App, Integration and panel 1.11.0 with
+Bridge 0.18.0 and unchanged Codex 0.157.1. Assist retains one configurable
+conversation entity, independently selected native or compatible custom MCP
+servers, a private read-only profile and deny-all initial native tool grants.
+Question notifications remain opt-in and cannot grant execution approval.
+
+Native evidence showed that a loaded provider thread ignores resume settings.
+The broker now confirms stable unsubscribe and explicit unload before resuming
+the same history with accepted settings. Strict identity, model, permission,
+generation and deadline checks remain. Fifteen focused provider-peer tests pass;
+independent read-only review found no actionable defect in this correction.
+
+The panel accepts an omitted default pending status only on the authoritative
+pending-list route. Native completed Plan items project into safe Markdown and
+rail excerpts; matching unfinished Plans stream without becoming acknowledged
+answers. Queue edit/remove references resolve a unique run-owned draft across
+global event and local message sequence namespaces. Rebuilds preserve reading
+position and cancelling a draft preserves a different live turn's ownership.
+The current Windows checks pass 815 units and all 131 browser cases. Desktop
+and phone screenshots verify completed Plan and edited queue presentation.
+
+The App restart regression proves the original shutdown cancels its queued
+record before recovery. Closing auth before runner teardown can wake a queued
+worker into the admission-false path. A shared locked worker predicate now
+preserves only an explicit, undispatched queued prompt when the broker is closed.
+Deterministic barrier tests preserve that prompt after closed admission and
+closed start errors while genuine open-broker account changes still cancel.
+Private account ownership and the original recovery budget remain required.
+Fresh Linux focused qualification passes 90 tests and full Ruff, including the
+real App lifespan's post-shutdown queue assertion and one dispatch/completion
+after restart. The failing diagnostics remain in the combined task evidence.
+
+Independent final-candidate review also identified an already-admitted queued
+lease retained by cancellation during close. The deterministic pre-start
+barrier reproduced the reserved slot after shutdown. Close now releases that
+slot only for a proven undispatched explicit queue; dispatch-marked ownership
+remains retained. Both focused barrier cases pass. The first frozen full Bridge
+run passes 2,436 tests with 27 existing skips; final qualification will cover
+this scoped correction separately against the corrected committed source.
+
+Final qualification requires a clean local commit, a canonical Git archive
+verified against every committed file, fresh applicable Linux gates and parent
+native acceptance. No combined publication or deployment has occurred.
+Production remains excluded; original fixtures and failed histories are retained.
+
+## PR #238 lifecycle review corrections — 27 September 2026
+
+A valid native HA MCP grant now survives a temporary unload or setup of one
+enabled server entry. Status reports unavailable and refresh does not rotate
+credentials until it is loaded again. Token and owner validation still precede
+that temporary status. Missing, disabled or failed entries, missing capabilities
+and invalid authority retain definitive cleanup. Restoration during running HA
+does not leave a listener waiting for a startup event that has already fired.
+
+Permanent Bridge entry removal now uses the question coordinator's own saved
+ledger contract after unload, on both Supervisor and external connections.
+It clears managed persistent and verified Companion notices without starting
+the runtime. Corrupt storage, failed service delivery, cancellation and failed
+ledger writes retain cleanup evidence. A changed recipient identity is never
+targeted. Normal reload still preserves claims and does not deliver twice.
+
+The focused Linux run passes 100 cases. The public Home Assistant entry manager
+drives setup, reload, disable and removal in the regressions; only optional MCP
+integration callbacks and external network/UI boundaries are mocked. No test
+dependency versions change. Independent scoped source review found no blocker.
+The corrected candidate requires fresh full Integration, static and validator
+checks. Unaffected Bridge, frontend and App gates may be carried only after
+exact canonical input equivalence is recorded. Parent owns publication and
+managed HA-DEV acceptance; no native or phone actions occurred in this follow-up.
+
+## In-flight question delivery removal race — 27 September 2026
+
+An admitted HA interval callback can be sending a Companion notification even
+though it is not the coordinator's tracked broker refresh task. Close now fences
+listeners and drains both startup and ledger ownership locks in their existing
+order. It lets admitted service work finish before a removal owner reads the
+ledger, and refresh/reply callbacks waiting for the lock recheck the close fence.
+It no longer cancels an admitted tracked refresh as a substitute for draining.
+
+Unload retains the runtime owner until close completes. Permanent removal also
+drains an owner retained by cancelled or failed unload, because HA can invoke
+removal without retrying those unload states. Errors and cancellation leave that
+owner and the durable claims available for safe cleanup; they do not establish a
+successful removal. The existing local MCP revocation-before-wait rule remains.
+
+The focused Linux suite passes 73 cases. Native HA interval scheduling, service
+execution and public setup/unload/removal drive tests for timer and tracked broker
+delivery, cancellation followed by removal retry, and a failed platform unload.
+They require the send to finish before its tag is cleared, no later timer delivery
+and an empty ledger only after successful cleanup. Two queued-callback cases prove
+the close fence prevents a fresh lookup or reply after lock acquisition.
+Independent lifecycle review confirmed the owner and lock ordering correction.
+Fresh full Integration, static and validator gates remain required against the
+next frozen candidate; unchanged gates require explicit input equivalence.
