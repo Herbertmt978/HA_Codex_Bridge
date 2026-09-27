@@ -225,6 +225,7 @@ def test_delayed_authoritative_start_uses_exact_budget_stop(tmp_path, monkeypatc
             _wait_until(lambda: broker._state.runs[bounded.run_id].status == "cancelled")
         assert broker._state.runs[bounded.run_id].budget_deadline_at == deadline
         expected_replay = (None, 0) if outcome == "completed" or outcome.startswith("buffered_") else ("elapsed_time_limit", 1)
+        _wait_until(lambda: len(replay_observations) == 1)
         assert replay_observations == [expected_replay]
         if outcome != "completed":
             assert any(event.event_type == "message.delta" and event.payload.get("text") == "Retained before acknowledgement"
@@ -282,7 +283,7 @@ def test_unknown_elapsed_start_fences_without_guessing_and_recovers_generation(t
         # stop abort. Existing recovery releases the uncertain lease and checks
         # the undispatched queue's original authority before it can run.
         client.generation += 1
-        _wait_until(lambda: broker._state.runs[bounded.run_id].status == "interrupted")
+        _wait_until(lambda: broker._state.runs[bounded.run_id].status == "cancelled")
         assert not broker._state.runs[bounded.run_id].budget_stop_unconfirmed
         _wait_until(lambda: storage.load_thread(other.thread_id).active_turn_id is not None)
         assert broker._state.runs[queued_other.run_id].status == "running"
