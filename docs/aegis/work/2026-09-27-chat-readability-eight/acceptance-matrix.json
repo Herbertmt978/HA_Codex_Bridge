@@ -3,7 +3,7 @@
   "target": "1.13.0",
   "bridge_target": "0.20.0",
   "codex": "0.157.1",
-  "updated_utc": "2026-09-27T10:05:39.430873+00:00",
+  "updated_utc": "2026-09-27T10:49:28.916312+00:00",
   "items": [
     {
       "id": "CB-002",
@@ -1227,11 +1227,13 @@
       "evidence": "D:\\CodexTemp\\bridge-chat-eight-20260927\\windows-updater-final.xml"
     },
     "frozenBrowserFull": {
-      "state": "failed",
-      "passed": 176,
-      "failed": 12,
-      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\qualification\\candidate1\\results\\final-browser\\receipt.json"
-    }
+      "state": "passed",
+      "passed": 188,
+      "failed": 0,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\qualification\\candidate2\\results\\final-browser\\receipt.json"
+    },
+    "localQualification": "D:\\CodexTemp\\bridge-chat-eight-20260927\\qualification\\candidate2\\local-qualification.json",
+    "frozenReview": "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-frozen-candidate2.md"
   },
   "browser_corrections": {
     "draft": "Confirmed asynchronous IndexedDB deletion raced immediate reload; wait for captured revision removal before clearing acknowledged composer and preserve storage failures. Both HTTP and event settlement retain owner/newer revision guards.",
@@ -1245,5 +1247,42 @@
     },
     "native": null,
     "release": null
+  },
+  "pr242_review_corrections": {
+    "observed_utc": "2026-09-27T10:49:28.916312+00:00",
+    "feature": "CB-060",
+    "pr": 242,
+    "source_commit": "e62672fb23c9d22fda08dd4a467e4e6bfc60780f",
+    "feature_commit": "d09c1e22b0c2fe74112ae5ba024ac143276ff258",
+    "feature_base": "89420c52df9db101161a18d533a2b431862085f4",
+    "negative_control": {
+      "counts": {
+        "passed": 2,
+        "failed": 16,
+        "errors": 0,
+        "skipped": 0
+      },
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\cb060-review-before-qualified\\receipt.json"
+    },
+    "corrected": {
+      "counts": {
+        "passed": 43,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\cb060-review-after-final\\receipt.json"
+    },
+    "review_reports": [
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-cb060-final.md",
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-cb060-test-assumptions.md"
+    ],
+    "test_only_corrections": [
+      "preserve native interrupted outcome",
+      "wait for completed-response replay observer",
+      "retain cancelling-to-cancelled generation recovery"
+    ],
+    "publication_qualified": false,
+    "native_acceptance": false
   }
 }

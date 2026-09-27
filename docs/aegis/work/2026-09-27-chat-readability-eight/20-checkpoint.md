@@ -137,3 +137,26 @@ All 1,097 frontend tests across 74 files, 798 Integration tests, 2,643 isolated 
 The first frozen browser candidate passed 176 cases and failed twelve. Canonical draft settlement now waits for revision-bound IndexedDB deletion before clearing accepted input, preserving owner/newer-edit guards and a storage-only warning on failed cleanup. Question focus scrolls only the existing conversation region, keeping sign-in recovery visible. Browser fixtures now reflect intentional goal/message/code controls, 44px narrow targets, keyboard modality and lazy-image visibility.
 
 All 1102 frontend cases across 74 files pass. The 87 focused draft/question/composer/usage cases and fourteen actual Linux browser correction checks pass without diagnostic overrides. Independent correction review has no actionable findings. The original failed candidate and diagnostic evidence remain retained. A replacement source freeze, full browser gates, validators, transport and both image builds remain required before publication. Native/release acceptance remains unclaimed; production and pending MCP/phone decisions are unchanged.
+
+
+## PR review corrections — 27 September 2026
+
+PR #242 completed its CI checks, then fresh automated review identified elapsed
+startup limits and optional usage history failures. The merge guard stopped
+before any merge. The corrected runtime checks elapsed expiry before model
+dispatch, keeps preparation within its existing control/global bound, and uses
+only a validated native identity for a targeted stop. Uncertain starts retain
+their lease and admission fence; queued work is preserved until authoritative
+recovery. Corrupt, oversized, unreadable or non-file usage history now disables
+only telemetry and preserves the original evidence; ordinary chat and duration
+controls remain available.
+
+Independent review confirmed the production corrections. Three test assumptions
+were corrected to preserve native interrupted status, wait for the replay
+observer and retain existing cancelling-to-cancelled recovery. The same new
+regressions reproduce sixteen failures against the previous frozen source.
+All forty-three corrected startup, history and usage cases pass. Source freeze,
+complete changed local gates and image builds are still required before a
+cohesive follow-up push. Release and served DEV acceptance remain unclaimed;
+CB-011 remains partial and CB-037 excluded. Production and the pending MCP/phone
+decisions are unchanged.
