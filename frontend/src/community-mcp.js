@@ -1,8 +1,8 @@
 const COPY = Object.freeze({
   not_connected: "The installed community HA-MCP App is available. Review the destination and authorise its connection below.",
   not_installed: "No community HA-MCP App is installed. Use the HA-MCP installation and connection guide below.",
-  configured: "The connection is saved. Choose allowed tools, then enable MCP for the regular chat where you want to use them.",
-  paused: "The existing connection is paused. Its allowed tools are preserved; resume it when ready.",
+  configured: "Connection saved. Check its status and choose which tools Codex may use, then turn on MCP in each chat that needs them.",
+  paused: "This connection is paused. Your tool choices are saved. Resume it when you are ready.",
   unavailable: "Could not confirm the community HA-MCP App. Refresh connection options or use the existing HA-MCP setup guide.",
   ambiguous: "More than one community HA-MCP App matches. Use manual server setup to choose the intended server.",
   stopped: "The community HA-MCP App is stopped. Start it in Home Assistant if you intend to use it, then refresh connection options.",
@@ -12,7 +12,7 @@ const COPY = Object.freeze({
   connection_changed: "The connection or destination changed. Refresh to review it again. If a saved connection still uses the old destination, remove it before reconnecting; its tools will need selecting again.",
   restart_required: "The connection result is uncertain. Restart the Codex Bridge App before reviewing its status; no connection action will be retried automatically.",
   retry: "Codex is busy. Wait for active and queued work to finish, then refresh connection options.",
-  enable_mcp: "Update the Bridge App and Integration and enable MCP and local MCP connections in the App, then refresh connection options.",
+  enable_mcp: "Update the Bridge App and Integration, turn on MCP and local MCP connections in the App, then refresh this page.",
 });
 
 export const supportsCommunityMcp = (capabilities = []) => Array.isArray(capabilities)
@@ -60,12 +60,12 @@ export function renderCommunityMcp(doc, state, capabilities = []) {
     label.append(checkbox, node("span", "I authorise this Home Assistant destination and accept the connection and backup risks.", ""));
     card.append(detail, label);
     const connect = node("button", "Connect installed HA-MCP", "panel-button"); connect.type = "button"; connect.dataset.desktopAction = "community-mcp-connect";
-    connect.disabled = Boolean(state.communityMcpBusy) || !checkbox.checked; actions.append(connect);
+    connect.disabled = Boolean(state.communityMcpBusy) || !checkbox.checked; connect.classList.add("settings-primary-action"); actions.append(connect);
   }
   if (supported && status?.server_name) {
     const tools = node("button", "Choose allowed tools", "panel-button"); tools.type = "button"; tools.dataset.desktopAction = "edit-mcp-tools"; tools.dataset.id = status.server_name;
-    actions.append(tools);
-    card.append(node("p", "Manage this connection in the server list below. Existing pause state and tool permissions are preserved. In a regular chat, enable MCP in its conversation settings. Select Assist servers separately if you also want voice access."));
+    tools.classList.add("settings-primary-action"); actions.append(tools);
+    card.append(node("p", "Your pause and tool choices are kept in the server list below. To use these tools in a chat, turn on MCP in that chat’s settings. Voice access through Assist is a separate choice."));
   }
   if (state.communityMcpBusy) actions.querySelectorAll("button").forEach((button) => { button.disabled = true; });
   card.append(actions);

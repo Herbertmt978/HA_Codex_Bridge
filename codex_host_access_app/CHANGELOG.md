@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.2
+
+- Keeps the optional Host Access App metadata paired with Codex Bridge `1.13.2`.
+- Does not change Host Access behaviour or grant access automatically.
+
 ## 1.13.1
 
 - Bundles the Sigstore-verified Codex runtime `0.157.1`.

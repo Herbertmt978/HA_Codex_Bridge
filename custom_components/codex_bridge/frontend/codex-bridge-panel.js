@@ -51248,9 +51248,9 @@ var HA_MCP_CAPABILITIES = ["assist_mcp_selection_v1", "mcp_credential_binding_v1
 var HA_MCP_COPY = Object.freeze({
   not_connected: "Off. Connect only if you want Codex to use Home Assistant tools.",
   unavailable: "Install and load Home Assistant’s native MCP Server integration. Use a Supervisor connection with Enable MCP and Enable local MCP connections enabled in the Bridge App, then refresh connection options.",
-  configured: "Authorisation is saved. New connections allow no tools. Choose allowed tools and refresh server status before use.",
+  configured: "Home Assistant access is saved. Check the server status and choose the tools you want Codex to use before trying it in a chat.",
   paused: "The server is paused and its tools are blocked. Resume it when you are ready to use the allowed tools.",
-  connected: "Ready to use the allowed Home Assistant tools.",
+  connected: "Connected and ready to use the Home Assistant tools you have allowed.",
   expired: "Access has expired. Refresh the existing authorisation before using the server.",
   retry: "Codex is busy or its settings changed. Wait for current work to finish, then refresh status before trying again.",
   reauthorise: "Administrator authorisation is required again. Review the consent below before reconnecting.",
@@ -51281,8 +51281,8 @@ function renderHaMcpShortcut(doc, state, capabilities = []) {
   card.setAttribute("aria-labelledby", "ha-mcp-shortcut-title");
   const title = text2(doc, "h3", "Installed Home Assistant MCP", "desktop-subheading");
   title.id = "ha-mcp-shortcut-title";
-  card.append(title, text2(doc, "p", "Optional and off by default. This shortcut uses Home Assistant’s native MCP Server integration and its Assist API. Community HA-MCP and other custom servers remain separate choices below.", "desktop-note"));
-  const notice = text2(doc, "p", !supported ? "Update the Bridge App and Integration, enable MCP and local MCP connections in the App, then refresh connection options. Manual server setup remains available." : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
+  card.append(title, text2(doc, "p", "This optional connection uses Home Assistant’s own MCP Server and Assist API. It starts off. Community HA-MCP and other servers have separate settings below."));
+  const notice = text2(doc, "p", !supported ? "Update the Bridge App and Integration, turn on MCP and local MCP connections in the App, then refresh this page. You can still add a server manually." : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
   notice.setAttribute("role", "status");
   card.append(notice);
   if (state.haMcpError) {
@@ -51313,7 +51313,9 @@ function renderHaMcpShortcut(doc, state, capabilities = []) {
   }
   if (status?.server_name) {
     if (status.configured) {
-      actions.append(button2(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }));
+      const chooseTools = button2(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name });
+      chooseTools.classList.add("settings-primary-action");
+      actions.append(chooseTools);
       const server = state.data.mcp_servers?.find((row) => row.name === status.server_name);
       if (server?.enabled === false && capabilities.includes("mcp_management_v1")) actions.append(button2(doc, "Resume", "resume-mcp", { id: status.server_name }));
       actions.append(button2(doc, "Refresh authorisation", "ha-mcp-refresh"));
@@ -51323,7 +51325,7 @@ function renderHaMcpShortcut(doc, state, capabilities = []) {
   if (state.haMcpBusy) actions.querySelectorAll("button").forEach((control2) => {
     control2.disabled = true;
   });
-  card.append(actions, text2(doc, "p", "Connecting does not enable the Assist conversation agent. Configure Assist separately and select only the tools you intend to make available. Revoking this shortcut leaves unrelated servers unchanged.", "desktop-note"));
+  card.append(actions, text2(doc, "p", "Connecting here does not turn on the Assist conversation agent. Set up Assist separately if you want it. Removing this connection leaves your other servers alone."));
   return card;
 }
 function validStdioPackage(item) {
@@ -51777,8 +51779,8 @@ function renderMcpCredentialForm(doc, state) {
 var COPY = Object.freeze({
   not_connected: "The installed community HA-MCP App is available. Review the destination and authorise its connection below.",
   not_installed: "No community HA-MCP App is installed. Use the HA-MCP installation and connection guide below.",
-  configured: "The connection is saved. Choose allowed tools, then enable MCP for the regular chat where you want to use them.",
-  paused: "The existing connection is paused. Its allowed tools are preserved; resume it when ready.",
+  configured: "Connection saved. Check its status and choose which tools Codex may use, then turn on MCP in each chat that needs them.",
+  paused: "This connection is paused. Your tool choices are saved. Resume it when you are ready.",
   unavailable: "Could not confirm the community HA-MCP App. Refresh connection options or use the existing HA-MCP setup guide.",
   ambiguous: "More than one community HA-MCP App matches. Use manual server setup to choose the intended server.",
   stopped: "The community HA-MCP App is stopped. Start it in Home Assistant if you intend to use it, then refresh connection options.",
@@ -51788,7 +51790,7 @@ var COPY = Object.freeze({
   connection_changed: "The connection or destination changed. Refresh to review it again. If a saved connection still uses the old destination, remove it before reconnecting; its tools will need selecting again.",
   restart_required: "The connection result is uncertain. Restart the Codex Bridge App before reviewing its status; no connection action will be retried automatically.",
   retry: "Codex is busy. Wait for active and queued work to finish, then refresh connection options.",
-  enable_mcp: "Update the Bridge App and Integration and enable MCP and local MCP connections in the App, then refresh connection options."
+  enable_mcp: "Update the Bridge App and Integration, turn on MCP and local MCP connections in the App, then refresh this page."
 });
 var supportsCommunityMcp = (capabilities = []) => Array.isArray(capabilities) && ["community_mcp_quick_connect_v1", "mcp_local_v1", "mcp_admin_v1", "mcp_tool_permissions_v1"].every((key) => capabilities.includes(key));
 function normalizeCommunityMcp(value) {
@@ -51851,6 +51853,7 @@ function renderCommunityMcp(doc, state, capabilities = []) {
     connect.type = "button";
     connect.dataset.desktopAction = "community-mcp-connect";
     connect.disabled = Boolean(state.communityMcpBusy) || !checkbox.checked;
+    connect.classList.add("settings-primary-action");
     actions.append(connect);
   }
   if (supported && status?.server_name) {
@@ -51858,8 +51861,9 @@ function renderCommunityMcp(doc, state, capabilities = []) {
     tools.type = "button";
     tools.dataset.desktopAction = "edit-mcp-tools";
     tools.dataset.id = status.server_name;
+    tools.classList.add("settings-primary-action");
     actions.append(tools);
-    card.append(node2("p", "Manage this connection in the server list below. Existing pause state and tool permissions are preserved. In a regular chat, enable MCP in its conversation settings. Select Assist servers separately if you also want voice access."));
+    card.append(node2("p", "Your pause and tool choices are kept in the server list below. To use these tools in a chat, turn on MCP in that chat’s settings. Voice access through Assist is a separate choice."));
   }
   if (state.communityMcpBusy) actions.querySelectorAll("button").forEach((button4) => {
     button4.disabled = true;
@@ -52269,6 +52273,17 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
   panel.setAttribute("role", "tabpanel");
   panel.setAttribute("aria-labelledby", `settings-tab-${tab}`);
   section2.append(panel);
+  const actionRow = (...controls) => {
+    const row = documentRef.createElement("div");
+    row.className = "settings-card-actions";
+    row.append(...controls);
+    return row;
+  };
+  const primaryAction = (label, action, extra = {}) => {
+    const control2 = button3(documentRef, label, action, extra);
+    control2.classList.add("settings-primary-action");
+    return control2;
+  };
   const mcp = normalizeDesktopList(state.data.mcp_servers || state.data.servers);
   const preferences = { ...DEFAULT_PREFERENCES, ...settings.preferences };
   const saved = text3(documentRef, "p", "", "preference-save-status");
@@ -52291,9 +52306,9 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
       }
       try {
         settings.onPreferenceChange?.(preferences);
-        saved.textContent = "Saved for this Home Assistant user in this browser.";
+        saved.textContent = "Saved in this browser.";
       } catch {
-        saved.textContent = "Applied for this visit. Browser storage is unavailable, so these preferences could not be saved.";
+        saved.textContent = "Changed for now, but this browser could not save your choice.";
       }
     });
   };
@@ -52304,14 +52319,14 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     addPreference(card, "theme", "Theme", [["ha", "Follow Home Assistant"], ["light", "Light"], ["dark", "Dark"]]);
     addPreference(card, "textSize", "Chat text size", [["default", "Default"], ["large", "Large"], ["larger", "Larger"]]);
     addPreference(card, "motion", "Motion", [["system", "Follow device preference"], ["reduced", "Reduce motion"]]);
-    panel.append(card, text3(documentRef, "p", "Appearance applies to this panel. Your Home Assistant theme stays unchanged.", "desktop-note"), saved);
+    panel.append(card, text3(documentRef, "p", "These choices only change Codex Bridge. Your Home Assistant theme stays the same.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
     panel.append(renderCommunityMcp(documentRef, state, config?.capabilities));
     panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
-    recommendation.className = "desktop-note";
-    recommendation.append(text3(documentRef, "h3", "Community HA-MCP and custom servers", "desktop-subheading"), text3(documentRef, "p", "Community HA-MCP is a separate optional server with its own tools and permissions, which may include configuration access beyond Assist’s exposed entities. You can also connect another compatible server. Review its access before choosing tools; root host access is separate."));
+    recommendation.className = "schedule-card settings-card";
+    recommendation.append(text3(documentRef, "h3", "Other Home Assistant tools"), text3(documentRef, "p", "Community HA-MCP and other servers have their own tools and permissions. Some tools can change more than the devices exposed to Assist. Check what each tool can do before allowing it. Full access to the Home Assistant OS machine is a separate choice."));
     const guide = text3(documentRef, "a", "HA-MCP installation and Bridge connection guide");
     guide.href = HA_MCP_GUIDE;
     guide.target = "_blank";
@@ -52319,7 +52334,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     guide.style.color = "inherit";
     recommendation.append(guide);
     panel.append(recommendation);
-    panel.append(text3(documentRef, "h3", "MCP servers", "desktop-subheading"), text3(documentRef, "p", "Connect public HTTPS servers with optional OAuth, or explicitly enable local network connections. OAuth opens once in a new tab and is never stored by the panel.", "desktop-note"), button3(documentRef, "Add MCP server", "open-mcp-form"));
+    panel.append(text3(documentRef, "h3", "Your MCP servers", "desktop-subheading"), text3(documentRef, "p", "Add a public HTTPS server, or turn on local connections to add one on your home network. OAuth sign-in opens in a new tab. If you enter an API key, the App saves it in its private settings and backups.", "desktop-note"), actionRow(primaryAction("Add MCP server", "open-mcp-form")));
     const credentials = config?.capabilities?.includes("mcp_credentials_v1");
     const management = config?.capabilities?.includes("mcp_management_v1");
     const toolPermissions = config?.capabilities?.includes("mcp_tool_permissions_v1");
@@ -52329,9 +52344,9 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     if (state.form === "mcp-edit" && management) panel.append(renderMcpConnectionForm(documentRef, state));
     if (state.form === "mcp-tools" && toolPermissions) panel.append(renderMcpToolPermissions(documentRef, state));
     if (stdio || mcp.some((row) => row.transport === "stdio")) panel.append(renderStdioPackages(documentRef, state, { available: stdio, management, toolPermissions }));
-    if (!stdio) panel.append(text3(documentRef, "p", "Isolated local packages require a newer App with its separate stdio option enabled. Update the App and Integration, then refresh connection options.", "desktop-note"));
-    panel.append(text3(documentRef, "p", management ? "Pause a server to block its tools in all chats and scheduled tasks. Saved settings stay in the App. Pause before editing its destination; changes wait until current work finishes. Resume applies to subsequent turns in existing and new chats." : "To edit or pause connections, update both the Codex Bridge App and HACS Integration, restart Home Assistant, then refresh server status. Existing connection controls remain available.", "desktop-note"));
-    panel.append(button3(documentRef, "Refresh server status", "refresh-settings-capabilities"));
+    if (!stdio) panel.append(text3(documentRef, "p", "To add a local package, update the App and Integration, turn on the App’s local-package option, then refresh this page.", "desktop-note"));
+    panel.append(text3(documentRef, "p", management ? "Pause a server to stop its tools in every chat and scheduled task. Pause it before changing its address. Work already in progress finishes first; resuming makes it available from the next turn." : "To edit or pause servers, update the Codex Bridge App and Integration, restart Home Assistant, then refresh this page.", "desktop-note"));
+    panel.append(actionRow(button3(documentRef, "Refresh server status", "refresh-settings-capabilities")));
     panel.append(renderTable(documentRef, mcp.filter((row) => row.transport !== "stdio"), [["name", "Name"], ["endpoint", "Endpoint"], ["startup", "Startup"], ["auth", "Auth"]], (row, td) => {
       const controls = text3(documentRef, "div", "", "mcp-connection-actions");
       td.append(controls);
@@ -52350,7 +52365,7 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
         if (row.failure) controls.append(text3(documentRef, "span", "Connection needs attention. Check the destination and authentication, then refresh status.", "desktop-action-note"));
       }
       if (managedHome) {
-        controls.append(text3(documentRef, "span", "Managed Home Assistant authorisation · revoke using the shortcut above", "desktop-action-note"));
+        controls.append(text3(documentRef, "span", "To remove this Home Assistant connection, use the card above.", "desktop-action-note"));
         return;
       }
       controls.append(button3(documentRef, "Remove server", "remove-mcp", { id }));
@@ -52358,16 +52373,19 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
         controls.append(text3(documentRef, "span", row.credential_configured ? "Credential saved" : "Credential removed · connection blocked", "desktop-action-note"), button3(documentRef, row.credential_configured ? "Replace credential" : "Set credential", "edit-mcp-credential", { id }));
         if (row.credential_configured) controls.append(button3(documentRef, "Remove credential", "remove-mcp-credential", { id }));
       } else if (oauth) controls.append(button3(documentRef, "Sign in", "login-mcp", { id }));
-      else controls.append(text3(documentRef, "span", "No OAuth", "desktop-action-note"));
+      else controls.append(text3(documentRef, "span", row.auth === "none" ? "No separate sign-in" : "Authentication status unavailable", "desktop-action-note"));
     }));
   }
   if (tab === "instructions") {
-    panel.append(text3(documentRef, "h3", "AGENTS.md instructions", "desktop-subheading"), text3(documentRef, "p", "Keep global defaults separate from the current project. The selected scope is saved through Home Assistant.", "desktop-note"));
+    panel.append(text3(documentRef, "h3", "Instructions for Codex", "desktop-subheading"));
+    const card = documentRef.createElement("section");
+    card.className = "schedule-card settings-card";
+    card.append(text3(documentRef, "p", "Choose whether these instructions apply to all chats or just this project. Codex saves all-chat instructions in its private storage and project instructions in the selected workspace."));
     const selectedScope = hasActiveProject && state.agentsScope !== "global" ? "project" : "global";
     const scope = selectField(documentRef, "Instruction scope", "agents_scope", [{ value: "global", label: "Global instructions" }, { value: "project", label: hasActiveProject ? "Current project" : "Current project (select a project first)", disabled: !hasActiveProject }], selectedScope);
     const scopeControl = scope.querySelector('[data-desktop-field="agents_scope"]');
     if (scopeControl) scopeControl.dataset.agentsProjectId = activeProjectId || "";
-    panel.append(scope);
+    card.append(scope);
     const records = asRecord(state.data.agentsScopes);
     const agents = asRecord(records[selectedScope] || state.data.agents);
     const draftKey = selectedScope === "project" ? `project:${activeProjectId || state.agentsProjectId || ""}` : "global";
@@ -52376,34 +52394,58 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const contentField = input(documentRef, `${selectedScope === "global" ? "Global" : "Project"} AGENTS.md`, "agents_content", content, "textarea");
     const contentControl = contentField.querySelector('[data-desktop-field="agents_content"]');
     if (contentControl) contentControl.dataset.agentsProjectId = activeProjectId || "";
-    panel.append(contentField);
-    const actions = documentRef.createElement("div");
-    actions.className = "desktop-form-actions";
-    actions.append(button3(documentRef, "Save instructions", "save-agents"), button3(documentRef, "Delete instructions", "delete-agents"));
-    panel.append(actions);
+    card.append(contentField, actionRow(primaryAction("Save instructions", "save-agents"), button3(documentRef, "Delete instructions", "delete-agents")));
+    panel.append(card);
   }
-  if (tab === "shortcuts") panel.append(text3(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"), text3(documentRef, "p", "⌘/Ctrl+N new chat · ⌘/Ctrl+G search · ⌘/Ctrl+F find · ⌘/Ctrl+Shift+[ or ] switch chats · Ctrl+Shift+D toggle drawer · ⌘/Ctrl+, settings · Esc closes menus", "desktop-note"));
-  if (tab === "about") panel.append(text3(documentRef, "h3", "About / security", "desktop-subheading"), text3(documentRef, "p", "The panel connects through Home Assistant. Codex runs in the private App. Full auto allows work inside the selected workspace and enabled tools. The separate, optional Host Access App can grant root access to Home Assistant OS, including host files, credentials and networking, after an administrator acknowledges the warning and selects it for a task.", "desktop-note"));
+  if (tab === "shortcuts") {
+    panel.append(text3(documentRef, "h3", "Keyboard shortcuts", "desktop-subheading"));
+    const card = documentRef.createElement("section");
+    card.className = "schedule-card settings-card";
+    const shortcuts = documentRef.createElement("dl");
+    shortcuts.className = "settings-shortcuts-list";
+    for (const [label, key] of [["New chat", "⌘/Ctrl+N"], ["Search", "⌘/Ctrl+G"], ["Find", "⌘/Ctrl+F"], ["Switch chats", "⌘/Ctrl+Shift+[ or ]"], ["Toggle drawer", "Ctrl+Shift+D"], ["Open settings", "⌘/Ctrl+,"], ["Close a menu", "Esc"]]) {
+      const row = documentRef.createElement("div");
+      row.append(text3(documentRef, "dt", label));
+      const value = documentRef.createElement("dd");
+      value.append(text3(documentRef, "kbd", key));
+      row.append(value);
+      shortcuts.append(row);
+    }
+    card.append(shortcuts);
+    panel.append(card);
+  }
+  if (tab === "about") {
+    panel.append(text3(documentRef, "h3", "About and security", "desktop-subheading"));
+    const app = documentRef.createElement("section");
+    app.className = "schedule-card settings-card";
+    app.append(text3(documentRef, "h3", "How Codex Bridge works"), text3(documentRef, "p", "This panel connects through Home Assistant. Codex runs in the private App. Full auto can work in your selected workspace using the tools you have enabled."));
+    const host = documentRef.createElement("section");
+    host.className = "schedule-card settings-card";
+    host.append(text3(documentRef, "h3", "Access to the Home Assistant OS machine"), text3(documentRef, "p", "The optional Host Access App can give Codex root access to the machine, including its files, credentials and network. An administrator must read the warning and enable it, then choose it for a chat or task."));
+    panel.append(app, host);
+  }
   if (tab === "access") {
     panel.append(text3(documentRef, "h3", "Choose the access your task needs", "desktop-subheading"));
     const workspace = text3(documentRef, "section", "", "schedule-card host-access-settings");
-    workspace.append(text3(documentRef, "h3", "Full auto · workspace"), text3(documentRef, "p", "Codex can use enabled tools automatically and edit files inside the selected workspace. It cannot use private host paths or direct network connections. Set your new-chat permission default in General, or change permissions for an individual chat.", "desktop-note"), button3(documentRef, "New chat defaults", "select-settings-tab", { tab: "general" }));
+    workspace.append(text3(documentRef, "h3", "Full auto in your workspace"), text3(documentRef, "p", "Codex can use the tools you have enabled and edit files in the selected workspace. It cannot read private Home Assistant OS files or connect directly to your network. Set the default for new chats in General, or change it in each chat."), actionRow(primaryAction("New chat defaults", "select-settings-tab", { tab: "general" })));
     const mcpCard = text3(documentRef, "section", "", "schedule-card host-access-settings");
-    mcpCard.append(text3(documentRef, "h3", "Home Assistant devices and automations"), text3(documentRef, "p", "Connect HA-MCP to give Codex the Home Assistant tools you choose. This is separate from root host access; revoking one does not revoke the other.", "desktop-note"), button3(documentRef, "Set up Home Assistant tools", "select-settings-tab", { tab: "mcp" }));
+    mcpCard.append(text3(documentRef, "h3", "Home Assistant tools"), text3(documentRef, "p", "Connect HA-MCP, then choose which tools Codex may use. This is separate from full access to the Home Assistant OS machine. Turning one off does not turn off the other."), actionRow(primaryAction("Set up Home Assistant tools", "select-settings-tab", { tab: "mcp" })));
     const host = state.data?.host_access;
     const card = text3(documentRef, "section", "", "schedule-card host-access-settings");
-    card.append(text3(documentRef, "h3", HOST_LABEL), text3(documentRef, "p", "The optional Codex Host Access App lets Codex run commands as root on the HAOS machine. That includes its files, credentials, services, internet and local network. It can change or delete data and interrupt Home Assistant.", "desktop-note"));
+    card.append(text3(documentRef, "h3", HOST_LABEL), text3(documentRef, "p", "The optional Host Access App lets Codex run commands as root on your Home Assistant OS machine. This includes files, credentials, services and network access. It can change or delete data and interrupt Home Assistant."));
     if (config?.capabilities?.includes("host_access_v1")) {
-      card.append(text3(documentRef, "p", host?.enabled ? "Enabled. Choose this mode explicitly for each chat or scheduled task." : "Review the full warning before enabling access. If the companion App is missing, the setup dialog links to its installation instructions.", "desktop-note"), button3(documentRef, host?.enabled ? "Review host access" : "Set up host access", "review-host-access"));
-      if (host?.enabled) card.append(button3(documentRef, "Revoke host access", "revoke-host-access"));
-      if (host?.enabled && settings.threadId) card.append(button3(documentRef, "Use for current chat", "use-host-access"));
+      card.append(text3(documentRef, "p", host?.enabled ? "Host access is on. You still need to choose it for each chat or scheduled task." : "Read the full warning before turning this on. The setup window can also help you install the App."));
+      const hostActions = [primaryAction(host?.enabled ? "Review host access" : "Set up host access", "review-host-access")];
+      if (host?.enabled) hostActions.push(button3(documentRef, "Revoke host access", "revoke-host-access"));
+      if (host?.enabled && settings.threadId) hostActions.push(button3(documentRef, "Use for current chat", "use-host-access"));
+      card.append(actionRow(...hostActions));
     } else {
       card.append(text3(documentRef, "p", "Host access is not available on this connection. Update the Codex Bridge App and HACS Integration, then restart Home Assistant and reload this panel. Updating does not grant host access.", "desktop-note"));
       const guide = text3(documentRef, "a", "Update instructions and missing-update checks");
       guide.href = "https://github.com/Herbertmt978/HA_Codex_Bridge/blob/main/docs/installation.md#update-an-existing-installation";
       guide.target = "_blank";
       guide.rel = "noopener noreferrer";
-      card.append(guide, button3(documentRef, "Check connection options again", "refresh-settings-capabilities"));
+      card.append(guide, actionRow(button3(documentRef, "Check connection options again", "refresh-settings-capabilities")));
     }
     panel.append(workspace, mcpCard, card);
   }
@@ -52430,17 +52472,18 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     const recovery = documentRef.createElement("div");
     recovery.className = "schedule-card settings-card";
     addPreference(recovery, "draftRecovery", "Recover unsent drafts in this browser", [["off", "Off"], ["on", "On"]]);
-    recovery.append(text3(documentRef, "p", "Optional browser-local storage for this Home Assistant user: up to 20 chats, 8,192 characters each, for seven days. Sent or discarded text is removed. Turning this off clears saved drafts. Restoring never sends a message.", "desktop-note"));
-    panel.append(recovery);
+    recovery.append(text3(documentRef, "p", "If you turn this on, this browser can keep unsent text for up to 20 chats, with up to 8,192 characters per chat, for seven days. Sent or discarded text is removed. Turning it off clears saved drafts. Restoring a draft never sends it."));
     panel.append(
       defaults,
-      text3(documentRef, "p", "Full auto lets Codex work automatically within the selected workspace and enabled tools. Observe is read-only; Edit workspace asks before commands. Private host paths and direct network access remain blocked.", "desktop-note"),
-      text3(documentRef, "p", "These defaults apply to new chats created in this browser. Inherit uses the project's defaults. Existing chats and scheduled tasks keep their own settings.", "desktop-note"),
+      text3(documentRef, "p", "Observe is read-only. Edit workspace asks before running commands. Full auto can work in your selected workspace with enabled tools. Private Home Assistant OS files and direct network access stay blocked.", "desktop-note"),
+      text3(documentRef, "p", "These choices apply to new chats in this browser. Inherit uses the project’s defaults. Existing chats and scheduled tasks keep their own choices.", "desktop-note"),
       saved,
-      button3(documentRef, "Access settings and Home Assistant control", "select-settings-tab", { tab: "access" }),
+      actionRow(primaryAction("Access and Home Assistant tools", "select-settings-tab", { tab: "access" })),
+      text3(documentRef, "h3", "Unsent drafts", "desktop-subheading"),
+      recovery,
       text3(documentRef, "h3", "Native tools", "desktop-subheading"),
       rows,
-      text3(documentRef, "p", "Image generation uses the signed-in ChatGPT account and Codex's native tool. Ask for an image naturally in a chat.", "desktop-note")
+      text3(documentRef, "p", "To make an image, ask in a chat. Codex uses the signed-in ChatGPT account and its built-in image tool.", "desktop-note")
     );
   }
   return section2;
@@ -52506,7 +52549,7 @@ function renderDesktopFeatureSurface(container, { destination = "scheduled", sta
   heading.className = `desktop-feature-header${destination === "scheduled" ? "" : " desktop-feature-header-centered"}`;
   const destinationMeta = DESTINATIONS.find((item) => item.id === destination) || DESTINATIONS[1];
   heading.append(text3(documentRef, "div", destinationMeta.label, "desktop-feature-title"));
-  heading.append(text3(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Connection, instructions, and security preferences.", "desktop-feature-summary"));
+  heading.append(text3(documentRef, "p", destination === "scheduled" ? "Manage automations and run history." : destination === "skills" ? "Enable skills by scope and create bounded instructions." : destination === "plugins" ? "Install plugins and maintain trusted marketplaces." : "Choose how Codex Bridge looks, works and connects.", "desktop-feature-summary"));
   if (!(destination === "scheduled" && state.form)) container.append(heading);
   if (state.loading) {
     container.setAttribute("aria-busy", "true");
@@ -53742,7 +53785,7 @@ var ChildAgentsView = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.13.1";
+var PANEL_VERSION = "1.13.2";
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -54402,8 +54445,8 @@ template.innerHTML = `
     .host-access-dialog .confirmation-actions { margin-top: 24px; flex-wrap: wrap; }
     .host-access-acknowledgement { display: flex; align-items: flex-start; gap: 12px; margin-top: 20px; line-height: 1.5; }
     .host-access-acknowledgement input { flex: 0 0 auto; width: 20px; height: 20px; margin-top: 2px; }
-    .schedule-card.host-access-settings { padding: 20px; }
-    .host-access-settings + .host-access-settings { margin-top: 16px; }
+    .schedule-card.host-access-settings { padding: 24px; }
+    .host-access-settings + .host-access-settings { margin-top: 0; }
     .host-access-settings a, .mcp-setup a, .mcp-stdio-settings a { color: var(--accent-color); overflow-wrap: anywhere; }
     .host-access-settings > button { margin: 8px 8px 0 0; }
 
@@ -56909,7 +56952,42 @@ template.innerHTML = `
     .stdio-server-details dt { font-weight: 600; }
     .stdio-server-details dd { margin: 0; }
     .desktop-action-note { color: var(--muted-color); font-size: var(--font-caption-size); }
-    .settings-panel { display: grid; gap: 14px; }
+    .settings-panel { display: grid; gap: 18px; min-width: 0; }
+    .settings-panel > .desktop-note { max-width: 72ch; margin: 0; line-height: 1.55; }
+    .settings-panel > .desktop-subheading { margin: 8px 0 -6px; font-size: 18px; }
+    .settings-panel .settings-card,
+    .settings-panel .host-access-settings {
+      display: grid;
+      align-content: start;
+      gap: 14px;
+      min-width: 0;
+      margin: 0;
+      padding: 24px;
+      border-radius: 20px;
+      background: var(--surface-bg);
+    }
+    .settings-panel .settings-card > h3,
+    .settings-panel .host-access-settings > h3 { margin: 0; }
+    .settings-panel .settings-card > p,
+    .settings-panel .host-access-settings > p { margin: 0; max-width: 72ch; line-height: 1.55; }
+    .settings-panel .desktop-form-actions,
+    .settings-card-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 4px; }
+    .settings-panel .panel-button {
+      min-height: 44px;
+      padding: 11px 18px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .settings-panel .settings-primary-action {
+      border-color: color-mix(in srgb, var(--accent-color) 30%, var(--border-color) 70%);
+      background: var(--accent-surface);
+    }
+    .settings-shortcuts-list { display: grid; gap: 0; margin: 0; }
+    .settings-shortcuts-list > div { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 12px 0; }
+    .settings-shortcuts-list > div + div { border-top: 1px solid var(--border-color); }
+    .settings-shortcuts-list dt { flex: 1 1 220px; font-weight: 600; }
+    .settings-shortcuts-list dd { margin: 0; color: var(--muted-color); }
+    .settings-shortcuts-list kbd { display: inline-block; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--surface-muted); color: var(--text-color); font: inherit; font-size: var(--font-caption-size); }
 
     .native-tools-list {
       display: grid;
@@ -57077,14 +57155,14 @@ template.innerHTML = `
       color: var(--text-color);
     }
     .desktop-notice[role="alert"] > span { flex-basis: 100%; }
-    .settings-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
+    .settings-tabs { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
     .settings-card { margin: 16px 0; }
     .preference-save-status { color: var(--muted-color); font-size: var(--font-control-size); min-height: 20px; }
     .skill-group { min-width: 0; border: 1px solid var(--border-color); border-radius: 16px; background: var(--surface-bg); overflow: hidden; }
     .skill-group-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin: 0; padding: 18px 20px; background: var(--surface-alt); font-size: 17px; }
     .skill-group-count { margin-left: auto; color: var(--muted-color); font-weight: 400; font-size: var(--font-control-size); }
     .skill-group .desktop-table { margin: 0; }
-    .settings-tab { min-height: 32px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--muted-color); font-size: var(--font-caption-size); }
+    .settings-tab { min-height: 40px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--muted-color); font-size: var(--font-control-size); }
     .settings-tab[aria-selected="true"] { background: var(--surface-muted); color: var(--text-color); font-weight: 600; }
 
     .rail-actions .tool-button {
@@ -59004,7 +59082,13 @@ template.innerHTML = `
       .desktop-toolbar { align-items: flex-start; flex-direction: column; gap: 10px; }
       .desktop-toolbar > button { width: 100%; }
       .settings-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
-      .settings-tab { flex: 0 0 auto; }
+      .settings-tab { flex: 0 0 auto; min-height: 44px; }
+      .settings-panel .settings-card,
+      .settings-panel .host-access-settings { padding: 18px; }
+      .settings-panel .desktop-form-actions,
+      .settings-card-actions { align-items: stretch; flex-direction: column; }
+      .settings-panel .desktop-form-actions > .panel-button,
+      .settings-card-actions > .panel-button { width: 100%; }
 
       .shell {
         display: block;

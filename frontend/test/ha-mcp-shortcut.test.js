@@ -33,7 +33,7 @@ describe("installed Home Assistant MCP shortcut", () => {
     await panel._handleDesktopAction("ha-mcp-connect");
     expect(panel._fetchHaApi).not.toHaveBeenCalled();
     expect(control(panel, "ha-mcp-connect")).toBeNull();
-    expect(surface(panel).textContent).toContain("Manual server setup remains available");
+    expect(surface(panel).textContent).toContain("add a server manually");
     expect(control(panel, "open-mcp-form")).toBeTruthy();
   });
 
@@ -91,7 +91,7 @@ describe("installed Home Assistant MCP shortcut", () => {
     expect(consent(panel)).toBeNull();
     expect(control(panel, "edit-mcp-tools").dataset.id).toBe(ownedName);
     expect(surface(panel).textContent).toContain("no tools allowed");
-    expect(surface(panel).textContent).toContain("does not enable the Assist conversation agent");
+    expect(surface(panel).textContent).toContain("does not turn on the Assist conversation agent");
   });
 
   it("does not replay a failed mutation or retain provider messages and credentials", async () => {

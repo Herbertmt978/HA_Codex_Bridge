@@ -127,7 +127,7 @@ for (const width of [390, 1280]) {
     await expect(card.getByRole("button", { name: "Choose allowed tools", exact: true })).toBeVisible();
     expect(requests).toEqual([{ acknowledged: true, consent_revision: "c".repeat(64) }]);
     expect(await page.evaluate(() => window.communityServer.enabled_tools)).toEqual([]);
-    await expect(card).toContainText("regular chat");
+    await expect(card).toContainText("turn on MCP in that chat’s settings");
     const bounds = await card.boundingBox(); expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
@@ -219,7 +219,7 @@ for (const width of [390, 1280]) for (const theme of ["light", "dark"]) {
     releaseConnect();
     await expect(card.getByRole("button", { name: "Revoke home authorisation", exact: true })).toBeVisible();
     await expect(panel.getByText("Home Assistant connected with no tools allowed. Choose the permitted tools before use.", { exact: true })).toBeVisible();
-    await expect(card).toContainText("New connections allow no tools");
+    await expect(card).toContainText("Check the server status and choose the tools");
     await expect(card).not.toContainText("paused");
     await expect(card.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
     expect(await panel.evaluate((element) => element._desktopFeatures.settings.data.ha_mcp_shortcut.state)).toBe("configured");

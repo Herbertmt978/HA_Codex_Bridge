@@ -238,7 +238,7 @@ describe("desktop feature surfaces", () => {
     expect(host.textContent).toContain("Image generation");
     expect(host.textContent).toContain("Available");
     expect(host.textContent).toContain("signed-in ChatGPT account");
-    expect(host.textContent).toContain("Ask for an image naturally in a chat");
+    expect(host.textContent).toContain("To make an image, ask in a chat");
     expect(host.textContent).not.toContain("$imagegen");
     expect(host.textContent).not.toMatch(/skill guide/i);
     expect(host.textContent).not.toMatch(/API key|token/i);
@@ -250,6 +250,23 @@ describe("desktop feature surfaces", () => {
     expect(host.textContent).toContain("P"); expect(host.textContent).toContain("1"); expect(host.textContent).not.toContain("[object Object]");
     renderDesktopFeatureSurface(host, { destination: "settings", state: { settingsTab: "mcp", data: { mcp_servers: [{ name: "MCP", endpoint: "https://mcp.example", startup: "ready", auth: "oauth" }] } } });
     expect(host.textContent).toContain("https://mcp.example");
+  });
+
+  it("explains how each MCP sign-in method handles credentials", () => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, { destination: "settings", state: { settingsTab: "mcp", data: {} } });
+    expect(host.textContent).toContain("OAuth sign-in opens in a new tab");
+    expect(host.textContent).toContain("If you enter an API key, the App saves it in its private settings and backups");
+  });
+
+  it("does not describe unknown MCP authentication as no sign-in", () => {
+    const host = document.createElement("div");
+    renderDesktopFeatureSurface(host, { destination: "settings", state: { settingsTab: "mcp", data: { mcp_servers: [
+      { name: "unknown", auth: "unknown" }, { name: "public", auth: "none" },
+    ] } } });
+    const actions = [...host.querySelectorAll(".mcp-connection-actions")];
+    expect(actions[0].textContent).toContain("Authentication status unavailable");
+    expect(actions[1].textContent).toContain("No separate sign-in");
   });
 
   it("shows provider display names without exposing opaque app IDs", () => {

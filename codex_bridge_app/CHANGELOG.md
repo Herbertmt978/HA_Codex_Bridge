@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.13.2
+
+- Gives every Settings tab roomier cards and buttons, with mobile-friendly action rows.
+- Makes connection, access and instruction guidance easier to read. MCP status text
+  distinguishes saved settings from a ready connection and explains where keys live.
+- Pairs App, Integration and panel `1.13.2` with unchanged Bridge `0.20.0`
+  and Codex `0.157.1`.
+
 ## 1.13.1
 
 - Keeps the composer to one toolbar, with secondary settings and context tools

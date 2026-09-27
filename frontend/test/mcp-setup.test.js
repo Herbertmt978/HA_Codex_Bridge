@@ -33,7 +33,7 @@ describe("MCP connection management", () => {
     panel._renderDesktopSurface();
     expect(action(panel, "remove-mcp")).toBeTruthy();
     expect(action(panel, "resume-mcp")).toBeNull();
-    expect(panel.shadowRoot.getElementById("desktop-feature-surface").textContent).toContain("update both");
+    expect(panel.shadowRoot.getElementById("desktop-feature-surface").textContent).toContain("update the Codex Bridge App and Integration");
   });
 
   it("requires an explicit authentication decision and fresh destination consent", async () => {
@@ -100,7 +100,7 @@ describe("isolated stdio MCP packages", () => {
     expect(action(panel, "resume-mcp")).toBeNull();
     expect(action(panel, "remove-mcp")).toBeTruthy();
     expect(action(panel, "toggle-stdio-details")).toBeTruthy();
-    expect(panel.shadowRoot.textContent).toContain("Isolated local packages require a newer App");
+    expect(panel.shadowRoot.textContent).toContain("To add a local package, update the App and Integration");
     expect(panel._callWS).not.toHaveBeenCalledWith("list_stdio_packages");
   });
 
