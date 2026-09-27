@@ -194,13 +194,15 @@ describe("panel run activity integration", () => {
     expect(response.getAttribute("aria-label")).toBe("Assistant response");
     expect(response.querySelector(".avatar, .message-head")).toBeNull();
     expect(response.querySelector(".message-actions").getAttribute("aria-label")).toBe("Message actions");
-    expect([...response.querySelectorAll(".message-actions button")].map((button) => button.textContent))
+    expect(response.querySelector('.message-actions > button').getAttribute('aria-label')).toBe('Message actions');
+    expect([...response.querySelectorAll('.message-actions [role="menuitem"]')].map((button) => button.textContent))
       .toEqual(["Copy message", "Copy passage", "Quote message", "Quote passage"]);
     expect(response.querySelectorAll('.copy-button[aria-label="Copy original code"]')).toHaveLength(2);
     response.querySelector('.copy-button[aria-label="Copy original code"]').click();
     await Promise.resolve();
     expect(copy).toHaveBeenCalledWith(code);
     response.querySelector(".message-actions button").click();
+    response.querySelector('.message-actions [role="menuitem"][aria-label="Copy message"]').click();
     await Promise.resolve();
     expect(copy).toHaveBeenLastCalledWith(source);
     expect(copy.mock.calls.at(-1)[0]).not.toContain("hidden tool output");
@@ -208,6 +210,7 @@ describe("panel run activity integration", () => {
     expect(plain.querySelector(".code-block")).toBeNull();
     expect(plain.querySelector(".message-actions").getAttribute("aria-label")).toBe("Message actions");
     plain.querySelector(".message-actions button").click();
+    plain.querySelector('.message-actions [role="menuitem"][aria-label="Copy message"]').click();
     await Promise.resolve();
     expect(copy).toHaveBeenLastCalledWith("Hello");
     const user = panel._renderMessage("user", "Say hello", 3, "Queued steer");
@@ -216,6 +219,7 @@ describe("panel run activity integration", () => {
     expect(user.querySelector(".avatar, .code-block")).toBeNull();
     expect(user.querySelector(".message-actions").getAttribute("aria-label")).toBe("Message actions");
     user.querySelector(".message-actions button").click();
+    user.querySelector('.message-actions [role="menuitem"][aria-label="Copy message"]').click();
     await Promise.resolve();
     expect(copy).toHaveBeenLastCalledWith("Say hello");
   });

@@ -57,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.0";
+const PANEL_VERSION = "1.13.1";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -6910,6 +6910,9 @@ class CodexBridgePanel extends HTMLElement {
     if (actionTarget.closest("#add-menu")) {
       this._setAddMenuOpen(false, { restoreFocus: action === "upload-file" || action === "upload-folder" });
     }
+    if (actionTarget.closest(".compact-surface") && ["upload-file", "upload-folder", "schedule-message", "add-plugins"].includes(action)) {
+      this._compactComposer.close(action === "upload-file" || action === "upload-folder");
+    }
     if (
       actionTarget.closest(".rail-pane")
       && !["toggle-project-actions", "toggle-thread-actions"].includes(action)
@@ -7505,6 +7508,7 @@ class CodexBridgePanel extends HTMLElement {
       const shortcut = event.key.toLowerCase();
       if (shortcut === "f" && this._activeDestination === "chats" && this._selectedThreadId && this._config?.capabilities?.includes("conversation_search_v1")) {
         event.preventDefault();
+        if (this._compactComposer.openPage !== "search") this._compactComposer.open("search", this.shadowRoot.getElementById("chat-menu-button"));
         this.shadowRoot.getElementById("conversation-search-input").focus();
         return;
       }

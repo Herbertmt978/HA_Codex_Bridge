@@ -886,6 +886,390 @@ var goalStyles = `
   #goal-controls summary { overflow-wrap: anywhere; cursor: pointer; }
 `;
 
+// frontend/src/bottom-pane-resize.js
+var bottomPaneResizeStyles = `
+  .bottom-panel { position:relative; display:flex; flex-direction:column; }
+  #bottom-preview { flex:1 1 0; min-height:0; overflow:auto; }
+  #bottom-terminal { display:flex; flex-direction:column; flex:1 1 0; min-height:0; overflow:auto; }
+  #bottom-terminal[hidden], #bottom-preview[hidden] { display:none; }
+  #bottom-terminal > .terminal-note, #bottom-terminal > .terminal-tools { flex:0 0 auto; }
+  #terminal-host { height:auto; flex:1 0 80px; min-height:80px; }
+  .bottom-pane-resizer { position:sticky; top:0; z-index:3; height:8px; flex:0 0 8px; min-height:8px; margin:0; cursor:ns-resize; touch-action:none; outline-offset:-2px; }
+  .bottom-pane-resizer::after { content:""; position:absolute; top:2px; left:calc(50% - 22px); width:44px; height:3px; border-radius:3px; background:var(--muted-color); opacity:0; }
+  .bottom-pane-resizer:hover::after, .bottom-pane-resizer:focus-visible::after, .bottom-panel-resizing .bottom-pane-resizer::after { opacity:1; }
+  .bottom-panel-header { top:8px; flex:0 0 auto; }
+  .bottom-panel > .row-actions { flex:0 0 auto; }
+  .bottom-pane-drag-shield { position:fixed; inset:0; z-index:200; cursor:ns-resize; touch-action:none; }
+  .bottom-pane-drag-shield[hidden] { display:none; }
+  .bottom-panel-resizing { user-select:none; }
+  @media (pointer:coarse) { .bottom-pane-resizer::before { content:""; position:absolute; inset:-8px 0; } }
+`;
+var BottomPaneResize = class {
+  constructor(panel) {
+    this.panel = panel;
+    this.root = panel.shadowRoot;
+    this.pane = this.root.getElementById("bottom-panel");
+    this.handle = document.createElement("div");
+    this.handle.className = "bottom-pane-resizer";
+    this.handle.tabIndex = 0;
+    this.handle.setAttribute("role", "separator");
+    this.handle.setAttribute("aria-label", "Resize file preview and terminal");
+    this.handle.setAttribute("aria-orientation", "horizontal");
+    this.handle.setAttribute("aria-controls", "bottom-panel");
+    this.handle.title = "Drag to resize. Arrow keys adjust; Home minimises, End maximises, Enter resets.";
+    this.pane.prepend(this.handle);
+    this.shield = document.createElement("div");
+    this.shield.className = "bottom-pane-drag-shield";
+    this.shield.hidden = true;
+    this.root.append(this.shield);
+    this.handle.addEventListener("pointerdown", (event) => this.start(event));
+    this.handle.addEventListener("pointermove", (event) => {
+      if (this.drag?.id === event.pointerId) this.apply(this.drag.height + this.drag.y - event.clientY);
+    });
+    this.handle.addEventListener("pointerup", () => this.finish());
+    this.handle.addEventListener("pointercancel", () => this.finish(true));
+    this.handle.addEventListener("lostpointercapture", () => this.finish(true));
+    this.handle.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && this.drag) {
+        event.preventDefault();
+        this.finish(true);
+        return;
+      }
+      const bounds = this.bounds();
+      const current = this.panel._bottomPanelHeight || this.pane.getBoundingClientRect().height;
+      const step = event.shiftKey ? 50 : 10;
+      const next = { ArrowUp: current + step, ArrowDown: current - step, Home: bounds.min, End: bounds.max, Enter: bounds.default }[event.key];
+      if (next !== void 0) {
+        event.preventDefault();
+        this.apply(next);
+      }
+    });
+    this.resize = () => {
+      if (this.panel._bottomPanelOpen) this.apply(this.panel._bottomPanelHeight || this.bounds().default);
+    };
+    this.observer = typeof ResizeObserver === "function" ? new ResizeObserver(this.resize) : null;
+  }
+  bounds() {
+    const main2 = this.pane.parentElement;
+    const rect = main2.getBoundingClientRect();
+    const viewportBottom = (window.visualViewport?.height || window.innerHeight) + (window.visualViewport?.offsetTop || 0);
+    const available = Math.max(0, Math.min(rect.bottom, viewportBottom) - Math.max(window.visualViewport?.offsetTop || 0, rect.top));
+    const composer = this.root.querySelector(".composer-shell")?.getBoundingClientRect().height || 0;
+    const header = this.root.querySelector(".main-header")?.getBoundingClientRect().height || 60;
+    const min = Math.min(120, Math.max(64, available * 0.2));
+    const max = Math.max(min, available - composer - header - 120);
+    return { min: Math.round(min), max: Math.round(max), default: Math.round(Math.min(max, Math.max(min, available * 0.35))) };
+  }
+  apply(height) {
+    const { min, max } = this.bounds();
+    const value = Math.round(Math.min(max, Math.max(min, height)));
+    this.panel._bottomPanelHeight = value;
+    this.pane.style.flex = `0 0 ${value}px`;
+    this.pane.style.minHeight = `${min}px`;
+    this.pane.style.maxHeight = `${max}px`;
+    this.handle.setAttribute("aria-valuemin", String(min));
+    this.handle.setAttribute("aria-valuemax", String(max));
+    this.handle.setAttribute("aria-valuenow", String(value));
+    this.handle.setAttribute("aria-valuetext", `${value} pixels high`);
+    this.panel._terminal?.resize();
+  }
+  start(event) {
+    if (event.button !== 0 || !this.panel._bottomPanelOpen || this.drag) return;
+    event.preventDefault();
+    this.handle.focus({ preventScroll: true });
+    this.drag = { id: event.pointerId, y: event.clientY, height: this.pane.getBoundingClientRect().height };
+    this.handle.setPointerCapture(event.pointerId);
+    this.shield.hidden = false;
+    this.root.querySelector(".shell").classList.add("bottom-panel-resizing");
+  }
+  finish(cancel = false) {
+    const drag = this.drag;
+    if (!drag) return;
+    this.drag = null;
+    this.shield.hidden = true;
+    this.root.querySelector(".shell").classList.remove("bottom-panel-resizing");
+    if (this.handle.hasPointerCapture(drag.id)) this.handle.releasePointerCapture(drag.id);
+    if (cancel) this.apply(drag.height);
+  }
+  connect() {
+    window.addEventListener("resize", this.resize);
+    window.visualViewport?.addEventListener("resize", this.resize);
+    window.visualViewport?.addEventListener("scroll", this.resize);
+    this.observer?.observe(this.pane.parentElement);
+    this.observer?.observe(this.root.querySelector(".composer-shell"));
+  }
+  disconnect() {
+    this.finish(true);
+    this.observer?.disconnect();
+    window.removeEventListener("resize", this.resize);
+    window.visualViewport?.removeEventListener("resize", this.resize);
+    window.visualViewport?.removeEventListener("scroll", this.resize);
+  }
+};
+
+// frontend/src/compact-composer.js
+var compactComposerStyles = `
+  .compact-composer-bar { grid-column:1 / -1; grid-row:2; display:flex; align-items:center; gap:6px; min-width:0; }
+  .compact-composer-bar .icon-button { flex:0 0 auto; width:32px; min-width:32px; height:32px; border:0; background:transparent; }
+  .compact-composer-bar .compact-model-button { margin-left:auto; min-width:0; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .compact-composer-bar .compact-context-summary[hidden] { display:none; }
+  .compact-composer-bar .compact-context-summary { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:20%; }
+  .compact-composer-bar .compact-options-button { width:auto; max-width:28%; gap:4px; }
+  .compact-options-summary { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:var(--font-control-size); }
+  .compact-options-summary:empty { display:none; }
+  .compact-composer-bar .send-button { flex:0 0 auto; width:32px; min-width:32px; height:32px; padding:6px; border-radius:50%; background:var(--text-color); color:var(--surface-bg); }
+  .composer-shell .attachment-toolbar, .composer-shell > #composer-diagnostics, .composer-shell .composer-actions { display:none !important; }
+  .composer-shell .composer-status:empty { display:none; }
+  .compact-surface { position:fixed; z-index:75; width:min(420px,calc(100vw - 16px)); max-height:calc(100dvh - 16px); overflow:auto; padding:12px; border:1px solid var(--border-color); border-radius:14px; background:var(--surface-bg); color:var(--text-color); box-shadow:0 8px 28px color-mix(in srgb,var(--text-color) 16%,transparent); }
+  .compact-surface[hidden] { display:none !important; }
+  .compact-surface-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .compact-surface-header h2 { flex:1; margin:0; font-size:var(--font-body-size); }
+  .compact-surface-header button { min-height:32px; }
+  .compact-surface-body { min-width:0; }
+  .compact-surface .compact-surface-link { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; border:0; background:transparent; padding:8px 10px; text-align:left; }
+  .compact-surface .compact-surface-link:hover { background:var(--surface-muted); }
+  .compact-surface .row-actions, .compact-surface #collaboration-controls, .compact-surface #compact-toolbar { display:flex; flex-wrap:wrap; gap:8px; }
+  .compact-surface #collaboration-controls > .composer-utility, .compact-surface #compact-toolbar > .composer-utility { flex:1 1 100%; justify-content:space-between; min-width:0; padding:6px 0; border:0; }
+  .compact-surface input { max-width:100%; min-width:0; }
+  .compact-surface #workspace-context, .compact-surface #chat-context { padding:0; max-height:none; overflow:visible; }
+  .compact-surface #goal-controls { margin:0; }
+  .compact-surface .attachment-chips { position:static; max-height:180px; overflow:auto; }
+  .compact-surface .row-meta { overflow-wrap:anywhere; }
+  .compact-surface #conversation-search { padding:0; border:0; }
+  .message:has(.message-actions) { grid-template-columns:minmax(0,1fr) 32px; column-gap:4px; }
+  .message:has(.message-actions) > .bubble { grid-column:1; grid-row:1; }
+  .message:has(.message-actions) > .message-time { grid-column:1 / -1; grid-row:1; }
+  .message:has(.message-time):has(.message-actions) > .bubble, .message:has(.message-time) > .message-actions { grid-row:2; }
+  .message-actions { grid-column:2; grid-row:1; margin-top:0; justify-content:flex-end; }
+
+  .message-actions-menu { position:fixed; z-index:100; width:200px; max-height:calc(100dvh - 16px); overflow:auto; padding:6px; border:1px solid var(--border-color); border-radius:12px; background:var(--surface-bg); box-shadow:0 8px 24px #0003; }
+  .message-actions-menu[hidden] { display:none; }
+  .message-selection-help { padding:4px 8px; margin:0; }
+  .message-actions-menu .composer-limits-button { width:100%; height:auto; min-height:36px; justify-content:flex-start; padding:8px; }
+  .message-actions-trigger { font-size:22px; }
+  .message-actions > .composer-limits-button { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:6px; }
+  .message-actions .composer-limits-button svg { width:18px; height:18px; }
+  @media (max-width:880px) {
+    .composer-shell { grid-template-columns:minmax(0,1fr); }
+    .compact-composer-bar { gap:2px; }
+    .compact-composer-bar .icon-button, .compact-composer-bar .send-button { width:44px; min-width:44px; height:44px; }
+    .compact-composer-bar .compact-options-button { width:auto; }
+    .compact-composer-bar .compact-model-button { min-height:44px; max-width:none; flex:1; padding:6px 2px; }
+    .compact-composer-bar .compact-context-summary { max-width:48px; padding:6px 2px; }
+    .compact-surface .compact-select, .compact-surface button, .compact-surface input, .compact-surface summary { min-height:44px; }
+    .message:has(.message-actions) { grid-template-columns:minmax(0,1fr) 44px; }
+    .message-actions > .composer-limits-button { width:44px; height:44px; }
+    .message-actions-menu .composer-limits-button { min-height:44px; }
+  }
+`;
+var CompactComposer = class {
+  constructor(panel, icons2) {
+    this.panel = panel;
+    this.icons = icons2;
+    this.root = panel.shadowRoot;
+    this.surfaces = /* @__PURE__ */ new Map();
+    this.openPage = null;
+    this.trigger = null;
+    this.threadId = panel._selectedThreadId;
+    const shell = this.root.querySelector(".composer-shell");
+    this.bar = document.createElement("div");
+    this.bar.className = "compact-composer-bar";
+    this.bar.setAttribute("role", "group");
+    this.bar.setAttribute("aria-label", "Message toolbar");
+    shell.append(this.bar);
+    const plus = this.root.getElementById("add-menu-button");
+    this.bar.append(plus);
+    this.options = this.button("Turn options", "options", "settings", true);
+    this.options.classList.add("compact-options-button");
+    this.optionSummary = document.createElement("span");
+    this.optionSummary.className = "compact-options-summary";
+    this.options.append(this.optionSummary);
+    this.context = this.button("Selected context", "add");
+    this.context.classList.add("compact-context-summary");
+    this.model = this.button("Model and thinking", "models");
+    this.model.classList.add("compact-model-button");
+    this.bar.append(this.options, this.context, this.model);
+    for (const id of ["context-usage-button", "dictation-button", "stop-run-button", "send-button"]) this.bar.append(this.root.getElementById(id));
+    this.surface("options", "Turn options", ["collaboration-controls", "elapsed-limit-note", "draft-recovery-controls"]);
+    this.surface("models", "Model, thinking and allowance", ["compact-toolbar"]);
+    this.surface("files", "Files and workspace context", ["upload-file-button", "upload-folder-button", "attachment-meta", "attachment-chip-list", "workspace-context"]);
+    this.surface("previous", "Previous chat context", ["chat-context"]);
+    this.surface("review", "Repository review", ["git-composer-review", "git-context"]);
+    this.surface("goal", "Goal — manual continuation", ["goal-controls"]);
+    this.surface("search", "Find in chat", ["conversation-search"]);
+    const add = this.surface("add", "Add to chat", []);
+    for (const [label, page] of [["Files and workspace context", "files"], ["Previous chat context", "previous"], ["Repository review", "review"]]) add.append(this.button(label, page));
+    for (const id of ["schedule-message-button", "add-plugins-button"]) add.append(this.root.getElementById(id));
+    this.root.getElementById("add-menu").hidden = true;
+    this.root.addEventListener("change", () => queueMicrotask(() => this.sync()));
+    this.outside = (event) => {
+      const path2 = event.composedPath();
+      if (!path2.some((node2) => node2?.classList?.contains("message-actions"))) this.panel._openMessageActions?.();
+      if (!this.openPage) return;
+      if (!path2.includes(this.surfaces.get(this.openPage)) && !path2.includes(this.trigger)) this.close();
+    };
+    this.resize = () => this.place();
+    this.key = (event) => {
+      if (event.key === "Tab" && !this.panel._openMessageActions) for (const actions of this.root.querySelectorAll(".message-actions")) actions._captureMenuSelection?.();
+      if (!this.openPage) return;
+      const surface = this.surfaces.get(this.openPage);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.close(true);
+      }
+      const target = event.composedPath()[0];
+      if (!surface.contains(target)) return;
+      if (event.key === "Tab") {
+        const controls = [...surface.querySelectorAll("button,input,select,textarea,summary")].filter((node2) => !node2.disabled && node2.getClientRects().length);
+        if (event.shiftKey && target === controls[0] || !event.shiftKey && target === controls.at(-1)) {
+          event.preventDefault();
+          event.stopPropagation();
+          this.close(true);
+        }
+      }
+    };
+    this.observer = new MutationObserver(() => this.sync());
+    for (const id of ["compact-toolbar", "workspace-context", "chat-context", "goal-controls", "attachment-chip-list"]) this.observer.observe(this.root.getElementById(id), { childList: true, subtree: true });
+  }
+  connect() {
+    for (const id of ["compact-toolbar", "workspace-context", "chat-context", "goal-controls", "attachment-chip-list"]) this.observer.observe(this.root.getElementById(id), { childList: true, subtree: true });
+    document.addEventListener("pointerdown", this.outside);
+    window.addEventListener("resize", this.resize);
+    document.addEventListener("keydown", this.key, true);
+  }
+  disconnect() {
+    this.panel._openMessageActions?.();
+    this.close();
+    this.observer.disconnect();
+    document.removeEventListener("pointerdown", this.outside);
+    document.removeEventListener("keydown", this.key, true);
+    window.removeEventListener("resize", this.resize);
+  }
+  button(label, page, icon = "", compact = false) {
+    const button4 = document.createElement("button");
+    button4.type = "button";
+    button4.className = compact ? "icon-button" : "composer-limits-button compact-surface-link";
+    button4.setAttribute("aria-label", label);
+    button4.setAttribute("aria-haspopup", "dialog");
+    button4.setAttribute("aria-expanded", "false");
+    button4.setAttribute("aria-controls", `compact-surface-${page}`);
+    if (icon) this.panel._setTrustedButtonContent(button4, this.icons[icon]);
+    else button4.textContent = label;
+    button4.addEventListener("click", () => this.open(page, button4));
+    return button4;
+  }
+  surface(page, label, ids) {
+    const surface = document.createElement("section");
+    surface.id = `compact-surface-${page}`;
+    surface.className = "compact-surface";
+    surface.hidden = true;
+    surface.setAttribute("role", "dialog");
+    surface.setAttribute("aria-label", label);
+    const header = document.createElement("div");
+    header.className = "compact-surface-header";
+    const title = document.createElement("h2");
+    title.textContent = label;
+    const close2 = document.createElement("button");
+    close2.type = "button";
+    close2.textContent = "Close";
+    close2.setAttribute("aria-label", `Close ${label}`);
+    close2.addEventListener("click", () => this.close(true));
+    header.append(title, close2);
+    const body = document.createElement("div");
+    body.className = "compact-surface-body";
+    for (const id of ids) {
+      const node2 = this.root.getElementById(id);
+      if (node2) body.append(node2);
+    }
+    surface.append(header, body);
+    this.root.append(surface);
+    this.surfaces.set(page, surface);
+    return body;
+  }
+  open(page, trigger) {
+    if (!this.surfaces.has(page)) return;
+    this.sync();
+    if (this.openPage === page) {
+      this.close(true);
+      return;
+    }
+    const returnTo = this.openPage === "add" ? this.trigger : trigger;
+    this.close();
+    this.panel._chatContextMenu.close();
+    this.panel._setAddMenuOpen(false);
+    this.openPage = page;
+    this.trigger = returnTo || this.root.getElementById("chat-menu-button");
+    if (page === "search") this.panel._renderConversationSearch();
+    if (page === "review") void this.panel._loadGitContext(true);
+    this.trigger?.setAttribute("aria-expanded", "true");
+    const surface = this.surfaces.get(page);
+    surface.hidden = false;
+    for (const details of surface.querySelectorAll("#workspace-context, #chat-context, #goal-controls > details")) details.open = true;
+    this.sync();
+    this.place();
+    surface.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+  }
+  close(focus = false) {
+    const search = this.openPage === "search";
+    if (this.openPage) this.surfaces.get(this.openPage).hidden = true;
+    this.trigger?.setAttribute("aria-expanded", "false");
+    if (focus && this.trigger?.isConnected) this.trigger.focus({ preventScroll: true });
+    this.openPage = null;
+    this.trigger = null;
+    if (search) this.panel._renderConversationSearch();
+  }
+  place() {
+    if (!this.openPage) return;
+    const surface = this.surfaces.get(this.openPage);
+    const view = window.visualViewport;
+    const left = view?.offsetLeft || 0, top = view?.offsetTop || 0;
+    const width = view?.width || window.innerWidth, height = view?.height || window.innerHeight;
+    const anchor = this.trigger?.getBoundingClientRect() || this.bar.getBoundingClientRect();
+    surface.style.maxHeight = `${Math.max(44, height - 16)}px`;
+    const bounds = surface.getBoundingClientRect();
+    surface.style.left = `${Math.max(left + 8, Math.min(anchor.left, left + width - bounds.width - 8))}px`;
+    surface.style.top = `${Math.max(top + 8, Math.min(anchor.top - bounds.height - 8, top + height - bounds.height - 8))}px`;
+  }
+  sync() {
+    const p2 = this.panel;
+    if (this.threadId !== p2._selectedThreadId || p2._activeDestination !== "chats") {
+      this.close();
+      this.threadId = p2._selectedThreadId;
+    }
+    const choices = [];
+    if (p2._collaborationMode === "plan") choices.push("Plan");
+    if (p2._followUpMode === "steer") choices.push("Steer");
+    const duration = this.root.getElementById("elapsed-time-limit");
+    if (duration?.value) choices.push(duration.selectedOptions[0]?.textContent || "Time limit");
+    const search = this.root.getElementById("web-search-mode");
+    if (search?.value && search.value !== "configured") choices.push(`Search ${search.selectedOptions[0]?.textContent}`);
+    const state = choices.length ? `Turn options: ${choices.join(", ")}` : "Turn options";
+    this.optionSummary.textContent = choices.join(" · ");
+    this.options.setAttribute("aria-label", state);
+    this.options.title = state;
+    this.options.dataset.active = String(choices.length > 0);
+    const workspace = p2._workspaceContext.current(), chats = p2._chatContext.current();
+    const count = workspace.length + chats.length + (p2._activeThread?.attachments?.length || 0);
+    this.context.hidden = !count;
+    const stale = [...workspace, ...chats].some((item) => item.stale);
+    this.context.textContent = `${stale ? "Review " : ""}${count} context`;
+    this.context.setAttribute("aria-label", `Inspect selected context: ${count} items${stale ? ", changed context requires review" : ""}`);
+    const model = this.root.getElementById("thread-model-select"), thinking = this.root.getElementById("thread-thinking-select");
+    const clean = (select) => (select?.selectedOptions[0]?.textContent || "").replace(/^Inherit \((.*)\)$/, "$1");
+    const text5 = [clean(model), clean(thinking)].filter(Boolean).join(" · ") || "Model and thinking";
+    this.model.textContent = text5;
+    this.model.setAttribute("aria-label", `Model and thinking: ${text5}. Open allowance and settings`);
+    const goal = p2._goalControls?.view?.goal;
+    const header = this.root.getElementById("chat-menu-button");
+    header?.setAttribute("aria-label", goal ? `Chat actions. Goal ${goal.status}` : "Chat actions");
+    if (this.openPage && !this.root.activeElement && (document.activeElement === document.body || document.activeElement === p2)) {
+      this.surfaces.get(this.openPage).querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+    }
+    this.place();
+  }
+};
+
 // frontend/src/context-usage.js
 function contextUsage(value) {
   const used = value?.used_tokens;
@@ -52546,7 +52930,7 @@ var ChatContextMenu = class {
       null,
       ...this.supported ? [control("Fork", "submenu", "pullRequest", "", "fork"), null] : [],
       control("Open in new window", "open", "external"),
-      ...this.header ? [null, control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : [],
+      ...this.header ? [null, control("Goal", "compact-goal", "chat"), control("Find in chat", "compact-search", "search"), control("Repository review", "compact-review", "file"), control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : [],
       ...(this.uncertain.has(this.threadId) || this.notice) && !this.header ? [null, control("Refresh", "refresh", "refresh")] : []
     ];
   }
@@ -52777,6 +53161,12 @@ var ChatContextMenu = class {
       return;
     }
     if (this.busy.has(thread.thread_id)) return;
+    if (action.startsWith("compact-") && this.header) {
+      const trigger = this.trigger;
+      this.close();
+      this.panel._compactComposer.open(action.slice(8), trigger);
+      return;
+    }
     if (action === "submenu" || action === "back" || action === "manage-sections" || action === "manage-section") {
       window.clearTimeout(this.hoverTimer);
       const previous = this.page;
@@ -53343,7 +53733,7 @@ var ChildAgentsView = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.13.0";
+var PANEL_VERSION = "1.13.1";
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -59043,6 +59433,8 @@ template.innerHTML = `
         border-color: color-mix(in srgb, var(--accent-color) 64%, var(--border-color) 36%);
       }
     }
+    ${compactComposerStyles}
+    ${bottomPaneResizeStyles}
   </style>
   <div class="shell">
     <div class="pane rail-pane" id="workspace-drawer" role="navigation" aria-label="Workspace navigation">
@@ -59608,6 +60000,8 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   connectedCallback() {
     this._installStaticUi();
+    this._compactComposer.connect();
+    this._bottomPaneResize.connect();
     this._chatContextMenu.connect();
     if (typeof ResizeObserver === "function") {
       this._timelineResizeObserver ||= new ResizeObserver(() => this._scheduleTimelineScrollSync(true));
@@ -59647,6 +60041,8 @@ var CodexBridgePanel = class extends HTMLElement {
     this._inlineImageController?.dispose();
     this._inlineImageController = null;
     this._chatContextMenu.disconnect();
+    this._compactComposer?.disconnect();
+    this._bottomPaneResize?.disconnect();
     window.cancelAnimationFrame(this._timelineScrollFrame);
     this._timelineScrollFrame = null;
     this._closeTimelinePreview();
@@ -59693,6 +60089,10 @@ var CodexBridgePanel = class extends HTMLElement {
     menu.style.maxHeight = `${Math.max(44, Math.min(420, Math.floor((viewport?.height ?? window.innerHeight) * 0.6), Math.floor(spaceAbove)))}px`;
   }
   _setAddMenuOpen(open2, { restoreFocus = false } = {}) {
+    if (open2 && this._compactComposer) {
+      this._compactComposer.open("add", this.shadowRoot.getElementById("add-menu-button"));
+      return;
+    }
     if (open2) this._hideTooltip();
     this._addMenuOpen = open2;
     const menu = this.shadowRoot.getElementById("add-menu");
@@ -59896,6 +60296,8 @@ var CodexBridgePanel = class extends HTMLElement {
     for (const control2 of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
       this._setTooltipTarget(control2, control2.getAttribute("aria-label") || control2.getAttribute("title") || "");
     }
+    this._compactComposer = new CompactComposer(this, icons);
+    this._bottomPaneResize = new BottomPaneResize(this);
     this.shadowRoot.addEventListener("contextmenu", (event) => {
       const row = event.target instanceof Element ? event.target.closest(".chat-row[data-chat-thread-id]") : null;
       if (!row) return;
@@ -60055,6 +60457,7 @@ var CodexBridgePanel = class extends HTMLElement {
     contextToggle?.setAttribute("aria-expanded", String(contextOpen));
   }
   _syncComposerDiagnostics() {
+    if (this._compactComposer) return;
     const details = this.shadowRoot.getElementById("composer-diagnostics");
     if (!details) {
       return;
@@ -60090,6 +60493,9 @@ var CodexBridgePanel = class extends HTMLElement {
     const action = actionTarget.dataset.action;
     if (actionTarget.closest("#add-menu")) {
       this._setAddMenuOpen(false, { restoreFocus: action === "upload-file" || action === "upload-folder" });
+    }
+    if (actionTarget.closest(".compact-surface") && ["upload-file", "upload-folder", "schedule-message", "add-plugins"].includes(action)) {
+      this._compactComposer.close(action === "upload-file" || action === "upload-folder");
     }
     if (actionTarget.closest(".rail-pane") && !["toggle-project-actions", "toggle-thread-actions"].includes(action)) {
       this._closeRailMenus();
@@ -60735,6 +61141,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const shortcut = event.key.toLowerCase();
       if (shortcut === "f" && this._activeDestination === "chats" && this._selectedThreadId && this._config?.capabilities?.includes("conversation_search_v1")) {
         event.preventDefault();
+        if (this._compactComposer.openPage !== "search") this._compactComposer.open("search", this.shadowRoot.getElementById("chat-menu-button"));
         this.shadowRoot.getElementById("conversation-search-input").focus();
         return;
       }
@@ -62539,6 +62946,7 @@ var CodexBridgePanel = class extends HTMLElement {
     });
   }
   _renderComposerState(activeThread) {
+    queueMicrotask(() => this._compactComposer?.sync());
     this._workspaceContext.render();
     this._chatContext.render();
     this._renderGoals(activeThread);
@@ -64533,6 +64941,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._renderedSequence = 0;
       messageList.replaceChildren(this._mainEmptyState());
       this._renderConversationTimeline();
+      this._restoreMessageActionFocus();
       return;
     }
     const threadChanged = this._renderedThreadId !== this._selectedThreadId;
@@ -64542,6 +64951,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const searchSelected = search?.threadId === this._selectedThreadId && !search.error && Boolean(search.results[search.index]);
     const shouldStick = !searchSelected && (threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80);
     if (shouldRebuild) {
+      const focused = this.shadowRoot.activeElement?.closest?.(".message-actions");
+      const sequence2 = focused?.closest(".message")?.dataset.sequence;
+      this._messageActionFocus = sequence2 && !threadChanged ? { threadId: this._selectedThreadId, sequence: sequence2 } : null;
+      this._openMessageActions?.();
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
       this._forceMessageRebuild = false;
@@ -64554,6 +64967,7 @@ var CodexBridgePanel = class extends HTMLElement {
       this._syncStreamingMessage(messageList, activity);
       this._restoreConversationSearchSelection();
       this._renderConversationTimeline();
+      this._restoreMessageActionFocus();
       return;
     }
     if (eventsToRender.length && messageList.querySelector(".empty-state")) {
@@ -64572,6 +64986,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._syncStreamingMessage(messageList, activity);
     this._restoreConversationSearchSelection();
     this._renderConversationTimeline();
+    this._restoreMessageActionFocus();
     if (shouldStick) {
       this._scrollMessagesToBottom();
     } else if (shouldRebuild) {
@@ -64583,6 +64998,13 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _conversationBookmarkKey() {
     return `${this._preferenceKey || "codex-bridge:preferences:local"}:bookmarks:${this._selectedThreadId}`;
+  }
+  _restoreMessageActionFocus() {
+    const saved = this._messageActionFocus;
+    this._messageActionFocus = null;
+    if (!saved || saved.threadId !== this._selectedThreadId) return;
+    const article = [...this.shadowRoot.querySelectorAll(".message")].find((node2) => node2.dataset.sequence === saved.sequence);
+    (article?.querySelector(".message-actions-trigger") || this.shadowRoot.getElementById("conversation-scroll")).focus({ preventScroll: true });
   }
   _renderConversationTimeline() {
     const navigation = this.shadowRoot.getElementById("conversation-timeline");
@@ -64838,7 +65260,10 @@ var CodexBridgePanel = class extends HTMLElement {
     const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if (!isStreaming && !isPartial || !text5) {
+      const restoreActions = Boolean(existing?.querySelector(".message-actions")?.contains(this.shadowRoot.activeElement));
+      if (existing?.querySelector(".message-actions-trigger")?.getAttribute("aria-expanded") === "true") this._openMessageActions?.();
       existing?.remove();
+      if (restoreActions) this.shadowRoot.getElementById("conversation-scroll")?.focus({ preventScroll: true });
       return;
     }
     messageList.querySelector(".empty-state")?.remove();
@@ -64857,7 +65282,10 @@ var CodexBridgePanel = class extends HTMLElement {
       isPartial ? "Assistant partial response" : "Assistant response in progress"
     );
     if (existing) {
+      const restoreActions = Boolean(existing.querySelector(".message-actions")?.contains(this.shadowRoot.activeElement));
+      if (existing.querySelector(".message-actions-trigger")?.getAttribute("aria-expanded") === "true") this._openMessageActions?.();
       existing.replaceWith(article);
+      if (restoreActions) article.querySelector(".message-actions-trigger")?.focus({ preventScroll: true });
     } else {
       messageList.append(article);
     }
@@ -65103,15 +65531,28 @@ var CodexBridgePanel = class extends HTMLElement {
     }));
     bubble.append(content);
     article.append(bubble);
-    article.append(this._messageActions(content, String(text5 ?? ""), role));
-    if (mathsSources.length) article.append(mathSourceActions(document, mathsSources, async (source) => {
-      try {
-        await this._writeClipboardText(source);
-        this._clearError();
-      } catch (error) {
-        this._setError(error);
+    const messageActions = this._messageActions(content, String(text5 ?? ""), role);
+    article.append(messageActions);
+    const sourceThreadId = this._selectedThreadId;
+    if (mathsSources.length) {
+      const sourceActions = mathSourceActions(document, mathsSources, async (source) => {
+        const currentSources = [...content.querySelectorAll("[data-math-source]")].map((node2) => node2.dataset.mathSource);
+        if (!article.isConnected || sourceThreadId !== this._selectedThreadId || currentSources.length !== mathsSources.length || currentSources.some((value, index) => value !== mathsSources[index])) return;
+        messageActions._closeMenu(true);
+        try {
+          await this._writeClipboardText(source);
+          this._clearError();
+        } catch (error) {
+          this._setError(error);
+        }
+      });
+      for (const button4 of sourceActions.querySelectorAll("button")) {
+        button4.setAttribute("role", "menuitem");
+        button4.addEventListener("mousedown", (event) => event.preventDefault());
+        button4.setAttribute("aria-label", button4.textContent);
+        messageActions.querySelector(".message-actions-menu").append(button4);
       }
-    }));
+    }
     return article;
   }
   _messageActions(content, original, role) {
@@ -65120,6 +65561,91 @@ var CodexBridgePanel = class extends HTMLElement {
     actions.setAttribute("aria-label", "Message actions");
     const threadId = this._selectedThreadId;
     const title = this._activeThread?.title;
+    const trigger = document.createElement("button");
+    trigger.type = "button";
+    trigger.className = "composer-limits-button message-actions-trigger";
+    trigger.textContent = "⋯";
+    trigger.setAttribute("aria-label", "Message actions");
+    trigger.setAttribute("aria-haspopup", "menu");
+    trigger.setAttribute("aria-expanded", "false");
+    const menu = document.createElement("div");
+    menu.className = "message-actions-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Message actions");
+    menu.hidden = true;
+    let capturedPassage = null;
+    const readMenuSelection = () => {
+      try {
+        return this.shadowRoot.getSelection?.() || window.getSelection();
+      } catch {
+        return null;
+      }
+    };
+    const capture = () => {
+      capturedPassage = selectedMessagePassageResult(content, readMenuSelection());
+    };
+    const close2 = (restore = false) => {
+      menu.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      capturedPassage = null;
+      if (this._openMessageActions === close2) this._openMessageActions = null;
+      if (restore && trigger.isConnected) trigger.focus();
+      capturedPassage = null;
+    };
+    actions._closeMenu = close2;
+    trigger.addEventListener("pointerdown", capture);
+    actions._captureMenuSelection = capture;
+    trigger.addEventListener("focus", () => {
+      if (!readMenuSelection()?.isCollapsed || !capturedPassage) capture();
+    });
+    trigger.addEventListener("pointercancel", () => {
+      capturedPassage = null;
+    });
+    trigger.addEventListener("blur", () => {
+      if (menu.hidden) capturedPassage = null;
+    });
+    trigger.addEventListener("mousedown", (event) => event.preventDefault());
+    trigger.addEventListener("click", () => {
+      if (!menu.hidden) {
+        close2(true);
+        return;
+      }
+      this._openMessageActions?.();
+      const current = readMenuSelection();
+      if (!current?.isCollapsed || !capturedPassage) capture();
+      for (const item of menu.querySelectorAll("[data-passage]")) {
+        item.disabled = !capturedPassage?.text;
+        item.title = capturedPassage?.text ? item.getAttribute("aria-label") : capturedPassage?.error || "Select a passage inside this message first.";
+      }
+      selectionHelp.textContent = capturedPassage?.text ? "" : capturedPassage?.error || "Select a passage inside this message to copy or quote it.";
+      selectionHelp.hidden = Boolean(capturedPassage?.text);
+      menu.hidden = false;
+      trigger.setAttribute("aria-expanded", "true");
+      this._openMessageActions = close2;
+      const rect = trigger.getBoundingClientRect();
+      menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 208))}px`;
+      menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8))}px`;
+      menu.querySelector("button:not(:disabled)")?.focus({ preventScroll: true });
+    });
+    actions.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" || event.key === "Tab") {
+        if (event.key === "Escape") event.preventDefault();
+        close2(true);
+      } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        event.preventDefault();
+        const items = [...menu.querySelectorAll("button:not(:disabled)")];
+        const index = items.indexOf(this.shadowRoot.activeElement);
+        items[event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+      }
+    });
+    actions.addEventListener("focusout", () => queueMicrotask(() => {
+      if (!actions.contains(this.shadowRoot.activeElement)) close2();
+    }));
+    const selectionHelp = document.createElement("p");
+    selectionHelp.className = "row-meta message-selection-help";
+    selectionHelp.setAttribute("role", "status");
+    menu.append(selectionHelp);
+    actions.append(trigger, menu);
     for (const [label, quote, passage] of [
       ["Copy message", false, false],
       ["Copy passage", false, true],
@@ -65129,7 +65655,11 @@ var CodexBridgePanel = class extends HTMLElement {
       const button4 = document.createElement("button");
       button4.type = "button";
       button4.className = "composer-limits-button";
+      button4.setAttribute("aria-label", label);
+      button4.title = label;
       button4.textContent = label;
+      button4.setAttribute("role", "menuitem");
+      if (passage) button4.dataset.passage = "true";
       let activatedPassage = null;
       const readSelection = () => {
         try {
@@ -65154,9 +65684,10 @@ var CodexBridgePanel = class extends HTMLElement {
       button4.addEventListener("click", async () => {
         const selection2 = readSelection();
         let result = passage ? selectedMessagePassageResult(content, selection2) : { text: original, error: "" };
-        if (passage && selection2?.isCollapsed && activatedPassage) result = activatedPassage;
+        if (passage && selection2?.isCollapsed && (capturedPassage || activatedPassage)) result = capturedPassage || activatedPassage;
         const selected = result.text;
         activatedPassage = null;
+        close2(!quote);
         if (!selected) {
           this._setError(result.error || "Select a passage inside this message first.");
           return;
@@ -65182,7 +65713,7 @@ var CodexBridgePanel = class extends HTMLElement {
           this._setError(error);
         }
       });
-      actions.append(button4);
+      menu.append(button4);
     }
     return actions;
   }
@@ -66147,11 +66678,12 @@ var CodexBridgePanel = class extends HTMLElement {
     if (this._contextDrawerMedia?.matches && this._mobileDrawer !== "context") this._toggleMobileDrawer("context", trigger);
   }
   _toggleBottomPanel() {
+    this._bottomPaneResize.finish(true);
     this._bottomPanelOpen = !this._bottomPanelOpen;
     this.shadowRoot.getElementById("bottom-panel").hidden = !this._bottomPanelOpen;
     this.shadowRoot.getElementById(this._bottomPanelOpen ? "bottom-preview" : "preview-home").append(this.shadowRoot.getElementById("artifact-preview-section"));
     this._renderChatControls();
-    if (this._bottomPanelOpen) this._terminal.resize();
+    if (this._bottomPanelOpen) this._bottomPaneResize.resize();
   }
   _selectBottomTab(tab) {
     for (const name of ["preview", "terminal"]) {
@@ -67245,7 +67777,7 @@ var CodexBridgePanel = class extends HTMLElement {
   }
   _renderConversationSearch() {
     const section2 = this.shadowRoot.getElementById("conversation-search");
-    section2.hidden = !this._selectedThreadId || this._activeDestination !== "chats" || !this._config?.capabilities?.includes("conversation_search_v1");
+    section2.hidden = this._compactComposer?.openPage !== "search" || !this._selectedThreadId || this._activeDestination !== "chats" || !this._config?.capabilities?.includes("conversation_search_v1");
     const state = this._conversationSearchState;
     const status = this.shadowRoot.getElementById("conversation-search-status");
     status.textContent = state?.loading ? "Searching retained messages…" : state?.error ? "Chat search unavailable. Try the search again." : state ? `${state.index >= 0 ? state.pageNumber * 50 + state.index + 1 : 0} of ${state.total} matching messages${state.complete === false ? " · Index coverage is incomplete" : ""}` : "Enter searches; Shift+Enter moves back.";

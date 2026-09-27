@@ -160,3 +160,33 @@ complete changed local gates and image builds are still required before a
 cohesive follow-up push. Release and served DEV acceptance remain unclaimed;
 CB-011 remains partial and CB-037 excluded. Production and the pending MCP/phone
 decisions are unchanged.
+
+## Signed release and compact follow-up — 27 September 2026
+
+Paired 1.13.0 / Bridge 0.20.0 / Codex 0.157.1 is published, signed-qualified
+and installed on DEV. Original chats, projects, sign-in and settings are
+preserved. Assistant Chats is below Projects and collapsed by default in the
+served panel. Native feature acceptance remains separate from release checks.
+Fresh owned fixtures prove manual goal controls without automatic turns,
+repository and exact Unicode file context, exactly-once rendering, and an
+exactly-once combined file/earlier-response/goal turn with the saved goal unchanged.
+Further native journeys and owned-fixture cleanup remain pending.
+
+The authorised compact follow-up is integrated on
+Herb/compact-ui-integration-20260927 with paired 1.13.1 metadata, unchanged
+Bridge/Codex, and regenerated assets. Secondary composer controls, Goal/Find,
+message copy/quote/maths and repository review use anchored menus; the bottom
+preview/terminal pane has an accessible resize edge. Independent source reviews
+found a hidden Find shortcut and a relocated upload close/focus caller. Both
+are corrected through their existing owners. The five affected browser journeys
+pass after correction. Full local gates and final frozen-source review remain
+required before any follow-up push or publication; served compact acceptance
+is unclaimed. Exact machine receipts are in the acceptance matrix and D records.
+
+Scope and initial resources are unchanged. CB-011 remains partial because direct
+v2 child follow-up is unsupported; CB-037 stays excluded. No issue closures or
+production installation. Local-MCP consent and phone readiness remain unanswered.
+Preserve the original inventory, powers, paused DEV updates and temporary fourth
+backup until acceptance permits restoration. Continue native acceptance without
+replaying completed requests, then frozen qualification, signed publication,
+served DEV checks and only actually delivered scoped issue closure.

@@ -55,7 +55,7 @@ describe("Codex desktop parity layout", () => {
     const panel = createPanel();
     const stylesheet = [...panel.shadowRoot.querySelectorAll("style")].map((style) => style.textContent).join("\n");
 
-    const narrowRules = stylesheet.split(/@media\s*\(max-width:\s*880px\)/).at(-1).split("@media")[0];
+    const narrowRules = stylesheet.split(/@media\s*\(max-width:\s*880px\)/).slice(1).map((rules) => rules.split("@media")[0]).join("\n");
     expect(narrowRules).toMatch(/\.main-pane\s*\{[^}]*overflow-y:\s*hidden;/);
     expect(narrowRules).not.toMatch(/\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);
     expect(stylesheet).toMatch(/@media\s*\(max-height:\s*600px\)\s*\{\s*\.main-pane\s*\{[^}]*overflow-y:\s*auto;/);

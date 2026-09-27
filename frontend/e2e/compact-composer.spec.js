@@ -187,6 +187,27 @@ for(const width of [1280,390]) for(const theme of ["light","dark"]) {
 
 
 
+test("chat search shortcuts open the compact surface and retain its query when already open", async ({ page }) => {
+  const panel = await openCompact(page, 390, "dark");
+  const search = panel.getByRole("searchbox", { name: "Find in selected chat", exact: true });
+  await panel.locator("#prompt-input").focus();
+  await page.keyboard.press("Control+f");
+  await expect(search).toBeVisible();
+  await expect(search).toBeFocused();
+  await search.fill("needle");
+  await page.keyboard.press("Control+f");
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("needle");
+  await page.keyboard.press("Escape");
+  await expect(search).toBeHidden();
+  await panel.locator("#prompt-input").focus();
+  await page.keyboard.press("Meta+f");
+  await expect(search).toBeVisible();
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("needle");
+  expect(await panel.evaluate((p) => p._compactCalls.some((c) => c.command === "send_prompt"))).toBe(false);
+});
+
 test("compact options, inspected file context and captured acknowledgement preserve newer edits",async({page})=>{
   test.skip(Boolean(process.env.CODEX_BRIDGE_COMPACT_BASELINE_ROOT));
   const panel=await openCompact(page,390,"dark");

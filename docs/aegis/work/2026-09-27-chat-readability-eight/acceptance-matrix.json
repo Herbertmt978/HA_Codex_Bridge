@@ -1,9 +1,9 @@
 {
   "baseline": "1.12.0",
-  "target": "1.13.0",
+  "target": "1.13.1",
   "bridge_target": "0.20.0",
   "codex": "0.157.1",
-  "updated_utc": "2026-09-27T10:49:28.916312+00:00",
+  "updated_utc": "2026-09-27T12:35:15.411125+00:00",
   "items": [
     {
       "id": "CB-002",
@@ -1284,5 +1284,34 @@
     ],
     "publication_qualified": false,
     "native_acceptance": false
+  },
+  "released_baseline": {
+    "paired": "1.13.0",
+    "bridge": "0.20.0",
+    "codex": "0.157.1",
+    "signed_qualified": true,
+    "installed_dev": true,
+    "full_native_acceptance": false,
+    "evidence": "D:\\CodexTemp\\bridge-chat-eight-20260927\\native-installation.json"
+  },
+  "compact_followup": {
+    "status": "integrated_local_verification",
+    "implementation_evidence": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\design_language\\compact-followup\\implementation-result.json",
+    "combined_review": "D:\\CodexTemp\\bridge-chat-eight-20260927\\compact-combined-source-review.md",
+    "correction_reviews": [
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\compact-search-shortcut-review.md",
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\compact-relocated-actions-final-review.md"
+    ],
+    "full_gates": "pending",
+    "final_frozen_review": "pending",
+    "publication": null,
+    "served_dev": "pending"
+  },
+  "fresh_native_context": {
+    "state": "completed_exactly_once",
+    "exact_public_prompt": true,
+    "goal_unchanged": true,
+    "reported_usage_not_billing": true,
+    "evidence": "D:\\CodexTemp\\bridge-chat-eight-20260927\\dev-selected-1130-context-observe-v2-receipt.json"
   }
 }
