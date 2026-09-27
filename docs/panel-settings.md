@@ -48,8 +48,11 @@ are independent.
 
 ## Appearance
 
-Chat responses use plain text on the conversation background. Code blocks have
-their own copy control; ordinary messages do not. Messages have no avatars or repeated assistant headings;
+Assistant responses use safe Markdown for readable prose, lists, tables and code;
+user prose remains plain text. Message actions copy a message or selected passage,
+or add an attributed, editable quote to the composer without sending it. Code
+blocks have a separate original-code copy control, optional line numbers and
+wrapping, with bounded syntax highlighting for supported languages. Messages have no avatars or repeated assistant headings;
 screen readers still identify who sent each message. A partial response keeps its
 label if a run stops before finishing. Each run has one completion indicator.
 Select it to open run details when steps or activity history are available.

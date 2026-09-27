@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .api_contract import API_CONTRACT, ApiContractRecord
 from .assist_mcp import AssistMcpServers
 from .workspace import normalize_portable_relative_path
+from .workspace_context import WorkspaceContextAttachment
+from .chat_context import ChatContextAttachment
 
 DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_THINKING_LEVEL = "medium"
@@ -314,6 +316,10 @@ class QueuedPromptRecord(BaseModel):
     revision: int = Field(ge=1)
     position: int = Field(ge=1)
     collaboration_mode: Literal["default", "plan"] = "default"
+    workspace_context: list[WorkspaceContextAttachment] = Field(
+        default_factory=list, max_length=8
+    )
+    chat_context: list[ChatContextAttachment] = Field(default_factory=list, max_length=8)
 
 
 class LimitsWindowRecord(BaseModel):
@@ -608,11 +614,21 @@ class BridgeReadinessRecord(BaseModel):
             "host_access_v1",
             "workspace_terminal_v1",
             "account_profiles_v1",
+            "account_profile_telemetry_v1",
             "account_profile_details_v1",
             "office_preview_v1",
             "discord_channel_v1",
             "chat_operations_v1",
             "transcript_search_v1",
+            "conversation_search_v1",
+            "git_context_v1",
+            "attention_inbox_v1",
+            "durable_goals_v1",
+            "subagents_v1",
+            "usage_history_v1",
+            "elapsed_time_limit_v1",
+            "workspace_context_v1",
+            "chat_context_v1",
             "git_review_v1",
             "prompt_queue_v1",
             "plan_mode_v1",

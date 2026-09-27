@@ -1,4 +1,5 @@
 import { sanitizeUrl } from "./safe-dom.js";
+import { createAssistantMath, inlineMathAt, inlineMathIndex, displayMathAt, isDisplayMathStart, assistantMathStyles } from "./assistant-math.js";
 
 const MAX_MARKDOWN_LENGTH = 200_000;
 
@@ -38,8 +39,9 @@ function appendText(document, parent, value) {
   if (value) parent.append(document.createTextNode(value));
 }
 
-function renderInline(document, parent, source) {
+function renderInline(document, parent, source, math) {
   const length = source.length;
+  const mathClosers = inlineMathIndex(source);
   const escaped = new Uint8Array(length);
   let slashCount = 0;
   for (let index = 0; index < length; index += 1) {
@@ -90,6 +92,11 @@ function renderInline(document, parent, source) {
   };
 
   while (index < length) {
+    const equation = inlineMathAt(source, index, mathClosers);
+    if (equation) {
+      emitToken(equation.end, math(equation), equation.source);
+      continue;
+    }
     if (source[index] === "\\" && index + 1 < length && "\\`*_{}[]()#+-.!>~|".includes(source[index + 1])) {
       const escapedText = source[index + 1];
       emitToken(index + 2, document.createTextNode(escapedText), escapedText);
@@ -172,10 +179,11 @@ function isTableDelimiter(line) {
 
 function tableCells(line) {
   const value = line.trim().replace(/^\|/u, "").replace(/\|$/u, "");
-  return value.split(/(?<!\\)\|/u).map((cell) => cell.replace(/\\\|/gu, "|").trim());
+  // Inline parsing owns escaped pipes, allowing maths source to retain \|.
+  return value.split(/(?<!\\)\|/u).map((cell) => cell.trim());
 }
 
-function appendTable(document, parent, lines) {
+function appendTable(document, parent, lines, math) {
   const rows = lines.filter(Boolean).map(tableCells);
   const plainRows = [];
   const table = element(document, "table");
@@ -186,7 +194,7 @@ function appendTable(document, parent, lines) {
   for (const value of rows[0] || []) {
     const cell = element(document, "th");
     cell.scope = "col";
-    plainRows[0].push(renderInline(document, cell, value));
+    plainRows[0].push(renderInline(document, cell, value, math));
     headingRow.append(cell);
   }
   head.append(headingRow);
@@ -197,7 +205,7 @@ function appendTable(document, parent, lines) {
     const plainRow = [];
     for (let index = 0; index < (rows[0]?.length || row.length); index += 1) {
       const cell = element(document, "td");
-      plainRow.push(renderInline(document, cell, row[index] || ""));
+      plainRow.push(renderInline(document, cell, row[index] || "", math));
       tr.append(cell);
     }
     plainRows.push(plainRow);
@@ -213,12 +221,53 @@ function fenceInfo(value) {
   return match?.[1] || "";
 }
 
+function sourceLines(source) {
+  const lines = [];
+  const pattern = /([^\r\n]*)(\r\n|\r|\n|$)/gu;
+  let match;
+  while ((match = pattern.exec(source)) && match[0]) {
+    lines.push({ text: match[1], start: match.index, end: pattern.lastIndex });
+  }
+  return lines;
+}
+
+function fencedBody(source, lines, index) {
+  const fence = lines[index].text.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+  if (!fence) return null;
+  const start = lines[index].end;
+  const close = new RegExp(`^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`, "u");
+  let next = index + 1;
+  while (next < lines.length && !close.test(lines[next].text)) next += 1;
+  const bodyEnd = next < lines.length ? lines[next].start : source.length;
+  return {
+    start: lines[index].start,
+    end: next < lines.length ? lines[next].end : source.length,
+    code: source.slice(start, bodyEnd),
+    language: fenceInfo(fence[2]),
+    next: next < lines.length ? next + 1 : next,
+  };
+}
+
+/** Exact source ranges for fenced code; prose remains the caller's responsibility. */
+export function fencedCodeParts(source) {
+  const original = String(source ?? "");
+  const lines = sourceLines(original);
+  const parts = [];
+  for (let index = 0; index < lines.length;) {
+    const fence = fencedBody(original, lines, index);
+    if (fence) { parts.push(fence); index = fence.next; }
+    else index += 1;
+  }
+  return parts;
+}
+
 /**
  * Render a bounded subset of assistant Markdown using DOM nodes only.
  * `createCodeBlock` may return the panel's existing fenced-code node, including
- * its copy action. It receives (document, code, language).
+ * its copy action. It receives (document, exactSourceCode, language), preserving
+ * original line endings without adding a newline to an unfinished fence.
  */
-export function renderAssistantMarkdown(document, source, { createCodeBlock } = {}) {
+export function renderAssistantMarkdown(document, source, { createCodeBlock, onMathSource } = {}) {
   if (!document?.createDocumentFragment) throw new TypeError("A document is required");
   const original = String(source ?? "");
   let formattedLength = Math.min(original.length, MAX_MARKDOWN_LENGTH);
@@ -229,7 +278,10 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
   }
   const markdown = original.slice(0, formattedLength);
   const overflow = original.slice(formattedLength);
-  const lines = markdown.replace(/\r\n?/gu, "\n").split("\n");
+  const rawLines = sourceLines(markdown);
+  const lines = rawLines.map((line) => line.text);
+  const math = createAssistantMath(document, { onSource: onMathSource });
+  const mathSourceLines = [...markdown.matchAll(/[^\r\n]*(?:\r\n|\r|\n|$)/gu)].filter((match) => match[0]);
   const fragment = document.createDocumentFragment();
   const plainParts = [];
   let index = 0;
@@ -238,17 +290,10 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
     const line = lines[index];
     if (!line.trim()) { index += 1; continue; }
 
-    const fence = line.match(/^\s*(`{3,}|~{3,})(.*)$/u);
+    const fence = fencedBody(markdown, rawLines, index);
     if (fence) {
-      const close = new RegExp(`^\\s*${fence[1][0]}{${fence[1].length},}\\s*$`, "u");
-      const body = [];
-      index += 1;
-      while (index < lines.length && !close.test(lines[index])) body.push(lines[index++]);
-      if (index < lines.length) index += 1;
-      // Splitting by lines drops the newline immediately before the closing
-      // fence. Preserve it because the code copy action promises exact text.
-      const code = body.length ? `${body.join("\n")}\n` : "";
-      const language = fenceInfo(fence[2]);
+      index = fence.next;
+      const { code, language } = fence;
       const node = createCodeBlock?.(document, code, language) || (() => {
         const pre = element(document, "pre");
         pre.className = "assistant-markdown-code";
@@ -262,11 +307,24 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
       continue;
     }
 
+    const displayEquation = displayMathAt(lines, index);
+    if (displayEquation) {
+      const first = mathSourceLines[index];
+      const last = mathSourceLines[displayEquation.next - 1];
+      if (first && last) {
+        displayEquation.source = markdown.slice(first.index, last.index + last[0].replace(/(?:\r\n|\r|\n)$/u, "").length).trim();
+      }
+      fragment.append(math(displayEquation));
+      plainParts.push(displayEquation.source);
+      index = displayEquation.next;
+      continue;
+    }
+
     if (index + 1 < lines.length && line.includes("|") && isTableDelimiter(lines[index + 1])) {
       const tableLines = [line];
       index += 2;
       while (index < lines.length && lines[index].trim() && lines[index].includes("|")) tableLines.push(lines[index++]);
-      plainParts.push(appendTable(document, fragment, tableLines));
+      plainParts.push(appendTable(document, fragment, tableLines, math));
       continue;
     }
 
@@ -274,7 +332,7 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
     if (heading) {
       const node = element(document, `h${heading[1].length}`);
       node.className = "assistant-markdown-heading";
-      const headingText = renderInline(document, node, heading[2]);
+      const headingText = renderInline(document, node, heading[2], math);
       fragment.append(node);
       plainParts.push(headingText);
       index += 1;
@@ -291,7 +349,7 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
         const itemMatch = lines[index].match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/u);
         if (!itemMatch || /^\d/u.test(itemMatch[1]) !== ordered) break;
         const item = element(document, "li");
-        const itemText = renderInline(document, item, itemMatch[2]);
+        const itemText = renderInline(document, item, itemMatch[2], math);
         list.append(item);
         listPlain.push(`${ordered ? `${list.children.length}.` : "•"} ${itemText}`);
         index += 1;
@@ -308,7 +366,7 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
       while (index < lines.length && /^\s*>/u.test(lines[index])) {
         const text = lines[index++].replace(/^\s*>\s?/u, "");
         const paragraph = element(document, "p");
-        const paragraphText = renderInline(document, paragraph, text);
+        const paragraphText = renderInline(document, paragraph, text, math);
         quote.append(paragraph);
         quotePlain.push(paragraphText);
       }
@@ -320,6 +378,7 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
     const paragraphLines = [line];
     index += 1;
     while (index < lines.length && lines[index].trim() && !/^\s{0,3}(?:#{1,6}\s|```|~~~|>|[-+*]\s|\d+[.)]\s)/u.test(lines[index])) {
+      if (isDisplayMathStart(lines[index])) break;
       if (index + 1 < lines.length && lines[index].includes("|") && isTableDelimiter(lines[index + 1])) break;
       paragraphLines.push(lines[index++]);
     }
@@ -327,7 +386,7 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
     paragraph.className = "assistant-markdown-paragraph";
     const paragraphText = paragraphLines.map((part, lineIndex) => {
       if (lineIndex) paragraph.append(element(document, "br"));
-      return renderInline(document, paragraph, part);
+      return renderInline(document, paragraph, part, math);
     });
     fragment.append(paragraph);
     plainParts.push(paragraphText.join("\n"));
@@ -351,6 +410,7 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock } = 
 export const assistantMarkdownMaxLength = MAX_MARKDOWN_LENGTH;
 
 export const assistantMarkdownStyles = `
+  ${assistantMathStyles}
   .assistant-markdown-paragraph { margin: 0 0 0.8em; overflow-wrap: anywhere; }
   .assistant-markdown-paragraph:last-child { margin-bottom: 0; }
   .assistant-markdown-heading { margin: 1.1em 0 0.45em; line-height: 1.25; overflow-wrap: anywhere; }

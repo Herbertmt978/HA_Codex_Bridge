@@ -661,6 +661,11 @@ class BridgeApiClient:
             "GET", f"/auth/profiles/{_path_segment(profile_id)}/details",
         )
 
+    async def async_account_profile_telemetry(self) -> dict[str, Any]:
+        """Read cached allowances without refreshing or selecting an account."""
+        self.require_capability("account_profile_telemetry_v1")
+        return await self._async_json("GET", "/auth/profiles/telemetry")
+
     async def async_save_account_profile(self, label: str) -> dict[str, Any]:
         self.require_capability("account_profiles_v1")
         return await self._async_json(
@@ -801,6 +806,94 @@ class BridgeApiClient:
             f"/threads/{_path_segment(thread_id)}/transcript/{sequence}",
         )
 
+    async def async_search_conversation(
+        self, thread_id: str, query: str, *, limit: int = 50,
+        before_cursor: int | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("conversation_search_v1")
+        params: dict[str, str | int] = {"q": query, "limit": limit}
+        if before_cursor is not None:
+            params["before_cursor"] = before_cursor
+        return await self._async_json(
+            "GET", f"/threads/{_path_segment(thread_id)}/search?{urlencode(params)}",
+        )
+
+    async def async_get_goal(self, thread_id: str) -> dict[str, Any]:
+        self.require_capability("durable_goals_v1")
+        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}/goal")
+
+    async def async_goal_action(self, thread_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self.require_capability("durable_goals_v1")
+        return await self._async_json("POST", f"/threads/{_path_segment(thread_id)}/goal/actions", json_body=payload)
+
+    async def async_attention_inbox(self) -> dict[str, Any]:
+        self.require_capability("attention_inbox_v1")
+        return await self._async_json("GET", "/attention")
+
+    async def async_chat_context(self, thread_id: str, *, source_thread_id: str, before_sequence: int | None = None) -> dict[str, Any]:
+        self.require_capability("chat_context_v1")
+        params = {"before_sequence": before_sequence} if before_sequence is not None else {}
+        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}/chat-context/{_path_segment(source_thread_id)}?{urlencode(params)}")
+
+    async def async_read_chat_context(self, thread_id: str, *, source_thread_id: str, message_sequence: int | None = None, start_char: int | None = None, end_char: int | None = None) -> dict[str, Any]:
+        self.require_capability("chat_context_v1")
+        payload = {"source_thread_id": source_thread_id}
+        for key, value in (("message_sequence", message_sequence), ("start_char", start_char), ("end_char", end_char)):
+            if value is not None:
+                payload[key] = value
+        return await self._async_json("POST", f"/threads/{_path_segment(thread_id)}/chat-context/read", json_body=payload)
+
+    async def async_child_agents(self, thread_id: str) -> dict[str, Any]:
+        self.require_capability("subagents_v1")
+        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}/children")
+
+    async def async_child_agent_action(
+        self, thread_id: str, child_id: str, action: str, *,
+        revision: int | None = None, client_request_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("subagents_v1")
+        if action not in {"refresh", "stop"}:
+            raise ValueError("Child action is unavailable")
+        payload = {} if action == "refresh" else {
+            "revision": revision, "client_request_id": client_request_id,
+        }
+        return await self._async_json(
+            "POST", f"/threads/{_path_segment(thread_id)}/children/{_path_segment(child_id)}/{action}",
+            json_body=payload,
+        )
+
+    async def async_usage_history(self, *, thread_id: str | None = None,
+                                  project_id: str | None = None) -> dict[str, Any]:
+        self.require_capability("usage_history_v1")
+        params = {}
+        if thread_id is not None:
+            params["thread_id"] = _path_segment(thread_id)
+        if project_id is not None:
+            params["project_id"] = _path_segment(project_id)
+        return await self._async_json("GET", f"/usage?{urlencode(params)}")
+
+    async def async_workspace_context(
+        self, thread_id: str, *, directory: str = ".",
+    ) -> dict[str, Any]:
+        self.require_capability("workspace_context_v1")
+        return await self._async_json(
+            "GET", f"/threads/{_path_segment(thread_id)}/workspace-context?{urlencode({'directory': directory})}",
+        )
+
+    async def async_read_workspace_context(
+        self, thread_id: str, *, path: str, start_line: int | None = None,
+        end_line: int | None = None, expected_revision: str | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("workspace_context_v1")
+        payload: dict[str, str | int] = {"path": path}
+        for key, value in (("start_line", start_line), ("end_line", end_line), ("expected_revision", expected_revision)):
+            if value is not None:
+                payload[key] = value
+        return await self._async_json(
+            "POST", f"/threads/{_path_segment(thread_id)}/workspace-context/read",
+            json_body=payload,
+        )
+
     async def async_git_review(
         self,
         thread_id: str,
@@ -828,6 +921,19 @@ class BridgeApiClient:
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("files"), list):
             raise BridgeApiEndpointError("git_review_payload_invalid")
+        return payload
+
+    async def async_git_context(
+        self, thread_id: str, *, base_ref: str | None = None,
+    ) -> dict[str, Any]:
+        self.require_capability("git_context_v1")
+        query = f"?{urlencode({'base_ref': base_ref})}" if base_ref else ""
+        payload = await self._async_json(
+            "GET", f"/threads/{_path_segment(thread_id)}/git-context{query}",
+            request_timeout=GIT_REVIEW_REQUEST_TIMEOUT,
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("repository"), bool):
+            raise BridgeApiEndpointError("git_context_payload_invalid")
         return payload
 
     async def async_create_thread(
@@ -955,8 +1061,16 @@ class BridgeApiClient:
         web_search: str | None = None,
         follow_up_mode: str | None = None,
         collaboration_mode: str | None = None,
+        workspace_context: list[dict[str, Any]] | None = None,
+        chat_context: list[dict[str, Any]] | None = None,
+        max_duration_seconds: int | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"prompt": prompt}
+        if max_duration_seconds is not None:
+            self.require_capability("elapsed_time_limit_v1")
+            if type(max_duration_seconds) is not int or not 1 <= max_duration_seconds <= 86_400:
+                raise BridgeApiError("bad_request")
+            payload["max_duration_seconds"] = max_duration_seconds
         if client_request_id is not None:
             payload["client_request_id"] = _client_request_id(client_request_id)
         if web_search is not None and "web_search_v1" in self._capabilities:
@@ -971,6 +1085,18 @@ class BridgeApiClient:
                 raise BridgeApiError("bad_request")
             self.require_capability("plan_mode_v1")
             payload["collaboration_mode"] = collaboration_mode
+        if chat_context is not None:
+            self.require_capability("chat_context_v1")
+            if not isinstance(chat_context, list) or not 1 <= len(chat_context) <= 8:
+                raise BridgeApiError("chat_context_limit_exceeded")
+            if len(chat_context) + len(workspace_context or []) > 8:
+                raise BridgeApiError("chat_context_limit_exceeded")
+            payload["chat_context"] = chat_context
+        if workspace_context is not None:
+            self.require_capability("workspace_context_v1")
+            if not isinstance(workspace_context, list) or not 1 <= len(workspace_context) <= 8:
+                raise BridgeApiError("bad_request")
+            payload["workspace_context"] = workspace_context
         return await self._async_json(
             "POST",
             f"/threads/{_path_segment(thread_id)}/prompts",

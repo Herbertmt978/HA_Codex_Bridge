@@ -32,9 +32,35 @@ _ARTIFACT_ERROR_MESSAGES = {
     "reservation_conflict": "Workspace files are temporarily unavailable while Codex is working",
 }
 _FEATURE_ERROR_MESSAGES = {
+    "subagents_unavailable": "Individual subagents are unavailable in this runtime",
+    "child_not_found": "This child is no longer retained in this chat",
+    "child_stale": "This child's ownership or runtime changed. Refresh and verify its status",
+    "child_ownership_conflict": "The runtime could not verify this child's parent and workspace",
+    "child_revision_conflict": "This child changed. Refresh and verify its status before stopping it",
+    "child_stop_unavailable": "This child has no verified running turn to stop",
+    "child_turn_changed": "This child's active turn changed. Verify its status before stopping it",
+    "child_request_capacity": "Child control history is full. Existing uncertain outcomes must be resolved first",
+    "child_request_conflict": "This action conflicts with an earlier child request",
+    "invalid_child_request": "Review the child action and try again",
+    "child_follow_up_unavailable": "Direct child follow-up is unavailable in this runtime",
+    "child_control_uncertain": "The stop outcome could not be confirmed. Verify this child's status",
     "terminal_unavailable": "Terminal unavailable. Close any running terminal or Codex turn, and select an editable chat.",
     "capability_unavailable": "This App version does not support this feature. Update it and try again",
     "host_access_unavailable": "Host access is unavailable or consent changed. Open Settings to review it.",
+    "goal_revision_conflict": "The goal changed; refresh before trying again",
+    "goal_conflict": "Pause before editing; finished goals need a new goal",
+    "goals_unavailable": "This App cannot manage goals for this chat",
+    "goal_invalid": "Review the goal text and completion confirmation",
+    "goal_chat_not_found": "The chat or project no longer exists",
+    "goal_context_stale": "The accepted goal changed; review it and send the retained prompt again",
+    "stale_context": "Workspace context changed. Refresh or remove it, inspect the selection and send again.",
+    "workspace_context_not_found": "The workspace file is no longer available. Choose another file or remove its context.",
+    "unsafe_workspace_context_entry": "Choose an available file inside this chat's workspace.",
+    "workspace_context_unavailable": "Workspace context is unavailable. Check the App and refresh the selection.",
+    "workspace_context_limit_exceeded": "Workspace context is too large. Choose fewer files or a smaller excerpt.",
+    "workspace_context_not_text": "Choose a supported text file for workspace context.",
+    "workspace_context_range_unavailable": "The selected lines are unavailable. Review the inclusive line range.",
+    "elapsed_time_limit_invalid": "Choose a shorter elapsed-time limit or remove it and send again.",
     "automation_conflict": "The automation is busy or must be paused first",
     "automation_invalid": "The automation settings are invalid",
     "automation_not_found": "The automation no longer exists",
@@ -71,7 +97,17 @@ _FEATURE_ERROR_MESSAGES = {
     "git_base_ref_required": "Choose a base branch before reviewing branch changes",
     "git_state_changed": "Git changed while you were opening the diff. Refresh the file list and try again",
     "git_unavailable": "Git review is unavailable in this App",
+    "chat_context_changed": "Previous chat context changed. Refresh and review it before sending.",
+    "chat_context_deleted": "The source chat was deleted. Remove its context.",
+    "chat_context_expired": "The source message is no longer retained. Choose another message or remove it.",
+    "chat_context_inaccessible": "The source or destination is inaccessible. Review access or remove the context.",
+    "chat_context_unavailable": "Previous chat context is unavailable in this App.",
+    "chat_context_destination_unavailable": "Choose a different ordinary destination chat.",
+    "chat_context_empty": "This chat has no retained public messages.",
+    "chat_context_limit_exceeded": "Context is too large. Choose fewer items or a smaller excerpt.",
+    "chat_context_range_unavailable": "The selected excerpt is no longer available. Review its range.",
     "collaboration_mode_requires_queue": "Choose Queue to change Plan or Execute mode after the active response",
+    "web_search_requires_queue": "Choose Queue or wait for the active response to finish to change web search",
     "queued_prompt_not_found": "This message has already started or was removed. Refresh the queue.",
     "queued_prompt_revision_conflict": "This queued message changed. Refresh the queue before saving again.",
     "client_request_id_required": "The queued message could not be confirmed. Retry from the chat.",
@@ -104,8 +140,20 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_create_folder,
         ws_list_threads,
         ws_search_transcript,
+        ws_search_conversation,
+        ws_attention_inbox,
+        ws_get_goal,
+        ws_goal_action,
+        ws_child_agents,
+        ws_child_agent_action,
+        ws_usage_history,
+        ws_workspace_context,
+        ws_chat_context,
+        ws_read_chat_context,
+        ws_read_workspace_context,
         ws_get_transcript_message,
         ws_git_review,
+        ws_git_context,
         ws_list_chat_sections,
         ws_create_chat_section,
         ws_update_chat_section,
@@ -682,6 +730,22 @@ async def ws_get_transcript_message(
     )
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/git_context",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Optional("base_ref"): vol.All(str, vol.Length(min=1, max=256)),
+})
+@websocket_api.async_response
+async def ws_git_context(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    await _async_handle(
+        hass, connection, msg,
+        lambda client: client.async_git_context(msg["thread_id"], base_ref=msg.get("base_ref")),
+    )
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/git_review",
@@ -927,14 +991,185 @@ async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.
     )
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/search_conversation",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("query"): vol.All(str, vol.Length(min=1, max=256)),
+    vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=100)),
+    vol.Optional("before_cursor"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+})
+@websocket_api.async_response
+async def ws_search_conversation(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_search_conversation(
+        msg["thread_id"], msg["query"], limit=msg["limit"], before_cursor=msg.get("before_cursor"),
+    ))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/get_goal",
+    vol.Required("thread_id"): vol.Match(r"^[A-Za-z0-9_-]{1,128}$"),
+})
+@websocket_api.async_response
+async def ws_get_goal(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_get_goal(msg["thread_id"]))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/goal_action",
+    vol.Required("thread_id"): vol.Match(r"^[A-Za-z0-9_-]{1,128}$"),
+    vol.Required("action"): vol.In({"create", "edit", "progress", "pause", "resume", "complete", "cancel"}),
+    vol.Required("expected_revision"): vol.All(int, vol.Range(min=0)),
+    vol.Required("client_request_id"): vol.Match(r"^[A-Za-z0-9_.:-]{1,128}$"),
+    vol.Optional("objective"): vol.All(str, vol.Length(min=1, max=4096)),
+    vol.Optional("completion_criteria"): vol.All([vol.All(str, vol.Length(min=1, max=1024))], vol.Length(min=1, max=16)),
+    vol.Optional("progress"): vol.All(str, vol.Length(max=8192)),
+    vol.Optional("completion_confirmed"): bool,
+})
+@websocket_api.async_response
+async def ws_goal_action(hass, connection, msg):
+    payload = {key: value for key, value in msg.items() if key not in {"id", "type", "thread_id"}}
+    await _async_handle(hass, connection, msg, lambda client: client.async_goal_action(msg["thread_id"], payload))
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/attention_inbox"})
+@websocket_api.async_response
+async def ws_attention_inbox(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_attention_inbox())
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/child_agents",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+})
+@websocket_api.async_response
+async def ws_child_agents(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_child_agents(msg["thread_id"]))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/child_agent_action",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("child_id"): vol.Match(r"^[a-f0-9]{32}$"),
+    vol.Required("action"): vol.In({"refresh", "stop"}),
+    vol.Optional("revision"): vol.All(vol.Coerce(int), vol.Range(min=1)),
+    vol.Optional("client_request_id"): vol.All(str, vol.Length(min=1, max=256)),
+})
+@websocket_api.async_response
+async def ws_child_agent_action(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_child_agent_action(
+        msg["thread_id"], msg["child_id"], msg["action"],
+        revision=msg.get("revision"), client_request_id=msg.get("client_request_id"),
+    ))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/usage_history",
+    vol.Optional("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+})
+@websocket_api.async_response
+async def ws_usage_history(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_usage_history(
+        thread_id=msg.get("thread_id"), project_id=msg.get("project_id"),
+    ))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/workspace_context",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Optional("directory", default="."): vol.All(str, vol.Length(min=1, max=2048)),
+})
+@websocket_api.async_response
+async def ws_workspace_context(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_workspace_context(
+        msg["thread_id"], directory=msg["directory"],
+    ))
+
+
+_NULLABLE_CONTEXT_LINE = vol.Any(None, vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/read_workspace_context",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("path"): vol.All(str, vol.Length(min=1, max=2048)),
+    vol.Optional("start_line"): _NULLABLE_CONTEXT_LINE,
+    vol.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
+    vol.Optional("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+})
+@websocket_api.async_response
+async def ws_read_workspace_context(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_read_workspace_context(
+        msg["thread_id"], path=msg["path"], start_line=msg.get("start_line"),
+        end_line=msg.get("end_line"), expected_revision=msg.get("expected_revision"),
+    ))
+
+
+def _bounded_prompt(value: str) -> str:
+    if not value.strip() or len(value.encode("utf-8")) > 1024 * 1024:
+        raise vol.Invalid("prompt is blank or exceeds its limit")
+    return value
+
+
+_CHAT_CONTEXT_SELECTION = {
+    vol.Required("source_thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Optional("message_sequence"): vol.Any(None, vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991))),
+    vol.Optional("start_char"): vol.Any(None, vol.All(int, vol.Range(min=0, max=1_048_576))),
+    vol.Optional("end_char"): vol.Any(None, vol.All(int, vol.Range(min=1, max=1_048_576))),
+}
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/chat_context",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Required("source_thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    vol.Optional("before_sequence"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+})
+@websocket_api.async_response
+async def ws_chat_context(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_chat_context(
+        msg["thread_id"], source_thread_id=msg["source_thread_id"], before_sequence=msg.get("before_sequence"),
+    ))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/read_chat_context",
+    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    **_CHAT_CONTEXT_SELECTION,
+})
+@websocket_api.async_response
+async def ws_read_chat_context(hass, connection, msg):
+    await _async_handle(hass, connection, msg, lambda client: client.async_read_chat_context(
+        msg["thread_id"], **{key: msg[key] for key in ("source_thread_id", "message_sequence", "start_char", "end_char") if key in msg},
+    ))
+
+
+_CHAT_CONTEXT_REFERENCE = vol.Schema({
+    **_CHAT_CONTEXT_SELECTION,
+    vol.Required("content_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+})
+
+
+_WORKSPACE_CONTEXT_REFERENCE = vol.Schema({
+    vol.Required("path"): vol.All(str, vol.Length(min=1, max=2048)),
+    vol.Required("content_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    vol.Optional("start_line"): _NULLABLE_CONTEXT_LINE,
+    vol.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
+})
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/send_prompt",
         vol.Required("thread_id"): str,
-        vol.Required("prompt"): str,
+        vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1024 * 1024), _bounded_prompt),
         vol.Optional("client_request_id"): str,
         vol.Optional("follow_up_mode"): vol.In({"queue", "steer"}),
         vol.Optional("collaboration_mode"): vol.In({"default", "plan"}),
+        vol.Optional("web_search"): vol.In({"live", "disabled"}),
+        vol.Optional("max_duration_seconds"): vol.All(int, vol.Range(min=1, max=86_400)),
+        vol.Optional("workspace_context"): vol.All([_WORKSPACE_CONTEXT_REFERENCE], vol.Length(min=1, max=8)),
+        vol.Optional("chat_context"): vol.All([_CHAT_CONTEXT_REFERENCE], vol.Length(min=1, max=8)),
     }
 )
 @websocket_api.async_response
@@ -945,7 +1180,7 @@ async def ws_send_prompt(
 ) -> None:
     explicit_mode_kwargs = {
         field: msg[field]
-        for field in ("follow_up_mode", "collaboration_mode")
+        for field in ("follow_up_mode", "collaboration_mode", "web_search", "workspace_context", "chat_context", "max_duration_seconds")
         if msg.get(field) is not None
     }
 
@@ -958,12 +1193,21 @@ async def ws_send_prompt(
             "plan_mode_v1"
         ):
             raise BridgeApiError("capabilities_unavailable")
+        if msg.get("web_search") is not None and not runtime.supports_capability(
+            "web_search_v1"
+        ):
+            raise BridgeApiError("capabilities_unavailable")
+        if msg.get("chat_context") is not None and not runtime.supports_capability("chat_context_v1"):
+            raise BridgeApiError("capabilities_unavailable")
+        if msg.get("workspace_context") is not None and not runtime.supports_capability("workspace_context_v1"):
+            raise BridgeApiError("capabilities_unavailable")
+        if msg.get("max_duration_seconds") is not None and not runtime.supports_capability("elapsed_time_limit_v1"):
+            raise BridgeApiError("capabilities_unavailable")
         return await runtime.client.async_send_prompt(
             msg["thread_id"],
             msg["prompt"],
             client_request_id=msg.get("client_request_id"),
-            **explicit_mode_kwargs,
-            **runtime.web_search_payload(),
+            **{**runtime.web_search_payload(), **explicit_mode_kwargs},
         )
 
     await _async_handle(

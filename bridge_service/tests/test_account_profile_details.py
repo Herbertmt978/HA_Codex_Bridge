@@ -4,6 +4,7 @@ import ast
 import json
 import os
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event, Thread
 
@@ -11,7 +12,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from codex_bridge_service.account_profile_details import AccountProfileDetailsProbe, _PROBE_CONFIG_PAYLOAD
+from codex_bridge_service.account_profile_details import AccountProfileDetailsProbe, _PROBE_CONFIG_PAYLOAD, _public_details
 from codex_bridge_service.account_profiles import AccountProfileStore
 from codex_bridge_service.models import LimitsStatusRecord, LimitsWindowRecord
 from codex_bridge_service.routes.codex_auth import router as auth_router
@@ -160,6 +161,45 @@ def test_last_verified_usage_survives_switch_and_probe_restart(tmp_path: Path) -
         assert stale["available_resets"] == 1
         assert restarted_probe.read(saved["id"]) == stale
         assert "saved-account" not in json.dumps(stale)
+    finally:
+        store.close()
+
+
+def test_cached_telemetry_projects_identity_bound_snapshot_without_a_provider_read(tmp_path: Path) -> None:
+    store = AccountProfileStore(tmp_path / "profiles", tmp_path / "codex")
+    try:
+        store.activate_credential(_credential("saved-account"))
+        saved = store.save_current("Saved", {"account": {"type": "chatgpt", "planType": "pro"}})
+        _, account_id = store.target_credential(saved["id"])
+        store.write_usage_snapshot(saved["id"], account_id, json.dumps({
+            "version": 1,
+            "account_id": account_id,
+            "details": {
+                "status": "available", "plan": "pro",
+                "windows": [
+                    {"name": "5 hours", "window_minutes": 300,
+                     "remaining_percent": 70, "resets_at": 2_000_000_000},
+                    {"name": "Weekly", "window_minutes": 10080,
+                     "remaining_percent": 40, "resets_at": 2_000_100_000},
+                ],
+                "available_resets": 0, "next_reset_expiry": None,
+                "expiry_complete": True, "updated_at": "2026-09-27T12:00:00Z",
+                "five_hour_enabled": True,
+            },
+        }).encode())
+        probe = AccountProfileDetailsProbe(
+            store, codex_command="must-not-run", active_limits=lambda: pytest.fail("no refresh"),
+            client_factory=lambda **_options: pytest.fail("no provider client"),
+        )
+        probe.read = lambda _profile_id: pytest.fail("cached projection must not invoke read")
+        result = probe.cached_telemetry(now=datetime(2026, 9, 27, 12, tzinfo=UTC))
+        assert result["inventory_complete"] is True
+        row = result["profiles"][0]
+        assert row["status"] == "stale"  # process restart requires a current poll confirmation
+        assert row["windows"][0]["window_minutes"] == 300
+        assert row["windows"][1]["window_minutes"] == 10080
+        assert row["available_resets"] == 0
+        assert "saved-account" not in json.dumps(result)
     finally:
         store.close()
 
@@ -330,5 +370,91 @@ def test_profile_details_route_requires_bridge_auth_and_advertised_capability(tm
             assert "active-account" not in result.text
             app.state.feature_capabilities = ()
             assert http.get(url, headers=headers).status_code == 409
+    finally:
+        store.close()
+
+
+def test_cached_telemetry_route_never_reads_or_refreshes_profiles(tmp_path: Path) -> None:
+    """HA's telemetry endpoint is a read-only projection over the existing poller cache."""
+    from unittest.mock import Mock
+
+    store = AccountProfileStore(tmp_path / "profiles", tmp_path / "codex")
+    try:
+        store.activate_credential(_credential("active-account"))
+        store.save_current("Active", {"account": {"type": "chatgpt", "planType": "pro"}})
+        telemetry = {
+            "inventory_complete": True,
+            "profiles": [{
+                "id": "saved-profile-id", "label": "Active", "active": True,
+                "status": "stale", "updated_at": "2026-09-27T12:00:00Z",
+                "windows": [{"name": "5 hours", "window_minutes": 300,
+                             "remaining_percent": 64, "resets_at": 2_000_000_000}],
+                "available_resets": 0, "next_reset_expiry": None,
+                "expiry_complete": True, "five_hour_enabled": True,
+            }],
+        }
+        probe = Mock()
+        probe.cached_telemetry.return_value = telemetry
+        probe.read.side_effect = AssertionError("telemetry must not refresh a profile")
+        app = FastAPI()
+        app.state.auth_token = "bridge-test-secret"
+        app.state.account_profile_store = store
+        app.state.auth_coordinator = object()
+        app.state.feature_capabilities = ("account_profile_telemetry_v1",)
+        app.state.account_profile_details = probe
+        app.include_router(auth_router)
+        headers = {"Authorization": "Bearer bridge-test-secret", "X-Codex-Bridge-Api": "1"}
+        with TestClient(app) as http:
+            assert http.get("/auth/profiles/telemetry").status_code == 401
+            result = http.get("/auth/profiles/telemetry", headers=headers)
+            assert result.status_code == 200
+            assert result.json() == telemetry
+            probe.cached_telemetry.assert_called_once_with()
+            probe.read.assert_not_called()
+            app.state.feature_capabilities = ()
+            assert http.get("/auth/profiles/telemetry", headers=headers).status_code == 409
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize(("count", "expiries", "complete", "next_expiry"), [
+    (0, [], True, None),
+    (None, [], False, None),
+    (2, [2_000_000_000, 2_000_100_000], True, 2_000_000_000),
+    (2, [2_000_000_000, None], False, 2_000_000_000),
+    (2, [None, None], False, None),
+    (2, [2_000_000_000], False, 2_000_000_000),
+    (1, [2_000_000_000, 2_000_100_000], False, 2_000_000_000),
+])
+def test_expiry_completeness_requires_every_reported_credit_date(count, expiries, complete, next_expiry):
+    limits = LimitsStatusRecord(available=True, reset_credits={
+        "available_count": count,
+        "credits": [{"expires_at": expiry} for expiry in expiries],
+    })
+    details = _public_details("available", "pro", limits)
+    assert details["available_resets"] == count
+    assert details["expiry_complete"] is complete
+    assert details["next_reset_expiry"] == next_expiry
+
+
+def test_cached_projection_refreshes_inactive_account_without_switching(tmp_path):
+    store = AccountProfileStore(tmp_path / "profiles", tmp_path / "codex")
+    try:
+        store.activate_credential(_credential("saved-account"))
+        saved = store.save_current("Saved", {"account": {"type": "chatgpt", "planType": "pro"}})
+        store.activate_credential(_credential("active-account"))
+        store.save_current("Active", {"account": {"type": "chatgpt", "planType": "pro"}})
+        active_before = store.current_credential()[0]
+        probe = AccountProfileDetailsProbe(
+            store, codex_command="codex", active_limits=lambda: None, client_factory=_IsolatedClient,
+        )
+        probe.poll_once()
+        probe.read = lambda _id: pytest.fail("cached read cannot refresh")
+        telemetry = probe.cached_telemetry()
+        row = next(row for row in telemetry["profiles"] if row["id"] == saved["id"])
+        assert row["active"] is False
+        assert row["status"] == "available"
+        assert row["windows"][0]["remaining_percent"] == 80
+        assert store.current_credential()[0] == active_before
     finally:
         store.close()

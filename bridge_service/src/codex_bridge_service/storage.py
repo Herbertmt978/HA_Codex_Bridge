@@ -3161,6 +3161,9 @@ class BridgeStorage:
             # Remove replayable prompts/deltas before deleting metadata. If a
             # later filesystem cleanup fails, privacy fails closed and a retry
             # can finish the remaining idempotent deletion work.
+            goals = getattr(self, "goals", None)
+            if goals is not None:
+                goals.delete_thread(thread_id)
             self.event_store.purge_thread(thread_id)
             if self.runtime_profile is RuntimeProfile.HOME_ASSISTANT:
                 artifacts_boundary = self._home_assistant_artifacts_boundary()

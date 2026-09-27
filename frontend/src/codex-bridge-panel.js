@@ -1,6 +1,15 @@
 import { refreshScheduleForm, scheduleFormValues } from "./scheduled-tasks.js";
+import { GoalControls, goalStyles } from "./goal-controls.js";
 import { contextUsage } from "./context-usage.js";
-import { renderAssistantMarkdown, assistantMarkdownStyles } from "./markdown.js";
+import { durationLimit, renderUsageHistory } from "./task-usage.js";
+import { renderAssistantMarkdown, assistantMarkdownStyles, fencedCodeParts, assistantMarkdownMaxLength } from "./markdown.js";
+import { mathSourceActions } from "./assistant-math.js";
+import { renderCodeBlock } from "./code-blocks.js";
+import { selectedMessagePassageResult, attributedMessageQuote } from "./message-actions.js";
+import { ChatContextController, chatContextStyles } from "./chat-context.js";
+import { DraftRecoveryStore } from "./draft-recovery.js";
+import { WorkspaceContextController } from "./workspace-context.js";
+import { highlightedConversationText, highlightConversationMessage, clearConversationHighlights } from "./conversation-highlights.js";
 import { authenticatedChatUrl, chatResources } from "./chat-resources.js";
 import { fetchHomeAssistantApi } from "./ha-http.js";
 import { WorkspaceTerminalView, terminalCss } from "./workspace-terminal.js";
@@ -44,8 +53,9 @@ import { supportsCommunityMcp, normalizeCommunityMcp } from "./community-mcp.js"
 import { proposeAutomationEditDescription, proposeScheduleDescription } from "./schedule-language.js";
 import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
+import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.12.0";
+const PANEL_VERSION = "1.13.0";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -309,15 +319,48 @@ const template = document.createElement("template");
 template.innerHTML = `
   <style>
     ${assistantMarkdownStyles}
+    ${goalStyles}
     #transcript-search { padding: 8px; }
+    #attention-inbox[hidden] { display: none !important; }
+    #attention-inbox { padding: 8px 12px; }
+    #attention-inbox summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+    ${chatContextStyles}
+    #conversation-search[hidden] { display: none !important; }
+    #conversation-search { padding: 8px 16px; border-bottom: 1px solid var(--border-color); }
+    #conversation-search .row-actions { flex-wrap: wrap; }
+    #conversation-search input { min-width: 100px; width: 180px; max-width: 100%; min-height: 32px; padding: 6px 8px; font-size: var(--font-control-size); }
+    #conversation-search-preview { overflow-wrap: anywhere; white-space: pre-wrap; margin: 6px 0 0; }
+    #conversation-search-preview:empty { display: none; }
+    #conversation-search mark, .message-content mark.conversation-text-match { color: var(--text-color); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-color); }
+    .message.conversation-search-target { outline: 2px solid var(--accent-color); outline-offset: 2px; }
     .transcript-search-result { display: flex; flex-direction: column; text-align: left; width: 100%; margin: 6px 0; white-space: normal; overflow-wrap: anywhere; }
-    #collaboration-controls { flex-wrap: wrap; padding: 6px; }
-    #collaboration-controls[hidden], #prompt-queue[hidden], #git-composer-review[hidden], #git-review-button[hidden], #implement-plan-button[hidden], #plan-availability[hidden] { display: none !important; }
+    #collaboration-controls { flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 6px; }
+    #web-search-availability { flex-basis: 100%; font-size: var(--font-caption-size); }
+    #collaboration-controls[hidden], #prompt-queue[hidden], #git-composer-review[hidden], #git-review-button[hidden], #implement-plan-button[hidden], #plan-availability[hidden], #git-context[hidden], #draft-recovery-controls[hidden] { display: none !important; }
     #prompt-queue { max-height: 220px; overflow: auto; padding: 8px; }
     .queued-prompt textarea { display: block; width: 100%; box-sizing: border-box; }
+    #git-context { flex-wrap: wrap; min-width: 0; overflow-wrap: anywhere; }
+    #git-context-status { min-width: 0; }
+    #git-context-files { flex-basis: 100%; min-width: 0; }
+    #git-context-files summary { cursor: pointer; padding: 6px; min-height: 32px; }
+    @media (max-width: 700px) { #git-context-files summary { min-height: 44px; } }
     #git-review { padding: 10px; min-width: 0; }
     #git-review .row-actions { flex-wrap: wrap; }
-    #git-review input { max-width: 180px; }
+    #git-review .composer-utility { flex-wrap: wrap; }
+    #task-usage[hidden], #elapsed-limit-control[hidden], #elapsed-limit-note[hidden] { display: none !important; }
+    #task-usage { padding: 10px; min-width: 0; }
+    #task-usage .row-actions { flex-wrap: wrap; }
+    #task-usage .composer-utility { flex-wrap: wrap; }
+    #task-usage-results { overflow: auto; max-height: 28rem; }
+    .task-usage-table-scroll { max-width: 100%; overflow-x: auto; }
+    .task-usage-table-scroll:focus-visible { outline: 2px solid var(--accent-color); outline-offset: -2px; }
+    .task-usage-table { width: 100%; min-width: 42rem; border-collapse: collapse; font: inherit; }
+    .task-usage-table td:nth-child(2) { max-width: 18rem; overflow-wrap: anywhere; }
+    .task-usage-table caption { text-align: start; padding: 8px 0; }
+    .task-usage-table th, .task-usage-table td { text-align: start; padding: 8px; border-bottom: 1px solid var(--border-color); }
+    #git-review input { min-width: 0; width: 180px; max-width: 100%; min-height: 32px; padding: 6px 8px; font-size: var(--font-control-size); }
+    #git-review-scope { min-height: 32px; }
+    #git-review-results > p { margin: 8px 0; }
     .git-diff { max-width: 100%; overflow: auto; white-space: pre; font-size: 12px; }
     #git-review summary { overflow-wrap: anywhere; cursor: pointer; padding: 6px; }
     ${SELECTION_STYLES}
@@ -2054,6 +2097,7 @@ template.innerHTML = `
     }
 
     .code-block {
+      --code-token-accent: color-mix(in srgb, var(--accent-color) 65%, var(--text-color) 35%);
       display: grid;
       gap: 0;
       margin: 10px 0;
@@ -2074,7 +2118,42 @@ template.innerHTML = `
       font-size: var(--font-caption-size);
       text-transform: uppercase;
       letter-spacing: 0.08em;
+      flex-wrap: wrap;
     }
+
+    .code-controls { display: flex; flex-wrap: wrap; gap: 6px; }
+    .code-controls > button { min-height: 32px; border-radius: 4px; }
+    @media (max-width: 600px) {
+      .code-controls > button { min-height: 44px; }
+    }
+    .message-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+    .code-toggle {
+      min-height: 32px;
+      padding: 0 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: var(--font-caption-size);
+      background: var(--surface-bg);
+      color: var(--text-color);
+    }
+    .code-toggle[aria-pressed="true"] { border-color: var(--accent-color); }
+    .code-text.is-wrapped { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .code-line { position: relative; }
+    .code-line:empty { display: inline-block; width: 0; height: 1lh; vertical-align: top; }
+    .code-text.has-line-numbers { padding-left: 4.5em; }
+    .code-text.has-line-numbers .code-line::before {
+      content: attr(data-line-number);
+      position: absolute;
+      right: calc(100% + 1em);
+      width: 3em;
+      text-align: right;
+      color: var(--muted-color);
+      user-select: none;
+    }
+    .code-token-keyword, .code-token-literal { color: var(--code-token-accent); font-weight: 600; }
+    .code-token-string { color: var(--text-color); font-style: italic; }
+    .code-token-number { color: var(--code-token-accent); }
+    .code-token-comment { color: var(--muted-color); font-style: italic; }
 
     .code-text {
       margin: 0;
@@ -3736,6 +3815,12 @@ template.innerHTML = `
       overflow: auto;
       overscroll-behavior: contain;
       scroll-padding-block: 24px;
+    }
+
+    .conversation-scroll:focus-visible {
+      outline: 2px solid var(--focus-ring-contrast);
+      outline-offset: -2px;
+      box-shadow: inset 0 0 0 4px var(--focus-ring-color);
     }
 
     #thread-status-text:not(:empty) {
@@ -5420,6 +5505,12 @@ template.innerHTML = `
         font-size: var(--font-body-size);
       }
 
+      #git-review-scope,
+      #git-review input {
+        min-height: 44px;
+        font-size: var(--font-body-size);
+      }
+
       .composer-diagnostics {
         display: block;
         border-top: 1px solid var(--border-color);
@@ -5747,6 +5838,7 @@ template.innerHTML = `
       </div>
       <div class="section-scroll">
         <div class="rail-sections">
+          <details id="attention-inbox" hidden><summary id="attention-inbox-heading">Attention inbox</summary><p class="row-meta">Current requests, failed runs and completed turns. Opening a chat does not resolve these items.</p><div class="composer-utility"><label class="composer-utility-label" for="attention-kind">Status</label><span class="composer-select"><select id="attention-kind" class="compact-select"><option value="all">All statuses</option><option value="interaction">Waiting for input</option><option value="failure">Failed</option><option value="review">Ready to review</option></select></span></div><div class="composer-utility"><label class="composer-utility-label" for="attention-project">Project</label><span class="composer-select"><select id="attention-project" class="compact-select"><option value="">All projects</option></select></span></div><button class="composer-limits-button" type="button" data-action="refresh-attention">Refresh attention</button><div id="attention-inbox-items" role="status"></div></details>
           <section class="rail-section" id="direct-section"></section>
           <section class="rail-section flat" id="project-section"></section>
           <section class="rail-section" id="archived-section"></section>
@@ -5781,6 +5873,8 @@ template.innerHTML = `
       </div>
       <div class="status-banner" id="status-banner" role="status" aria-live="polite"></div>
       <div class="error-strip" id="error-strip" role="alert" aria-live="assertive"></div>
+      <section id="goal-controls" aria-label="Manual goal" hidden></section>
+      <section id="conversation-search" aria-label="Find in selected chat" hidden><div class="row-actions"><label class="composer-utility"><span class="composer-utility-label">Find in chat</span><input id="conversation-search-input" type="search" maxlength="256" aria-label="Find in selected chat" aria-describedby="conversation-search-status" placeholder="Search retained messages" autocomplete="off" /></label><button class="composer-limits-button" type="button" id="conversation-search-previous" data-action="previous-conversation-match">Previous</button><button class="composer-limits-button" type="button" id="conversation-search-next" data-action="next-conversation-match">Next</button><span class="row-meta" id="conversation-search-status" role="status"></span></div><p class="row-meta" id="conversation-search-preview"></p></section>
       <section class="error-strip assist-conversation-notice" id="assist-conversation-notice" role="note" aria-labelledby="assist-conversation-title" aria-live="polite" hidden>
         <span class="error-icon" id="assist-conversation-icon" aria-hidden="true"></span>
         <div class="error-copy">
@@ -5788,7 +5882,7 @@ template.innerHTML = `
           <span class="error-message">${ASSIST_PROMPT_MESSAGE}</span>
         </div>
       </section>
-      <div class="conversation-scroll" id="conversation-scroll">
+      <div class="conversation-scroll" id="conversation-scroll" role="region" aria-label="Conversation" tabindex="0">
         <div class="main-top">
           <div class="runtime-shell" id="runtime-strip"></div>
           <section class="onboarding-shell" id="onboarding-shell">
@@ -5826,6 +5920,7 @@ template.innerHTML = `
           </div>
           <div class="attachment-chips" id="attachment-chip-list"></div>
         </div>
+        <details id="chat-context" hidden></details>
         <div class="composer">
           <textarea id="prompt-input" placeholder="Message Codex through Home Assistant" aria-label="Message Codex" aria-describedby="composer-shortcut-hint composer-status"></textarea>
           <div class="composer-actions">
@@ -5840,13 +5935,20 @@ template.innerHTML = `
         <details class="composer-diagnostics" id="composer-diagnostics" open>
           <summary>Chat settings and limits</summary>
         <div class="row-actions" id="collaboration-controls">
-          <label id="follow-up-control" hidden>Follow-up <select id="follow-up-mode"><option value="queue">Queue after response</option><option value="steer">Steer active response</option></select></label>
-          <label id="collaboration-control">Collaboration <select id="collaboration-mode"><option value="default">Implement</option><option value="plan" disabled>Plan — unavailable</option></select></label>
-          <button type="button" id="implement-plan-button" data-action="implement-reviewed-plan" hidden>Implement reviewed plan</button>
-          <button type="button" id="git-composer-review" data-action="open-git-review" hidden>Review changes</button>
+          <label class="composer-utility" id="follow-up-control" hidden><span class="composer-utility-label">Follow-up</span><span class="composer-select"><select class="compact-select" id="follow-up-mode"><option value="queue">Queue after response</option><option value="steer">Steer active response</option></select></span></label>
+          <label class="composer-utility" id="collaboration-control"><span class="composer-utility-label">Collaboration</span><span class="composer-select"><select class="compact-select" id="collaboration-mode"><option value="default">Implement</option><option value="plan" disabled>Plan — unavailable</option></select></span></label>
+          <label class="composer-utility" id="elapsed-limit-control" hidden><span class="composer-utility-label">Elapsed-time limit</span><span class="composer-select"><select class="compact-select" id="elapsed-time-limit" aria-describedby="elapsed-limit-note"><option value="">No extra limit</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></span></label>
+          <label class="composer-utility" id="web-search-control"><span class="composer-utility-label">Web search</span><span class="composer-select"><select class="compact-select" id="web-search-mode" aria-describedby="web-search-availability"><option value="configured">Use configured setting</option><option value="live">Live</option><option value="disabled">Off</option></select></span></label>
+          <span class="row-meta" id="web-search-availability"></span>
+          <button class="composer-limits-button" type="button" id="implement-plan-button" data-action="implement-reviewed-plan" hidden>Implement reviewed plan</button>
+          <button class="composer-limits-button" type="button" id="git-composer-review" data-action="open-git-review" hidden>Review changes</button>
           <details class="row-meta" id="plan-availability"><summary>Plan unavailable</summary><p>This runtime does not support selecting native Plan mode. Update the paired App and Integration to use it.</p></details>
         </div>
 
+          <p id="elapsed-limit-note" class="row-meta" hidden>Requests a stop for the next turn at the elapsed-time limit. In-flight work may overshoot; partial results are retained. A limit cannot be added while steering an active turn.</p>
+          <div class="row-actions" id="git-context" hidden><span class="row-meta" id="git-context-status" role="status"></span><button class="composer-limits-button" type="button" data-action="refresh-git-context">Refresh repository</button><details class="row-meta" id="git-context-files" hidden><summary>Changed files</summary><ul></ul></details></div>
+          <div class="row-actions" id="draft-recovery-controls" hidden><span class="row-meta" id="draft-recovery-status" role="status"></span><button class="composer-limits-button" type="button" data-action="discard-draft" id="discard-draft-button">Discard draft</button></div>
+          <details class="composer-diagnostics" id="workspace-context" hidden></details>
           <div class="compact-toolbar" id="compact-toolbar"></div>
         </details>
         <p class="composer-status" id="composer-status" role="status" aria-live="polite"></p>
@@ -5856,11 +5958,12 @@ template.innerHTML = `
       </div>
       <section class="bottom-panel" id="bottom-panel" aria-label="Workspace panel" hidden>
         <div class="bottom-panel-header"><div class="row-actions"><button type="button" data-action="bottom-preview" aria-pressed="true" id="bottom-preview-button">File preview</button><button type="button" data-action="bottom-terminal" aria-pressed="false" id="bottom-terminal-button">Terminal</button></div><button class="icon-button small" type="button" data-action="toggle-bottom-panel" aria-label="Hide bottom panel">×</button></div>
-        <div class="row-actions"><button type="button" data-action="open-git-review" id="git-review-button" hidden>Review Git changes</button></div>
+        <div class="row-actions"><button class="composer-limits-button" type="button" data-action="open-git-review" id="git-review-button" hidden>Review Git changes</button><button class="composer-limits-button" type="button" data-action="open-task-usage" id="task-usage-button" hidden>Usage history</button></div>
+        <section id="task-usage" aria-label="Task usage history" hidden><div class="row-actions"><label class="composer-utility"><span class="composer-utility-label">History scope</span><span class="composer-select"><select class="compact-select" id="task-usage-scope"><option value="chat">This chat</option><option value="project">This project</option></select></span></label><button class="composer-limits-button" type="button" data-action="refresh-task-usage">Refresh history</button><button class="composer-limits-button" type="button" data-action="close-task-usage">Close history</button></div><p id="task-usage-status" class="row-meta" role="status"></p><div id="task-usage-results"></div></section>
         <section id="git-review" aria-label="Git review" hidden>
-          <div class="row-actions"><label>Scope <select id="git-review-scope"><option value="unstaged">Unstaged</option><option value="staged">Staged</option><option value="commit">Commit</option><option value="branch">Branch</option><option disabled>Last turn — unavailable</option></select></label><label>Reference <input id="git-review-ref" placeholder="HEAD (commit) or branch base" /></label><button type="button" data-action="refresh-git-review">Refresh diff</button></div>
+          <div class="row-actions"><label class="composer-utility"><span class="composer-utility-label">Scope</span><span class="composer-select"><select class="compact-select" id="git-review-scope"><option value="unstaged">Unstaged</option><option value="staged">Staged</option><option value="commit">Commit</option><option value="branch">Branch</option><option disabled>Last turn — unavailable</option></select></span></label><label class="composer-utility"><span class="composer-utility-label">Reference</span><input id="git-review-ref" placeholder="HEAD (commit) or branch base" /></label><button class="composer-limits-button" type="button" data-action="refresh-git-review">Refresh diff</button></div>
           <p class="row-meta">Git repository state at refresh. Last-turn review is unavailable because a trusted baseline is not recorded.</p>
-          <div id="git-review-results"></div>
+          <div id="git-review-results" role="status" aria-live="polite"></div>
         </section>
         <div id="bottom-preview"></div>
         <div id="bottom-terminal" hidden>
@@ -6004,12 +6107,13 @@ class CodexBridgePanel extends HTMLElement {
     terminalStyle.textContent = terminalCss;
     this.shadowRoot.append(terminalStyle);
     const chatMenuStyle = document.createElement("style");
-    chatMenuStyle.textContent = chatMenuCss;
+    chatMenuStyle.textContent = chatMenuCss + childAgentsCss;
     this.shadowRoot.append(chatMenuStyle);
     const imageStyle = document.createElement("style");
     imageStyle.textContent = inlineImageCss;
     this.shadowRoot.append(imageStyle);
     this._chatContextMenu = new ChatContextMenu(this, icons);
+    this._childAgentsView = new ChildAgentsView(this);
     this._terminal = new WorkspaceTerminalView(
       this.shadowRoot.getElementById("terminal-host"),
       (operation, payload) => this._callWS("terminal", { operation, ...payload }),
@@ -6022,6 +6126,11 @@ class CodexBridgePanel extends HTMLElement {
     );
     this._hass = null;
     this._preferences = { ...DEFAULT_PREFERENCES };
+    this._draftRecoveryStore = null;
+    this._draftEditRevisions = new Map();
+    this._chatContext = new ChatContextController(this);
+    this._draftRecoveryChecked = new Set();
+    this._draftRecoveryStatus = "";
     this._preferenceKey = null;
     this._panel = null;
     this._staticUiInstalled = false;
@@ -6031,6 +6140,7 @@ class CodexBridgePanel extends HTMLElement {
     this._threads = [];
     this._selectedProjectId = null;
     this._selectedThreadId = null;
+    this._threadSelectionDeliberate = false;
     this._sharedThreadChecked = false;
     this._questionDeepLink = null;
     this._contextVisible = true;
@@ -6091,10 +6201,34 @@ class CodexBridgePanel extends HTMLElement {
     this._followUpMode = "queue";
     this._collaborationMode = "default";
     this._collaborationChoices = new Map();
+    this._webSearchChoices = new Map();
+    this._webSearchChoiceRevisions = new Map();
+    this._workspaceContext = new WorkspaceContextController(this);
+    this._durationChoices = new Map();
+    this._durationChoiceRevisions = new Map();
+    this._durationChoiceOwnerEpoch = 0;
+    this._taskUsageRequest = 0;
+    this._taskUsageThreadId = null;
     this._promptQueues = new Map();
     this._promptQueueGenerations = new Map();
     this._gitReviewGeneration = 0;
     this._gitReviewThreadId = null;
+    this._gitContext = null;
+    this._gitContextThreadId = null;
+    this._gitContextCheckedAt = 0;
+    this._gitContextGeneration = 0;
+    this._gitContextLoading = null;
+    this._attentionData = null;
+    this._attentionLoading = false;
+    this._attentionCheckedAt = 0;
+    this._attentionGeneration = 0;
+    this._attentionError = false;
+    this._attentionKind = "all";
+    this._attentionProject = "";
+    this._attentionOwner = null;
+    this._attentionConnection = null;
+    this._conversationSearchState = null;
+    this._conversationSearchTimer = null;
     this._showProjectForm = false;
     this._showThreadForm = false;
     this._projectFormMode = "create";
@@ -6258,6 +6392,9 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._clearConversationSearch();
+    this._goalControls?.invalidate();
+    this._childAgentsView.clear();
     this._inlineImageController?.dispose();
     this._inlineImageController = null;
     this._chatContextMenu.disconnect();
@@ -6328,6 +6465,8 @@ class CodexBridgePanel extends HTMLElement {
   set hass(value) {
     const previous = this._hass;
     this._hass = value;
+    this._syncAttentionOwner();
+    this._childAgentsView.sync();
     this._loadPreferences();
     if (!this._config) {
       this._bootstrap();
@@ -6349,10 +6488,30 @@ class CodexBridgePanel extends HTMLElement {
   _loadPreferences() {
     const key = `codex-bridge:preferences:${this._hass?.user?.id || "local"}`;
     if (this._preferenceKey === key) return;
+    this._clearConversationSearch();
+    this._goalControls?.invalidate();
     this._preferenceKey = key;
+    this._workspaceContext?.reset();
+    this._chatContext?.reset();
+    // Keep owner changes distinct even if an old request survives A -> B -> A.
+    this._durationChoiceOwnerEpoch += 1;
+    this._durationChoices.clear();
+    this._durationChoiceRevisions.clear();
+    if (this._draftRecoveryStore) {
+      this._drafts.clear();
+      this._draft = "";
+      this._draftEditRevisions.clear();
+      this._webSearchChoices.clear();
+      this._webSearchChoiceRevisions.clear();
+      this._taskUsageThreadId = null;
+      this._taskUsageRequest += 1;
+      this._promptMutations.clear();
+      this._promptMutation = null;
+    }
     try { this._preferences = readPreferences(window.localStorage, key); }
     catch { this._preferences = { ...DEFAULT_PREFERENCES }; }
     this._applyPreferences();
+    this._configureDraftRecovery();
   }
 
   _applyPreferences() {
@@ -6362,9 +6521,79 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _savePreferences(value) {
+    const wasEnabled = this._preferences.draftRecovery === "on";
     this._preferences = normalisePreferences(value);
     this._applyPreferences();
+    if (wasEnabled && this._preferences.draftRecovery !== "on") {
+      const oldStore = this._draftRecoveryStore;
+      if (oldStore) {
+        const clearing = oldStore.clearAll();
+        oldStore.enabled = false;
+        void clearing.then((result) => { if (!result.ok) this._setError("Saved drafts could not be cleared. Browser storage is unavailable."); });
+      }
+    }
+    this._configureDraftRecovery();
     savePreferences(window.localStorage, this._preferenceKey || "codex-bridge:preferences:local", this._preferences);
+  }
+
+  _configureDraftRecovery() {
+    const ownerKey = this._hass?.user?.id ? this._preferenceKey : null;
+    const enabled = this._preferences.draftRecovery === "on";
+    if (this._draftRecoveryStore?.ownerKey === ownerKey && this._draftRecoveryStore?.enabled === enabled) return;
+    this._draftRecoveryStore = new DraftRecoveryStore({
+      ownerKey, enabled,
+    });
+    this._draftRecoveryChecked.clear();
+    this._draftRecoveryStatus = "";
+    if (this._selectedThreadId) {
+      const draft = this._draftForThread(this._selectedThreadId);
+      if (draft) this._persistDraft(this._selectedThreadId, draft);
+      else void this._restoreRecoveredDraft(this._selectedThreadId);
+    }
+    this._renderDraftRecovery();
+  }
+
+  _renderDraftRecovery() {
+    const controls = this.shadowRoot.getElementById("draft-recovery-controls");
+    controls.hidden = !this._selectedThreadId || this._preferences.draftRecovery !== "on";
+    this.shadowRoot.getElementById("draft-recovery-status").textContent = this._draftRecoveryStatus || "Unsent draft recovery is on for this user in this browser.";
+    this.shadowRoot.getElementById("discard-draft-button").disabled = !this._draftForThread(this._selectedThreadId) || Boolean(this._promptMutationForThread(this._selectedThreadId));
+  }
+
+  async _restoreRecoveredDraft(threadId) {
+    const store = this._draftRecoveryStore;
+    if (!store?.enabled || this._draftRecoveryChecked.has(threadId) || this._draftForThread(threadId) || this._promptMutationForThread(threadId)) return;
+    this._draftRecoveryChecked.add(threadId);
+    const revision = this._draftEditRevisions.get(threadId) || 0;
+    const selectionEpoch = this._threadSelectionEpoch;
+    const result = await store.restoreDraft(threadId);
+    if (store !== this._draftRecoveryStore || !this._threadSelectionIsCurrent(threadId, selectionEpoch)
+      || revision !== (this._draftEditRevisions.get(threadId) || 0) || this._draftForThread(threadId) || this._promptMutationForThread(threadId)) return;
+    if (result.ok && result.draft) {
+      this._drafts.set(threadId, result.draft);
+      this._draft = result.draft;
+      this._draftRecoveryStatus = "Unsent draft restored. Review and edit it before sending.";
+      this._renderComposerState(this._activeThread);
+    } else if (!result.ok) {
+      this._draftRecoveryStatus = "Draft recovery is unavailable in this browser. Your current text is kept for this visit.";
+    }
+    this._renderDraftRecovery();
+  }
+
+  _persistDraft(threadId, draft) {
+    const store = this._draftRecoveryStore;
+    if (!store?.enabled) return;
+    const revision = this._draftEditRevisions.get(threadId) || 0;
+    const oversized = draft.length > store.maxDraftChars;
+    const writing = oversized ? store.removeDraft(threadId) : store.saveDraft(threadId, draft);
+    return writing.then((result) => {
+      if (store !== this._draftRecoveryStore || threadId !== this._selectedThreadId || revision !== (this._draftEditRevisions.get(threadId) || 0)) return result;
+      this._draftRecoveryStatus = result.ok ? oversized ? "This draft exceeds 8,192 characters and is kept only for this visit." : draft ? "Draft saved in this browser." : "Saved draft text removed."
+        : result.reason === "too_large" ? "This draft exceeds 8,192 characters and is kept only for this visit."
+          : "Draft recovery is unavailable in this browser. Your current text is kept for this visit.";
+      this._renderDraftRecovery();
+      return result;
+    });
   }
 
   set panel(value) {
@@ -6440,6 +6669,9 @@ class CodexBridgePanel extends HTMLElement {
     this._setTrustedButtonContent(this.shadowRoot.getElementById("workspace-archive-button"), icons.package);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("send-button"), icons.send, "Send");
     this._setTrustedButtonContent(this.shadowRoot.getElementById("dictation-button"), icons.microphone);
+    for (const id of ["follow-up-mode", "collaboration-mode", "web-search-mode", "git-review-scope", "elapsed-time-limit", "task-usage-scope"]) {
+      this._appendTrustedIcon(this.shadowRoot.getElementById(id).parentElement, icons.chevronDown);
+    }
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-nav-toggle"), icons.menu);
     this._setTrustedButtonContent(this.shadowRoot.getElementById("mobile-context-toggle"), icons.panelRight);
     for (const control of this.shadowRoot.querySelectorAll("button[aria-label], button[title]")) {
@@ -6701,6 +6933,20 @@ class CodexBridgePanel extends HTMLElement {
       case "bottom-terminal": this._selectBottomTab("terminal"); break;
       case "open-git-review": if (!this._bottomPanelOpen) this._toggleBottomPanel(); this._selectBottomTab("preview"); this.shadowRoot.getElementById("git-review").hidden = false; void this._loadGitReview(); break;
       case "refresh-git-review": void this._loadGitReview(); break;
+      case "open-task-usage":
+      case "refresh-task-usage": void this._loadTaskUsage(); break;
+      case "close-task-usage": this.shadowRoot.getElementById("task-usage").hidden = true; this._taskUsageRequest += 1; break;
+      case "refresh-git-context": void this._loadGitContext(true); break;
+      case "refresh-attention": void this._loadAttentionInbox(true); break;
+      case "open-attention": void this._selectThread(actionTarget.dataset.threadId || ""); break;
+      case "next-conversation-match": void this._navigateConversationMatch(1); break;
+      case "previous-conversation-match": void this._navigateConversationMatch(-1); break;
+      case "discard-draft":
+        if (!this._promptMutationForThread(this._selectedThreadId)) {
+          this._setDraftForThread(this._selectedThreadId, ""); this._draft = "";
+          this._renderComposerState(this._activeThread);
+        }
+        break;
       case "load-git-file": void this._loadGitFile(actionTarget); break;
       case "open-search-result": void this._openTranscriptSearchResult(actionTarget); break;
       case "more-transcript-results": void this._searchTranscript(true); break;
@@ -6984,6 +7230,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _handleInput(event) {
+    if (event.target?.id === "git-review-ref") this._renderGitContext();
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
       return;
@@ -7036,13 +7283,40 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _handleChange(event) {
+    if (["git-review-scope", "git-review-ref"].includes(event.target?.id)) void this._loadGitContext(true);
     const target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    if (target.id === "attention-kind" || target.id === "attention-project") {
+      if (target.id === "attention-kind") this._attentionKind = target.value;
+      else this._attentionProject = target.value;
+      this._renderAttentionInbox();
       return;
     }
     if (target.id === "search-archived") { this._searchArchived = target.checked; void this._searchTranscript(); return; }
     if (target.id === "follow-up-mode") { this._followUpMode = target.value; this._renderComposerState(this._activeThread); return; }
     if (target.id === "collaboration-mode") { this._collaborationMode = target.value; this._collaborationChoices.set(this._selectedThreadId, target.value); this._renderComposerState(this._activeThread); return; }
+    if (target.id === "web-search-mode" && ["configured", "live", "disabled"].includes(target.value)) {
+      this._setWebSearchChoice(this._selectedThreadId, target.value);
+      this._renderComposerState(this._activeThread);
+      return;
+    }
+    if (target.id === "elapsed-time-limit") {
+      this._setDurationChoice(this._selectedThreadId, durationLimit(target.value));
+      this._render();
+    }
+    if (target.id === "task-usage-scope") void this._loadTaskUsage();
+    if (target.id === "conversation-search-input") {
+      window.clearTimeout(this._conversationSearchTimer);
+      this._conversationSearchState = null;
+      this._clearConversationSearchHighlights();
+      this._removeConversationSearchInsertions();
+      const query = target.value.trim();
+      this._renderConversationSearch();
+      if (query) this._conversationSearchTimer = window.setTimeout(() => { void this._findConversationMatches(query); }, 250);
+      return;
+    }
     if (["host-access-acknowledged", "host-access-unattended"].includes(target.id) && this._hostAccessDialog) {
       this._hostAccessDialog[target.id === "host-access-acknowledged" ? "acknowledged" : "unattended"] = target.checked;
       this._renderHostAccess();
@@ -7174,6 +7448,20 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     if (this._chatContextMenu.handleKey(event)) return;
+    if (target.id === "conversation-search-input") {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        window.clearTimeout(this._conversationSearchTimer);
+        if (this._conversationSearchState?.error) void this._findConversationMatches(target.value.trim());
+        else if (this._conversationSearchState) void this._navigateConversationMatch(event.shiftKey ? -1 : 1);
+        else void this._findConversationMatches(target.value.trim());
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault(); this._clearConversationSearch();
+        this.shadowRoot.getElementById("prompt-input").focus(); return;
+      }
+    }
     if (event.key === "Escape" && this._timelinePreviewSequence && target.closest("#conversation-timeline")) {
       event.preventDefault();
       this._closeTimelinePreview({ restoreFocus: true });
@@ -7199,6 +7487,11 @@ class CodexBridgePanel extends HTMLElement {
     }
     if ((event.metaKey || event.ctrlKey) && !event.altKey) {
       const shortcut = event.key.toLowerCase();
+      if (shortcut === "f" && this._activeDestination === "chats" && this._selectedThreadId && this._config?.capabilities?.includes("conversation_search_v1")) {
+        event.preventDefault();
+        this.shadowRoot.getElementById("conversation-search-input").focus();
+        return;
+      }
       if (shortcut === "n") {
         event.preventDefault();
         if (this._activeDestination !== "chats") this._selectDesktopDestination("chats");
@@ -7611,6 +7904,7 @@ class CodexBridgePanel extends HTMLElement {
 
   async _switchAccountProfile(profileId) {
     if (this._accountProfilePending || !this._accountProfiles.some((item) => item.id === profileId && !item.active)) return;
+    this._childAgentsView.invalidate();
     const profile = this._accountProfiles.find((item) => item.id === profileId);
     this._accountProfilePending = true;
     this._accountProfileFeedback = "Verifying saved account…";
@@ -8936,7 +9230,23 @@ class CodexBridgePanel extends HTMLElement {
 
   }
 
+  _renderGoals(activeThread) {
+    this._goalControls ||= new GoalControls((command, payload) => this._callWS(command, payload), () => this._createRandomUuid());
+    this._goalControls.setContext(this.shadowRoot.getElementById("goal-controls"), {
+      threadId: this._selectedThreadId,
+      ownerId: this._hass?.user?.id || null,
+      available: this._config?.capabilities?.includes("durable_goals_v1") === true,
+      eligible: !!activeThread && activeThread.schedule_eligible !== false && !activeThread.archived_at && !this._activeProject()?.archived_at,
+    });
+  }
+
   _renderComposerState(activeThread) {
+    this._workspaceContext.render();
+    this._chatContext.render();
+    this._renderGoals(activeThread);
+    this._renderGitContext();
+    this._renderDraftRecovery();
+    this._renderConversationSearch();
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const sendButton = this.shadowRoot.getElementById("send-button");
     const composerStatus = this.shadowRoot.getElementById("composer-status");
@@ -8963,6 +9273,25 @@ class CodexBridgePanel extends HTMLElement {
     planOption.textContent = planSupported ? "Plan" : "Plan — unavailable";
     this.shadowRoot.getElementById("collaboration-mode").disabled = !activeThread || Boolean(mutation) || assistManaged;
     this.shadowRoot.getElementById("plan-availability").hidden = planSupported;
+    const searchSupported = this._config?.capabilities?.includes("web_search_v1");
+    const durationSupported = this._config?.capabilities?.includes("elapsed_time_limit_v1");
+    this.shadowRoot.getElementById("elapsed-limit-control").hidden = !durationSupported;
+    const durationSelect = this.shadowRoot.getElementById("elapsed-time-limit");
+    durationSelect.value = String(mutation ? mutation.maxDurationSeconds || "" : this._durationChoices.get(this._selectedThreadId) || "");
+    durationSelect.disabled = !activeThread || Boolean(mutation) || assistManaged || (isRunning && this._followUpMode !== "queue");
+    this.shadowRoot.getElementById("elapsed-limit-note").hidden = !durationSupported;
+    this.shadowRoot.getElementById("task-usage-button").hidden = !activeThread || !this._config?.capabilities?.includes("usage_history_v1");
+    if (this._taskUsageThreadId !== this._selectedThreadId) {
+      this.shadowRoot.getElementById("task-usage").hidden = true;
+      this.shadowRoot.getElementById("task-usage-results").replaceChildren();
+    }
+    const searchSelect = this.shadowRoot.getElementById("web-search-mode");
+    searchSelect.disabled = !activeThread || Boolean(mutation) || assistManaged || !searchSupported;
+    searchSelect.value = mutation?.webSearch || this._webSearchChoices.get(this._selectedThreadId) || "configured";
+    const effectiveSearch = this._effectivePromptWebSearch();
+    this.shadowRoot.getElementById("web-search-availability").textContent = searchSupported
+      ? `Effective: ${effectiveSearch === "live" ? "Live" : "Off"}. Applies to the next prompt; shell and browser access are unchanged.`
+      : "Web search is unavailable on this App/account. Shell and browser access are unchanged.";
     const implement = this.shadowRoot.getElementById("implement-plan-button");
     implement.hidden = !planSupported || activeThread?.collaboration_mode !== "plan" || isRunning || assistManaged;
     implement.disabled = Boolean(mutation);
@@ -9026,6 +9355,27 @@ class CodexBridgePanel extends HTMLElement {
         ? this._speechStatus
         : "Select a chat before sending a message.";
     }
+  }
+
+  _setWebSearchChoice(threadId, choice) {
+    this._webSearchChoices.set(threadId, choice);
+    this._webSearchChoiceRevisions.set(threadId, (this._webSearchChoiceRevisions.get(threadId) || 0) + 1);
+  }
+
+  _clearAcceptedWebSearchChoice(mutation) {
+    const threadId = mutation.threadId;
+    if (mutation.ownerKey !== (this._hass?.user?.id || null)
+      || mutation.webSearchChoiceRevision !== (this._webSearchChoiceRevisions.get(threadId) || 0)
+      || mutation.webSearchChoice !== this._webSearchChoices.get(threadId)) return;
+    this._webSearchChoices.delete(threadId);
+  }
+
+  _effectivePromptWebSearch() {
+    const mutation = this._promptMutationForThread(this._selectedThreadId);
+    if (mutation?.webSearch) return mutation.webSearch;
+    const choice = this._webSearchChoices.get(this._selectedThreadId);
+    return choice === "live" || choice === "disabled" ? choice
+      : this._config?.web_search_mode === "live" ? "live" : "disabled";
   }
 
   _renderDictationControl(activeThread, locked) {
@@ -10043,6 +10393,8 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _renderNavigationSections() {
+    this._renderAttentionInbox();
+    void this._loadAttentionInbox();
     const selectedRun = this._runActivityForThread();
     const key = JSON.stringify([
       this._projects,
@@ -11138,7 +11490,9 @@ class CodexBridgePanel extends HTMLElement {
     const threadChanged = this._renderedThreadId !== this._selectedThreadId;
     const shouldRebuild = this._forceMessageRebuild || threadChanged;
     const previousScrollTop = scrollContainer.scrollTop;
-    const shouldStick = threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80;
+    const search = this._conversationSearchState;
+    const searchSelected = search?.threadId === this._selectedThreadId && !search.error && Boolean(search.results[search.index]);
+    const shouldStick = !searchSelected && (threadChanged || scrollContainer.scrollHeight - scrollContainer.clientHeight - previousScrollTop < 80);
     if (shouldRebuild) {
       this._renderedThreadId = this._selectedThreadId;
       this._renderedSequence = 0;
@@ -11155,6 +11509,7 @@ class CodexBridgePanel extends HTMLElement {
     if (!eventsToRender.length && !messageList.childElementCount) {
       this._renderEmptyState(messageList, "Chat is ready", "Send the first prompt when you are ready.");
       this._syncStreamingMessage(messageList, activity);
+      this._restoreConversationSearchSelection();
       this._renderConversationTimeline();
       return;
     }
@@ -11169,11 +11524,13 @@ class CodexBridgePanel extends HTMLElement {
         this._renderedSequence = event.sequence;
         continue;
       }
+      messageList.querySelector(`[data-conversation-search-inserted][data-sequence="${event.sequence}"]`)?.remove();
       messageList.append(node);
       this._renderedSequence = event.sequence;
     }
 
     this._syncStreamingMessage(messageList, activity);
+    this._restoreConversationSearchSelection();
     this._renderConversationTimeline();
 
     if (shouldStick) {
@@ -11446,7 +11803,8 @@ class CodexBridgePanel extends HTMLElement {
   _syncStreamingMessage(messageList, activity) {
     const existing = messageList.querySelector('[data-streaming-message="true"]');
     const plan = this._streamingPlanText(activity);
-    const text = this._streamingAssistantText(activity, plan);
+    const projection = this._streamingAssistantProjection(activity, plan);
+    const text = projection.text;
     const isStreaming = activity.assistantState === "streaming" || Boolean(plan);
     const isPartial = activity.assistantState === "partial";
     if ((!isStreaming && !isPartial) || !text) {
@@ -11458,7 +11816,9 @@ class CodexBridgePanel extends HTMLElement {
       "assistant",
       text,
       isPartial ? "partial" : "streaming",
-      isPartial ? "Partial response" : plan && text === plan ? "Plan" : ""
+      isPartial ? "Partial response" : plan && text === plan ? "Plan" : "",
+      "",
+      projection.truncated ? "Only the latest part of this response is shown. Earlier text is outside this preview's limit." : ""
     );
     article.classList.add(isPartial ? "partial" : "streaming");
     article.dataset.streamingMessage = "true";
@@ -11474,14 +11834,20 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _streamingAssistantText(activity, plan = this._streamingPlanText(activity)) {
-    if (!["streaming", "partial"].includes(activity.assistantState)) return plan;
+    return this._streamingAssistantProjection(activity, plan).text;
+  }
+
+  _streamingAssistantProjection(activity, plan = this._streamingPlanText(activity)) {
+    if (!["streaming", "partial"].includes(activity.assistantState)) return { text: plan, truncated: false };
     let text = "";
+    let truncated = false;
     for (const event of this._events) {
       const payload = event?.payload && typeof event.payload === "object" ? event.payload : {};
       const eventRunId = typeof payload.run_id === "string" ? payload.run_id : "";
       if (activity.runId && eventRunId && eventRunId !== activity.runId) continue;
       if (event.event_type === "message.completed") {
         text = "";
+        truncated = false;
         continue;
       }
       if (event.event_type !== "message.delta") continue;
@@ -11489,10 +11855,17 @@ class CodexBridgePanel extends HTMLElement {
         ? payload.text
         : typeof payload.delta === "string" ? payload.delta : "";
       if (!chunk) continue;
-      text = chunk.startsWith(text) && chunk.length > text.length ? chunk : `${text}${chunk}`;
-      if (text.length > 200000) text = text.slice(-200000);
+      // Bridge message.delta carries incremental text, including repeated prefixes.
+      text += chunk;
+      if (text.length > assistantMarkdownMaxLength) {
+        truncated = true;
+        let start = text.length - assistantMarkdownMaxLength;
+        if (text.charCodeAt(start) >= 0xdc00 && text.charCodeAt(start) <= 0xdfff
+          && text.charCodeAt(start - 1) >= 0xd800 && text.charCodeAt(start - 1) <= 0xdbff) start += 1;
+        text = text.slice(start);
+      }
     }
-    return text || plan;
+    return { text: text || plan, truncated };
   }
 
   _streamingPlanText(activity) {
@@ -11698,7 +12071,7 @@ class CodexBridgePanel extends HTMLElement {
     return article;
   }
 
-  _renderMessage(role, text, key, label = "", timestamp = "") {
+  _renderMessage(role, text, key, label = "", timestamp = "", plaintextNotice = "") {
     const article = document.createElement("article");
     article.className = `message ${role === "user" ? "user" : "assistant"}`;
     article.dataset.sequence = String(key);
@@ -11725,35 +12098,109 @@ class CodexBridgePanel extends HTMLElement {
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     if (label) bubble.append(this._textElement("span", "message-state row-meta", label));
-    if (role === "user") this._renderMessageBody(bubble, String(text ?? ""));
-    else bubble.append(renderAssistantMarkdown(document, String(text ?? ""), { createCodeBlock: (_document, code, language) => this._markdownCodeBlock(code, language) }));
+    const content = document.createElement("div");
+    content.className = "message-content";
+    const mathsSources = [];
+    if (plaintextNotice) content.append(
+      this._textElement("p", "assistant-markdown-overflow-notice", plaintextNotice),
+      this._textElement("pre", "assistant-markdown-overflow", String(text ?? ""))
+    );
+    else if (role === "user") this._renderMessageBody(content, String(text ?? ""));
+    else content.append(renderAssistantMarkdown(document, String(text ?? ""), {
+      createCodeBlock: (_document, code, language) => this._markdownCodeBlock(code, language),
+      onMathSource: (source) => mathsSources.push(source),
+    }));
+    bubble.append(content);
     article.append(bubble);
+    article.append(this._messageActions(content, String(text ?? ""), role));
+    if (mathsSources.length) article.append(mathSourceActions(document, mathsSources, async (source) => {
+      try {
+        await this._writeClipboardText(source);
+        this._clearError();
+      } catch (error) { this._setError(error); }
+    }));
     return article;
   }
 
+  _messageActions(content, original, role) {
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+    actions.setAttribute("aria-label", "Message actions");
+    const threadId = this._selectedThreadId;
+    const title = this._activeThread?.title;
+    for (const [label, quote, passage] of [
+      ["Copy message", false, false], ["Copy passage", false, true],
+      ["Quote message", true, false], ["Quote passage", true, true],
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "composer-limits-button";
+      button.textContent = label;
+      let activatedPassage = null;
+      const readSelection = () => {
+        try { return this.shadowRoot.getSelection?.() || window.getSelection(); }
+        catch { return null; }
+      };
+      if (passage) {
+        // Touch may collapse the range when a button takes focus. Capture only
+        // for this activation; keyboard focus uses the same validated passage.
+        button.addEventListener("pointerdown", () => {
+          activatedPassage = selectedMessagePassageResult(content, readSelection());
+        });
+        button.addEventListener("focus", () => {
+          const result = selectedMessagePassageResult(content, readSelection());
+          if (result.text || result.error) activatedPassage = result;
+        });
+        button.addEventListener("blur", () => { activatedPassage = null; });
+      }
+      // Preserve the selected passage when a mouse user presses an action.
+      button.addEventListener("mousedown", (event) => event.preventDefault());
+      button.addEventListener("click", async () => {
+        const selection = readSelection();
+        let result = passage ? selectedMessagePassageResult(content, selection) : { text: original, error: "" };
+        if (passage && selection?.isCollapsed && activatedPassage) result = activatedPassage;
+        const selected = result.text;
+        activatedPassage = null;
+        if (!selected) {
+          this._setError(result.error || "Select a passage inside this message first.");
+          return;
+        }
+        try {
+          if (quote) {
+            const input = this.shadowRoot.getElementById("prompt-input");
+            if (threadId !== this._selectedThreadId || input.disabled || this._promptMutationForThread(threadId)) {
+              this._setError("This chat's composer is unavailable. Copy the message instead.");
+              return;
+            }
+            const draft = [input.value, attributedMessageQuote(selected, role, title)].filter(Boolean).join("\n\n");
+            input.value = draft;
+            this._draft = draft;
+            this._setDraftForThread(threadId, draft);
+            this._renderComposerState(this._activeThread);
+            input.focus();
+          } else {
+            await this._writeClipboardText(selected);
+          }
+          this._clearError();
+        } catch (error) {
+          this._setError(error);
+        }
+      });
+      actions.append(button);
+    }
+    return actions;
+  }
+
   _renderMessageBody(container, text) {
-    const fencePattern = /```([^\n`]*)\n([\s\S]*?)```/g;
     let lastIndex = 0;
     let renderedPart = false;
-    let match;
-    while ((match = fencePattern.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex, match.index)));
+    for (const fence of fencedCodeParts(text)) {
+      if (fence.start > lastIndex) {
+        container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex, fence.start)));
       }
-      const language = (match[1] || "code").trim() || "code";
-      const codeBlock = document.createElement("div");
-      codeBlock.className = "code-block";
-      const codeHead = document.createElement("div");
-      codeHead.className = "code-head";
-      codeHead.append(this._textElement("span", "", language));
-      const copyButton = this._actionButton("copy-button", "copy-code-block", "Copy code");
-      this._appendTrustedIcon(copyButton, icons.copy);
-      copyButton.append(this._textElement("span", "", "Copy code"));
-      codeHead.append(copyButton);
-      codeBlock.append(codeHead, this._textElement("pre", "code-text", match[2] || ""));
-      container.append(codeBlock);
+      container.append(this._markdownCodeBlock(fence.code, fence.language || "code"));
       renderedPart = true;
-      lastIndex = fencePattern.lastIndex;
+      lastIndex = fence.end;
     }
     if (lastIndex < text.length || !renderedPart) {
       container.append(this._textElement("pre", "bubble-text", text.slice(lastIndex)));
@@ -11761,14 +12208,14 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _markdownCodeBlock(code, language) {
-    const block = document.createElement("div"); block.className = "code-block";
-    const head = document.createElement("div"); head.className = "code-head";
-    head.append(this._textElement("span", "", language || "code"));
-    const copy = this._actionButton("copy-button", "copy-code-block", "Copy code");
-    this._appendTrustedIcon(copy, icons.copy);
-    copy.append(this._textElement("span", "", "Copy code"));
-    head.append(copy); block.append(head, this._textElement("pre", "code-text", code));
-    return block;
+    return renderCodeBlock(document, code, language, { onCopy: async (original) => {
+      try {
+        await this._writeClipboardText(original);
+        this._clearError();
+      } catch (error) {
+        this._setError(error.message || "Unable to copy code.");
+      }
+    } });
   }
 
   _renderProgress() {
@@ -12633,7 +13080,8 @@ class CodexBridgePanel extends HTMLElement {
       },
     });
     const resources = chatResources(this._events);
-    const key = JSON.stringify([this._selectedThreadId, this._activityView, resources, this._artifacts, this._activeThread?.attachments, model, activity.stages]);
+    this._childAgentsView.sync();
+    const key = JSON.stringify([this._selectedThreadId, this._activityView, resources, this._artifacts, this._activeThread?.attachments, model, activity.stages, this._childAgentsView.version, this._childAgentsView.supported()]);
     if (key === this._resourceRenderKey) return;
     this._resourceRenderKey = key;
     const openResources = new Set([...container.querySelectorAll("details[open]")].map((item) => item.dataset.resource));
@@ -12724,6 +13172,7 @@ class CodexBridgePanel extends HTMLElement {
       }
       container.append(card);
     }
+    this._childAgentsView.render(container);
     if (focusedResource) [...container.querySelectorAll("[data-resource]")].find((item) => item.dataset.resource === focusedResource)?.focus();
   }
 
@@ -13065,13 +13514,22 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   async _loadThreads({ reportRefreshError = true, preserveThread = null } = {}) {
+    const selectionEpoch = this._threadSelectionEpoch;
     const listedThreads = await this._callWS("list_threads", {
       include_archived: true,
     });
-    this._threads = preserveThread && !listedThreads.some(
-      (thread) => thread.thread_id === preserveThread.thread_id
+    // This inventory predates a choice made while the request was pending.
+    // Preserve that known choice for this response only; a later inventory
+    // can still remove it if the chat really was deleted.
+    const currentChoice = selectionEpoch !== this._threadSelectionEpoch && this._threadSelectionDeliberate
+      ? this._threads.find((thread) => thread.thread_id === this._selectedThreadId)
+        || (this._activeThread?.thread_id === this._selectedThreadId ? this._activeThread : null)
+      : null;
+    const retainedThread = currentChoice || preserveThread;
+    this._threads = retainedThread && !listedThreads.some(
+      (thread) => thread.thread_id === retainedThread.thread_id
     )
-      ? [preserveThread, ...listedThreads]
+      ? [retainedThread, ...listedThreads]
       : listedThreads;
     if (!this._sharedThreadChecked) {
       this._sharedThreadChecked = true;
@@ -13091,7 +13549,7 @@ class CodexBridgePanel extends HTMLElement {
       }
       const shared = this._threads.find((thread) => thread.thread_id === sharedId);
       if (shared) {
-        this._setSelectedThreadId(shared.thread_id);
+        this._setSelectedThreadId(shared.thread_id, { deliberate: true });
         this._selectedProjectId = shared.project_id;
       } else if (sharedId && !this._questionDeepLink) {
         throw new Error("This shared chat is no longer available on this Home Assistant.");
@@ -13104,8 +13562,16 @@ class CodexBridgePanel extends HTMLElement {
     if (this._selectedThreadId && !this._threads.some((thread) => thread.thread_id === this._selectedThreadId)) {
       this._setSelectedThreadId(null);
     }
+    const selected = this._threads.find((thread) => thread.thread_id === this._selectedThreadId);
+    if (selected && !this._threadCanBeDefault(selected) && !this._threadSelectionDeliberate) {
+      this._setSelectedThreadId(null);
+      this._stopEventSubscription();
+      this._retireThreadInteractionState(null);
+      this._activeThread = null;
+      this._resetEventState();
+    }
     if (!this._selectedThreadId) {
-      const firstActive = this._threads.find((thread) => this._threadIsPrimaryActive(thread));
+      const firstActive = this._threads.find((thread) => this._threadCanBeDefault(thread));
       this._setSelectedThreadId(firstActive?.thread_id || null);
     }
     if (this._questionDeepLink && !this._questionDeepLink.threadId) {
@@ -13178,6 +13644,8 @@ class CodexBridgePanel extends HTMLElement {
       }
       this._activeThread = thread;
       void this._loadPromptQueue(threadId);
+      void this._loadGitContext();
+      void this._restoreRecoveredDraft(threadId);
       this._selectedProjectId = thread.project_id;
       const authoritativeEvents = parseEvents(events).filter(
         (event) => !event.thread_id || event.thread_id === threadId
@@ -13523,17 +13991,19 @@ class CodexBridgePanel extends HTMLElement {
     }
     this._stopEventSubscription();
     this._retireThreadInteractionState(threadId);
-    const selectionEpoch = this._setSelectedThreadId(threadId, { force: true });
+    const selectionEpoch = this._setSelectedThreadId(threadId, { force: true, deliberate: true });
     this._resetEventState();
     this._activeThread = null;
     this._forceMessageRebuild = true;
     await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
   }
 
-  _setSelectedThreadId(threadId, { force = false } = {}) {
+  _setSelectedThreadId(threadId, { force = false, deliberate = false } = {}) {
     const nextThreadId = typeof threadId === "string" && threadId ? threadId : null;
     if (force || nextThreadId !== this._selectedThreadId) {
+      this._threadSelectionDeliberate = deliberate;
       if (nextThreadId !== this._selectedThreadId) {
+        this._clearConversationSearch();
         this._timelineSelectedSequence = null;
         this._timelineTabStopSequence = null;
         this._timelinePreviewSequence = null;
@@ -13554,6 +14024,7 @@ class CodexBridgePanel extends HTMLElement {
       this._selectedArtifactId = null;
       this._clearArtifactPreview();
     }
+    if (deliberate) this._threadSelectionDeliberate = true;
     this._selectedThreadId = nextThreadId;
     this._inlineImageController?.setThread(nextThreadId || "");
     return this._threadSelectionEpoch;
@@ -13711,7 +14182,7 @@ class CodexBridgePanel extends HTMLElement {
 
   _adoptCreatedThread(thread) {
     this._stopEventSubscription();
-    this._setSelectedThreadId(thread.thread_id);
+    this._setSelectedThreadId(thread.thread_id, { deliberate: true });
     this._selectedProjectId = thread.project_id;
     this._retireThreadInteractionState(thread.thread_id);
     this._threads = [
@@ -13836,7 +14307,38 @@ class CodexBridgePanel extends HTMLElement {
     finally { for (const control of row.querySelectorAll("button")) control.disabled = false; }
   }
 
+  async _loadTaskUsage() {
+    const threadId = this._selectedThreadId;
+    if (!threadId || !this._config?.capabilities?.includes("usage_history_v1")) return;
+    const request = ++this._taskUsageRequest;
+    this._taskUsageThreadId = threadId;
+    const section = this.shadowRoot.getElementById("task-usage");
+    const status = this.shadowRoot.getElementById("task-usage-status");
+    const container = this.shadowRoot.getElementById("task-usage-results");
+    section.hidden = false;
+    status.textContent = "Loading reported usage…";
+    container.replaceChildren();
+    const projectScope = this.shadowRoot.getElementById("task-usage-scope").value === "project";
+    const projectId = this._activeThread?.project_id;
+    if (projectScope && !projectId) { status.textContent = "This chat has no project usage group."; return; }
+    try {
+      const data = await this._callWS("usage_history", projectScope ? { project_id: projectId } : { thread_id: threadId });
+      if (request !== this._taskUsageRequest || threadId !== this._selectedThreadId) return;
+      renderUsageHistory(container, data, { openChat: (id) => void this._selectThread(id), timeZone: this._hass?.config?.time_zone });
+      status.textContent = data?.coverage === "reported" ? "Reported observations for retained runs" : "Usage coverage is partial or not reported";
+      if (Number.isSafeInteger(data?.max_duration_seconds)) {
+        for (const option of this.shadowRoot.getElementById("elapsed-time-limit").options) {
+          option.disabled = Boolean(option.value) && Number(option.value) > data.max_duration_seconds;
+        }
+      }
+    } catch {
+      if (request !== this._taskUsageRequest || threadId !== this._selectedThreadId) return;
+      status.textContent = "Unable to load usage history. Use Refresh history to retry.";
+    }
+  }
+
   async _loadGitReview() {
+    void this._loadGitContext(true);
     if (!this._selectedThreadId || !this._config?.capabilities?.includes("git_review_v1")) return;
     const generation = ++this._gitReviewGeneration;
     const threadId = this._selectedThreadId;
@@ -13845,7 +14347,7 @@ class CodexBridgePanel extends HTMLElement {
     const ref = this.shadowRoot.getElementById("git-review-ref").value.trim();
     const parameters = { thread_id: threadId, scope, ...(scope === "branch" && ref ? { base_ref: ref } : {}), ...(scope === "commit" && ref ? { commit_ref: ref } : {}) };
     const results = this.shadowRoot.getElementById("git-review-results");
-    results.replaceChildren(this._textElement("p", "", "Loading Git diff…"));
+    results.replaceChildren(this._textElement("p", "row-meta", "Loading Git diff…"));
     try {
       const response = await this._callWS("git_review", parameters);
       if (generation !== this._gitReviewGeneration || threadId !== this._selectedThreadId) return;
@@ -13853,7 +14355,7 @@ class CodexBridgePanel extends HTMLElement {
       for (const file of response.files || []) {
         const details = document.createElement("details");
         details.append(this._textElement("summary", "", `${file.path} (${file.status})`));
-        const load = this._actionButton("", "load-git-file", "Load file diff"); load.textContent = "Load diff";
+        const load = this._actionButton("composer-limits-button", "load-git-file", "Load file diff"); load.textContent = "Load diff";
         load._gitParameters = { ...parameters, path: file.path, expected_state_token: response.state_token };
         load._gitGeneration = generation;
         details.append(load);
@@ -13863,8 +14365,348 @@ class CodexBridgePanel extends HTMLElement {
         results.append(details);
       }
       if (response.files_truncated) results.append(this._textElement("p", "row-meta", "File list truncated: more changes exist."));
-      if (!results.childElementCount) results.append(this._textElement("p", "", "No changes in this scope."));
-    } catch { if (generation === this._gitReviewGeneration && threadId === this._selectedThreadId) results.replaceChildren(this._textElement("p", "", "Git review unavailable. Check the repository and reference, then refresh.")); }
+      if (!results.childElementCount) results.append(this._textElement("p", "row-meta", "No changes in this scope."));
+    } catch { if (generation === this._gitReviewGeneration && threadId === this._selectedThreadId) results.replaceChildren(this._textElement("p", "row-meta", "Git review unavailable. Check the repository and reference, then refresh.")); }
+  }
+
+  _renderGitContext() {
+    const section = this.shadowRoot.getElementById("git-context");
+    section.hidden = !this._selectedThreadId || !this._config?.capabilities?.includes("git_context_v1");
+    if (section.hidden) return;
+    const selectedBase = this.shadowRoot.getElementById("git-review-scope").value === "branch"
+      ? this.shadowRoot.getElementById("git-review-ref").value.trim() : "";
+    const current = this._gitContextThreadId === this._selectedThreadId
+      && this._gitContextSelectionEpoch === this._threadSelectionEpoch
+      && this._gitContextBase === selectedBase;
+    const context = current ? this._gitContext : null;
+    let text = "Repository status has not been checked.";
+    if (current && this._gitContextLoading) text = "Checking repository…";
+    else if (context?.unavailable) text = "Repository status unavailable. Refresh to try again.";
+    else if (context?.repository === false) text = "This workspace is not a Git repository.";
+    else if (context?.repository) {
+      const branch = context.detached ? "Detached HEAD" : `Branch: ${context.branch}`;
+      const dirty = context.dirty === true ? `${context.changed_files} changed ${context.changed_files === 1 ? "file" : "files"}`
+        : context.dirty === false ? "Working tree clean" : "Working tree status unknown";
+      const baseLabel = /^[0-9a-f]{40,64}$/i.test(context.base_name || "") ? "Selected commit" : context.base_name;
+      const base = baseLabel ? `Comparison base: ${baseLabel}${context.base_available ? "" : " (unavailable)"}` : "Comparison base: none selected";
+      text = `Workspace: ${context.workspace_path} · Repository: ${context.repository_path} · ${branch} · ${dirty} · ${base}`;
+    }
+    this.shadowRoot.getElementById("git-context-status").textContent = text;
+    const details = this.shadowRoot.getElementById("git-context-files");
+    details.hidden = !context?.repository || !context.files?.length;
+    const list = details.querySelector("ul");
+    list.replaceChildren();
+    const labels = { M: "Modified", A: "Added", D: "Deleted", R: "Renamed", C: "Copied", U: "Conflict", T: "Type changed", "?": "Untracked" };
+    for (const file of (context?.files || []).slice(0, 200)) {
+      const status = file.status === "??" ? "Untracked" : Array.from(file.status || "").map((code, index) =>
+        code === " " ? "" : `${index === 0 ? "Staged" : "Working tree"}: ${labels[code] || "Changed"}`).filter(Boolean).join(", ");
+      list.append(this._textElement("li", "row-meta", `${file.original_path ? `${file.original_path} → ` : ""}${file.path} · ${status}`));
+    }
+    if (context?.files_truncated) list.append(this._textElement("li", "row-meta", "More changed files exist; list limited to 200."));
+  }
+
+  _clearConversationSearchHighlights() {
+    if (this._conversationSearchState) this._conversationSearchState.highlightTarget = null;
+    this.shadowRoot.querySelectorAll(".conversation-search-target").forEach((node) => {
+      clearConversationHighlights(node);
+      node.classList.remove("conversation-search-target");
+    });
+  }
+
+  _removeConversationSearchInsertions() {
+    this.shadowRoot.querySelectorAll("[data-conversation-search-inserted]").forEach((node) => node.remove());
+  }
+
+  _clearConversationSearch() {
+    window.clearTimeout(this._conversationSearchTimer);
+    this._conversationSearchState = null;
+    this.shadowRoot.getElementById("conversation-search-input").value = "";
+    this._clearConversationSearchHighlights();
+    this._removeConversationSearchInsertions();
+    this._renderConversationSearch();
+  }
+
+  _renderConversationSearch() {
+    const section = this.shadowRoot.getElementById("conversation-search");
+    section.hidden = !this._selectedThreadId || this._activeDestination !== "chats" || !this._config?.capabilities?.includes("conversation_search_v1");
+    const state = this._conversationSearchState;
+    const status = this.shadowRoot.getElementById("conversation-search-status");
+    status.textContent = state?.loading ? "Searching retained messages…" : state?.error ? "Chat search unavailable. Try the search again."
+      : state ? `${state.index >= 0 ? state.pageNumber * 50 + state.index + 1 : 0} of ${state.total} matching messages${state.complete === false ? " · Index coverage is incomplete" : ""}` : "Enter searches; Shift+Enter moves back.";
+    this.shadowRoot.getElementById("conversation-search-previous").disabled = !state || state.loading || (state.index <= 0 && state.pageNumber === 0);
+    this.shadowRoot.getElementById("conversation-search-next").disabled = !state || state.loading || (state.index >= state.results.length - 1 && !state.hasMore);
+    const preview = this.shadowRoot.getElementById("conversation-search-preview");
+    preview.replaceChildren();
+    const match = state?.results[state.index];
+    if (match) preview.append(highlightedConversationText(document, match.excerpt, state.query));
+  }
+
+  async _findConversationMatches(query) {
+    const threadId = this._selectedThreadId;
+    if (!query || !threadId || !this._config?.capabilities?.includes("conversation_search_v1")) return;
+    const state = { threadId, query, results: [], index: -1, total: 0, cursor: null, hasMore: false, loading: true, pageNumber: 0, pageCursors: [null] };
+    this._conversationSearchState = state;
+    this._renderConversationSearch();
+    try {
+      const response = await this._callWS("search_conversation", { thread_id: threadId, query, limit: 50 });
+      if (state !== this._conversationSearchState || threadId !== this._selectedThreadId) return;
+      Object.assign(state, { results: response.results || [], total: response.total_matching_messages || 0,
+        cursor: response.next_cursor, hasMore: response.has_more === true, complete: response.complete });
+      state.index = state.results.length ? 0 : -1;
+      await this._focusConversationMatch(state);
+    } catch {
+      if (state === this._conversationSearchState) state.error = true;
+    } finally {
+      if (state === this._conversationSearchState) { state.loading = false; this._renderConversationSearch(); }
+    }
+  }
+
+  async _navigateConversationMatch(direction) {
+    const state = this._conversationSearchState;
+    if (!state || state.loading || state.threadId !== this._selectedThreadId) return;
+    let nextIndex = state.index + direction;
+    if ((nextIndex < 0 && state.pageNumber === 0) || (nextIndex >= state.results.length && !state.hasMore)) return;
+    state.loading = true;
+    state.error = false;
+    this._renderConversationSearch();
+    try {
+      if (nextIndex < 0 || nextIndex >= state.results.length) {
+        const pageNumber = state.pageNumber + direction;
+        const cursor = direction > 0 ? state.cursor : state.pageCursors[pageNumber];
+        if (direction > 0 && (!Number.isSafeInteger(cursor) || cursor < 1)) throw new Error("Invalid search cursor");
+        const page = await this._callWS("search_conversation", { thread_id: state.threadId, query: state.query, limit: 50, ...(cursor ? { before_cursor: cursor } : {}) });
+        if (state !== this._conversationSearchState || state.threadId !== this._selectedThreadId) return;
+        // Keep one result page, plus small cursor anchors for revisiting pages.
+        // Reject a non-progressing cursor rather than loop on a faulty response.
+        if (page.has_more && (!Number.isSafeInteger(page.next_cursor) || (cursor && page.next_cursor >= cursor))) throw new Error("Search cursor did not progress");
+        if (!(page.results || []).length) throw new Error("Search results changed; retry");
+        state.results = page.results;
+        state.pageNumber = pageNumber;
+        state.pageCursors[pageNumber] = cursor;
+        state.cursor = page.next_cursor; state.hasMore = page.has_more === true;
+        state.total = page.total_matching_messages ?? state.total;
+        state.complete = page.complete;
+        nextIndex = direction > 0 ? 0 : state.results.length - 1;
+      }
+      if (nextIndex < state.results.length) { state.index = nextIndex; await this._focusConversationMatch(state); }
+    } catch {
+      if (state === this._conversationSearchState) state.error = true;
+    } finally {
+      if (state === this._conversationSearchState) { state.loading = false; this._renderConversationSearch(); }
+    }
+  }
+
+  _conversationSearchTarget(match) {
+    const anchor = match?.anchor_cursor;
+    const selector = Number.isSafeInteger(anchor) && anchor > 0
+      ? `.message[data-sequence="${anchor}"]`
+      : `.message[data-conversation-search-sequence="${Number(match?.sequence)}"]`;
+    return this.shadowRoot.querySelector(`#message-list ${selector}`);
+  }
+
+  _conversationSearchMessageChanged(state) {
+    const match = state.results[state.index];
+    if (!match || !Number.isSafeInteger(match.revision_cursor)) return false;
+    return this._events.some((event) => event.sequence > match.revision_cursor
+      && ["message.updated", "message.removed"].includes(event.event_type)
+      && event.payload?.message_sequence === match.sequence);
+  }
+
+  _invalidateChangedConversationMatch(state) {
+    state.message = null;
+    state.results = [];
+    state.index = -1;
+    state.hasMore = false;
+    state.error = true;
+    this._clearConversationSearchHighlights();
+    this._removeConversationSearchInsertions();
+    this._renderConversationSearch();
+  }
+
+  _insertConversationSearchMessage(message, match) {
+    this._removeConversationSearchInsertions();
+    const anchor = match.anchor_cursor;
+    const knownAnchor = Number.isSafeInteger(anchor) && anchor > 0;
+    // An unknown legacy anchor has its own identity, never an unrelated global
+    // event cursor that happens to equal this thread-local retrieval sequence.
+    const key = knownAnchor ? anchor : `search-${match.sequence}`;
+    const target = this._renderMessage(message.role, message.text, key, "Chat search match from earlier history", message.timestamp);
+    target.dataset.conversationSearchInserted = "true";
+    target.dataset.conversationSearchSequence = String(match.sequence);
+    const list = this.shadowRoot.getElementById("message-list");
+    list.querySelector(".empty-state")?.remove();
+    const next = knownAnchor ? [...list.querySelectorAll("[data-sequence]")].find((node) => Number(node.dataset.sequence) > anchor) : list.firstChild;
+    list.insertBefore(target, next || null);
+    return target;
+  }
+
+  _highlightConversationSearchTarget(state, target) {
+    if (state.highlightTarget === target) return;
+    this._clearConversationSearchHighlights();
+    target.classList.add("conversation-search-target");
+    const content = target.querySelector(".message-content");
+    if (content) highlightConversationMessage(content, state.query);
+    state.highlightTarget = target;
+  }
+
+  _restoreConversationSearchSelection() {
+    const state = this._conversationSearchState;
+    const match = state?.results[state.index];
+    if (!state || state.threadId !== this._selectedThreadId || !Number.isSafeInteger(match?.sequence)) return;
+    if (this._conversationSearchMessageChanged(state)) { this._invalidateChangedConversationMatch(state); return; }
+    let target = this._conversationSearchTarget(match);
+    if (!target && state.message?.sequence === match.sequence) target = this._insertConversationSearchMessage(state.message, match);
+    if (target) this._highlightConversationSearchTarget(state, target);
+  }
+
+  async _focusConversationMatch(state) {
+    const match = state.results[state.index];
+    if (!match) return;
+    const sequence = Number(match.sequence);
+    if (!Number.isSafeInteger(sequence) || sequence < 1) return;
+    let target = this._conversationSearchTarget(match);
+    if (!target) {
+      const message = await this._callWS("get_transcript_message", { thread_id: state.threadId, sequence });
+      if (state !== this._conversationSearchState || state.threadId !== this._selectedThreadId) return;
+      if (Number.isSafeInteger(message.revision_cursor) && message.revision_cursor !== match.revision_cursor) throw new Error("Search result changed; retry");
+      if (this._conversationSearchMessageChanged(state)) { this._invalidateChangedConversationMatch(state); return; }
+      state.message = { ...message, sequence };
+      target = this._insertConversationSearchMessage(message, match);
+    }
+    if (state !== this._conversationSearchState || state.threadId !== this._selectedThreadId) return;
+    if (this._conversationSearchMessageChanged(state)) { this._invalidateChangedConversationMatch(state); return; }
+    this._highlightConversationSearchTarget(state, target);
+    if (Number.isSafeInteger(match.anchor_cursor) && match.anchor_cursor > 0) {
+      const anchor = document.createElement("button");
+      anchor.dataset.sequence = String(match.anchor_cursor);
+      this._jumpToConversationTurn(anchor);
+    } else {
+      const scroller = this.shadowRoot.getElementById("conversation-scroll");
+      scroller.scrollTop += target.getBoundingClientRect().top - scroller.getBoundingClientRect().top - scroller.clientTop - 16;
+    }
+    // Keep focus on the invoking search control for repeat navigation.
+  }
+
+  _syncAttentionOwner() {
+    const owner = this._hass?.user?.id || null;
+    const connection = this._hass?.connection || null;
+    if (owner === this._attentionOwner && connection === this._attentionConnection) return;
+    this._attentionOwner = owner;
+    this._attentionConnection = connection;
+    ++this._attentionGeneration;
+    this._attentionData = null;
+    this._attentionLoading = false;
+    this._attentionCheckedAt = 0;
+    this._attentionError = false;
+    this._attentionKind = "all";
+    this._attentionProject = "";
+    this._renderAttentionInbox();
+  }
+
+  _renderAttentionInbox() {
+    const section = this.shadowRoot.getElementById("attention-inbox");
+    section.hidden = !this._config?.capabilities?.includes("attention_inbox_v1");
+    if (section.hidden) return;
+    const items = this._attentionData?.items || [];
+    this.shadowRoot.getElementById("attention-inbox-heading").textContent = this._attentionData
+      ? `Attention inbox (${items.length}${this._attentionData.truncated ? "+" : ""})` : "Attention inbox";
+    const kind = this.shadowRoot.getElementById("attention-kind");
+    kind.value = this._attentionKind;
+    for (const field of section.querySelectorAll(".composer-select")) {
+      if (!field.querySelector("svg")) this._appendTrustedIcon(field, icons.chevronDown);
+    }
+    const project = this.shadowRoot.getElementById("attention-project");
+    const projects = new Map(items.map((item) => [item.project_id, item.project_name]));
+    const signature = JSON.stringify([...projects]);
+    if (project.dataset.options !== signature) {
+      project.replaceChildren(new Option("All projects", ""));
+      for (const [id, name] of projects) project.append(new Option(name, id));
+      project.dataset.options = signature;
+    }
+    if (!projects.has(this._attentionProject)) this._attentionProject = "";
+    project.value = this._attentionProject;
+    const filtered = items.filter((item) =>
+      (this._attentionKind === "all" || item.kind === this._attentionKind)
+      && (!this._attentionProject || item.project_id === this._attentionProject));
+    const list = this.shadowRoot.getElementById("attention-inbox-items");
+    list.replaceChildren();
+    if (this._attentionLoading) list.append(this._textElement("p", "row-meta", "Checking attention…"));
+    if (this._attentionError) list.append(this._textElement("p", "row-meta", "Attention status unavailable. Refresh to try again."));
+    for (const item of filtered) {
+      const row = this._actionButton("transcript-search-result", "open-attention", `Open ${item.chat_title}: ${item.label}`);
+      row.dataset.threadId = item.thread_id;
+      row.append(this._textElement("strong", "", `${item.project_name} · ${item.chat_title}${item.archived ? " (archived)" : ""}`));
+      row.append(this._textElement("span", "row-meta", item.label));
+      list.append(row);
+    }
+    if (this._attentionData && items.length && !filtered.length) list.append(this._textElement("p", "row-meta", "No attention items match these filters."));
+    if (this._attentionData && !items.length) list.append(this._textElement("p", "row-meta", "No current attention items."));
+    if (this._attentionData?.truncated) list.append(this._textElement("p", "row-meta", "More attention items exist than this bounded view can show."));
+  }
+
+  async _loadAttentionInbox(force = false) {
+    this._syncAttentionOwner();
+    if (!this._config?.capabilities?.includes("attention_inbox_v1") || this._attentionLoading) return;
+    if (!force && Date.now() - this._attentionCheckedAt < 30_000) return;
+    const generation = ++this._attentionGeneration;
+    const ownerKey = this._hass?.user?.id;
+    const connection = this._hass?.connection;
+    this._attentionCheckedAt = Date.now();
+    this._attentionLoading = true;
+    this._renderAttentionInbox();
+    try {
+      const response = await this._callWS("attention_inbox");
+      if (generation !== this._attentionGeneration || ownerKey !== this._hass?.user?.id || connection !== this._hass?.connection) return;
+      this._attentionData = response;
+      this._attentionError = false;
+    } catch {
+      if (generation !== this._attentionGeneration || ownerKey !== this._hass?.user?.id || connection !== this._hass?.connection) return;
+      this._attentionData = null;
+      this._attentionError = true;
+    } finally {
+      if (generation === this._attentionGeneration) {
+        this._attentionLoading = false;
+        this._renderAttentionInbox();
+      }
+    }
+  }
+
+  async _loadGitContext(force = false) {
+    const threadId = this._selectedThreadId;
+    const selectionEpoch = this._threadSelectionEpoch;
+    if (!threadId || !this._config?.capabilities?.includes("git_context_v1")) return;
+    const scope = this.shadowRoot.getElementById("git-review-scope").value;
+    const ref = this.shadowRoot.getElementById("git-review-ref").value.trim();
+    const base = scope === "branch" ? ref : "";
+    const key = JSON.stringify([threadId, selectionEpoch, base]);
+    if (!force && this._gitContextRequestKey === key && this._gitContextLoading === threadId) return;
+    if (!force && this._gitContextRequestKey === key && Date.now() - this._gitContextCheckedAt < 30_000) return;
+    const generation = ++this._gitContextGeneration;
+    this._gitContextRequestKey = key;
+    this._gitContextSelectionEpoch = selectionEpoch;
+    this._gitContextBase = base;
+    this._gitContextThreadId = threadId;
+    this._gitContextLoading = threadId;
+    this._gitContext = null;
+    this._renderGitContext();
+    const isCurrent = () => generation === this._gitContextGeneration
+      && this._threadSelectionIsCurrent(threadId, selectionEpoch)
+      && base === (this.shadowRoot.getElementById("git-review-scope").value === "branch"
+        ? this.shadowRoot.getElementById("git-review-ref").value.trim() : "");
+    try {
+      const context = await this._callWS("git_context", { thread_id: threadId, ...(base ? { base_ref: base } : {}) });
+      if (!isCurrent()) return;
+      this._gitContext = context;
+    } catch {
+      if (!isCurrent()) return;
+      this._gitContext = { unavailable: true };
+    } finally {
+      if (generation === this._gitContextGeneration) {
+        this._gitContextLoading = null;
+        this._gitContextCheckedAt = isCurrent() ? Date.now() : 0;
+        this._renderGitContext();
+      }
+    }
   }
 
   async _loadGitFile(button) {
@@ -13914,6 +14756,37 @@ class CodexBridgePanel extends HTMLElement {
     }
   }
 
+  _setDurationChoice(threadId, value) {
+    if (!threadId) return;
+    this._durationChoices.set(threadId, value);
+    this._durationChoiceRevisions.set(threadId, (this._durationChoiceRevisions.get(threadId) || 0) + 1);
+  }
+
+  _snapshotDurationChoice(threadId) {
+    return {
+      ownerKey: this._hass?.user?.id || null,
+      ownerEpoch: this._durationChoiceOwnerEpoch,
+      hasChoice: this._durationChoices.has(threadId),
+      rawChoice: this._durationChoices.get(threadId),
+      revision: this._durationChoiceRevisions.get(threadId) || 0,
+    };
+  }
+
+  _consumeSubmittedDurationChoice(mutation) {
+    const snapshot = mutation.durationChoiceSnapshot;
+    const threadId = mutation.threadId;
+    if (!snapshot || snapshot.ownerKey !== (this._hass?.user?.id || null)
+      || snapshot.ownerEpoch !== this._durationChoiceOwnerEpoch
+      || snapshot.hasChoice !== this._durationChoices.has(threadId)
+      || snapshot.rawChoice !== this._durationChoices.get(threadId)
+      || snapshot.revision !== (this._durationChoiceRevisions.get(threadId) || 0)) return false;
+    if (snapshot.hasChoice) {
+      this._durationChoices.delete(threadId);
+      this._durationChoiceRevisions.set(threadId, snapshot.revision + 1);
+    }
+    return true;
+  }
+
   async _sendPrompt() {
     const promptInput = this.shadowRoot.getElementById("prompt-input");
     const threadId = this._selectedThreadId;
@@ -13923,45 +14796,100 @@ class CodexBridgePanel extends HTMLElement {
       return;
     }
     const existing = this._promptMutationForThread(threadId);
+    if (!existing && this._durationChoices.get(threadId)
+      && this._activeThread?.status === "running" && this._followUpMode !== "queue") {
+      this._setError("Choose Queue after response or remove the elapsed-time limit before steering this turn.");
+      return;
+    }
     if (existing && ["sending", "reconciling"].includes(existing.state)) {
+      return;
+    }
+    if (this._workspaceContext.busy) {
+      this._setError("Wait for the workspace context preview to finish before sending.");
       return;
     }
     const prompt = existing?.state === "retryable" ? existing.prompt : promptInput.value.trim();
     if (!prompt || !threadId) {
       return;
     }
+    if (new TextEncoder().encode(prompt).byteLength > 1024 * 1024) {
+      this._setError("This message exceeds the 1 MiB prompt limit. Shorten it before sending.");
+      return;
+    }
+    let workspaceContext;
+    try {
+      workspaceContext = existing?.workspaceContext || (this._config?.capabilities?.includes("workspace_context_v1") ? this._workspaceContext.snapshot() : []);
+    } catch (error) {
+      this._setError(error.message);
+      return;
+    }
+    let chatContext;
+    try {
+      if (this._chatContext.busy) return;
+      chatContext = existing?.chatContext || (this._config?.capabilities?.includes("chat_context_v1") ? this._chatContext.snapshot() : []);
+    } catch (error) { this._setError(error.message); return; }
     const mutation = existing || {
       threadId,
+      chatContext,
+      chatContextRevision: this._chatContext.revision(threadId),
+      ownerKey: this._hass?.user?.id || null,
+      draftRecoveryStore: this._draftRecoveryStore,
       prompt,
+      workspaceContext,
+      workspaceContextRevision: this._workspaceContext.revision(threadId),
       clientRequestId: this._createClientRequestId("prompt"),
       state: "sending",
+      webSearch: this._config?.capabilities?.includes("web_search_v1") ? this._effectivePromptWebSearch() : null,
+      webSearchChoice: this._webSearchChoices.get(threadId),
+      webSearchChoiceRevision: this._webSearchChoiceRevisions.get(threadId) || 0,
       followUpMode: this._config?.capabilities?.includes("prompt_queue_v1") ? this._followUpMode : null,
       collaborationMode: this._config?.capabilities?.includes("plan_mode_v1") ? this._collaborationMode : null,
+      maxDurationSeconds: this._config?.capabilities?.includes("elapsed_time_limit_v1") ? this._durationChoices.get(threadId) || null : null,
+      durationChoiceSnapshot: this._config?.capabilities?.includes("elapsed_time_limit_v1") ? this._snapshotDurationChoice(threadId) : null,
     };
     mutation.state = "sending";
     this._promptMutations.set(threadId, mutation);
     this._promptMutation = mutation;
     this._draft = prompt;
-    this._setDraftForThread(threadId, prompt);
+    if (mutation.draftEditRevision === undefined) {
+      mutation.draftSave = this._setDraftForThread(threadId, prompt);
+      mutation.draftEditRevision = this._draftEditRevisions.get(threadId);
+    }
     this._render();
     try {
       await this._callWS("send_prompt", {
         thread_id: threadId,
         prompt,
         client_request_id: mutation.clientRequestId,
+        ...(mutation.chatContext?.length ? { chat_context: mutation.chatContext } : {}),
         ...(mutation.followUpMode ? { follow_up_mode: mutation.followUpMode } : {}),
         ...(mutation.collaborationMode ? { collaboration_mode: mutation.collaborationMode } : {}),
+        ...(mutation.webSearch ? { web_search: mutation.webSearch } : {}),
+        ...(mutation.workspaceContext?.length ? { workspace_context: mutation.workspaceContext } : {}),
+        ...(mutation.maxDurationSeconds ? { max_duration_seconds: mutation.maxDurationSeconds } : {}),
       });
+      const ownerChanged = mutation.ownerKey !== undefined && mutation.ownerKey !== (this._hass?.user?.id || null);
+      const superseded = this._promptMutations.get(threadId) !== mutation && this._promptMutation !== mutation;
+      if (ownerChanged || superseded) {
+        void this._removeSentRecoveredDraft(mutation);
+        return;
+      }
+      this._chatContext.clearCaptured(threadId, mutation.chatContext || [], mutation.chatContextRevision);
+      this._clearAcceptedWebSearchChoice(mutation);
+      this._workspaceContext.clearCaptured(threadId, mutation.workspaceContext || [], mutation.workspaceContextRevision);
+      this._consumeSubmittedDurationChoice(mutation);
       if (this._promptMutation === mutation) {
         this._promptMutation = null;
       }
       if (this._promptMutations.get(threadId) === mutation) {
         this._promptMutations.delete(threadId);
       }
-      if (threadId === this._selectedThreadId) {
+      void this._removeSentRecoveredDraft(mutation);
+      const draftUnchanged = mutation.draftEditRevision === this._draftEditRevisions.get(threadId);
+      if (draftUnchanged) this._setDraftForThread(threadId, "", { persist: false });
+      if (draftUnchanged && threadId === this._selectedThreadId) {
         promptInput.value = "";
         this._draft = "";
-        this._setDraftForThread(threadId, "");
         this._clearError();
         await this._refreshActiveThread();
         this._render();
@@ -13970,7 +14898,24 @@ class CodexBridgePanel extends HTMLElement {
       if (this._promptMutations.get(threadId) !== mutation) {
         return;
       }
-      if (["collaboration_mode_requires_queue", "capabilities_unavailable", "no_active_run", "queue_revision_conflict"].includes(this._bridgeErrorCode(error))) {
+      if (this._bridgeErrorCode(error)?.startsWith("chat_context_")) {
+        this._promptMutations.delete(threadId);
+        if (this._promptMutation === mutation) this._promptMutation = null;
+        this._chatContext.staleCaptured(threadId, mutation.chatContextRevision);
+        if (threadId === this._selectedThreadId) this._setError(this._chatContext.error(error));
+        return;
+      }
+      if (["stale_context", "workspace_context_limit_exceeded"].includes(this._bridgeErrorCode(error))) {
+        this._promptMutations.delete(threadId);
+        if (this._promptMutation === mutation) this._promptMutation = null;
+        this._workspaceContext.staleCaptured(threadId, mutation.workspaceContextRevision);
+        if (threadId === this._selectedThreadId) {
+          this._setError("Workspace context was not sent. Refresh or remove the selected context, inspect it and send again.");
+          this._renderComposerState(this._activeThread);
+        }
+        return;
+      }
+      if (["collaboration_mode_requires_queue", "web_search_requires_queue", "elapsed_time_limit_invalid", "capabilities_unavailable", "no_active_run", "queue_revision_conflict"].includes(this._bridgeErrorCode(error))) {
         this._promptMutations.delete(threadId);
         if (this._promptMutation === mutation) this._promptMutation = null;
         if (threadId === this._selectedThreadId) {
@@ -14043,15 +14988,39 @@ class CodexBridgePanel extends HTMLElement {
     if (this._promptMutation === mutation) {
       this._promptMutation = null;
     }
-    if (mutation.threadId === this._selectedThreadId) {
+    if (mutation.ownerKey === (this._hass?.user?.id || null)) {
+      this._chatContext.clearCaptured(mutation.threadId, mutation.chatContext || [], mutation.chatContextRevision);
+    }
+    this._clearAcceptedWebSearchChoice(mutation);
+    this._consumeSubmittedDurationChoice(mutation);
+    this._workspaceContext.clearCaptured(mutation.threadId, mutation.workspaceContext || [], mutation.workspaceContextRevision);
+    void this._removeSentRecoveredDraft(mutation);
+    const draftUnchanged = mutation.draftEditRevision === this._draftEditRevisions.get(mutation.threadId);
+    if (draftUnchanged) this._setDraftForThread(mutation.threadId, "", { persist: false });
+    if (draftUnchanged && mutation.threadId === this._selectedThreadId) {
       const promptInput = this.shadowRoot.getElementById("prompt-input");
       promptInput.value = "";
       this._draft = "";
-      this._setDraftForThread(mutation.threadId, "");
       this._clearError();
       this._render();
     }
     return true;
+  }
+
+  async _removeSentRecoveredDraft(mutation) {
+    if (mutation.draftRemoval) return mutation.draftRemoval;
+    mutation.draftRemoval = (async () => {
+      const store = mutation.draftRecoveryStore;
+      if (!store?.enabled) return;
+      const saved = await mutation.draftSave;
+      // No successful revision means there is no owned snapshot safe to delete.
+      if (!saved?.ok || !saved.revision) return;
+      const result = await store.removeDraft(mutation.threadId, { expectedRevision: saved.revision });
+      if (!result.ok && store === this._draftRecoveryStore) {
+        this._setError("A sent draft could not be removed from browser storage.");
+      }
+    })();
+    return mutation.draftRemoval;
   }
 
   _promptMutationForThread(threadId) {
@@ -14067,15 +15036,17 @@ class CodexBridgePanel extends HTMLElement {
     return threadId ? this._drafts.get(threadId) || "" : "";
   }
 
-  _setDraftForThread(threadId, draft) {
+  _setDraftForThread(threadId, draft, { persist = true } = {}) {
     if (!threadId) {
       return;
     }
+    this._draftEditRevisions.set(threadId, (this._draftEditRevisions.get(threadId) || 0) + 1);
     if (draft) {
       this._drafts.set(threadId, draft);
     } else {
       this._drafts.delete(threadId);
     }
+    if (persist) return this._persistDraft(threadId, draft);
   }
 
   async _cancelRun() {
@@ -14459,7 +15430,7 @@ class CodexBridgePanel extends HTMLElement {
       const archived = await this._callWS("archive_thread", { thread_id: threadId });
       this._threads = this._threads.map((thread) => (thread.thread_id === threadId ? archived : thread));
       if (this._selectedThreadId === threadId) {
-        const replacement = this._threads.find((thread) => !thread.archived_at && thread.thread_id !== threadId);
+        const replacement = this._threads.find((thread) => this._threadCanBeDefault(thread) && thread.thread_id !== threadId);
         const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
         if (this._selectedThreadId) {
           await this._refreshSelectedThreadAndStartPolling(this._selectedThreadId, selectionEpoch);
@@ -14550,7 +15521,7 @@ class CodexBridgePanel extends HTMLElement {
     try {
       const restored = await this._callWS("restore_thread", { thread_id: threadId });
       this._threads = this._threads.map((thread) => (thread.thread_id === threadId ? restored : thread));
-      const selectionEpoch = this._setSelectedThreadId(threadId);
+      const selectionEpoch = this._setSelectedThreadId(threadId, { deliberate: true });
       this._selectedProjectId = restored.project_id;
       await this._refreshSelectedThreadAndStartPolling(threadId, selectionEpoch);
       this._clearError();
@@ -14574,7 +15545,7 @@ class CodexBridgePanel extends HTMLElement {
       this._transcriptSearchResults = this._transcriptSearchResults.filter((result) => result.thread_id !== threadId);
       this._renderTranscriptSearch();
       if (this._selectedThreadId === threadId) {
-        const replacement = this._threads.find((thread) => !thread.archived_at) || null;
+        const replacement = this._threads.find((thread) => this._threadCanBeDefault(thread)) || null;
         const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
         this._selectedProjectId = replacement?.project_id || this._directProject()?.project_id || null;
         if (replacement) {
@@ -15129,6 +16100,8 @@ class CodexBridgePanel extends HTMLElement {
     if (!this._pollActive || generation !== this._pollGeneration || !this._selectedThreadId) {
       return;
     }
+    void this._loadGitContext();
+    void this._loadAttentionInbox();
     if (this._pollInFlight) {
       this._scheduleNextPoll(undefined, generation);
       return;
@@ -15193,6 +16166,10 @@ class CodexBridgePanel extends HTMLElement {
         const batch = acceptEvents(this._eventStream, scopedEvents);
         this._eventStream = batch.state;
         this._events = batch.state.events;
+        if (batch.accepted.some((event) => event.event_type === "goal.updated"
+            && event.payload?.revision > (this._goalControls?.view?.revision ?? 0))) {
+          this._goalControls?.showError("The goal changed in another request. Refresh to review it before saving.");
+        }
         this._sequence = batch.state.cursor;
         hasInteractionEvents = batch.accepted.some((event) => INTERACTION_EVENT_TYPES.has(event.event_type));
         if (batch.accepted.some((event) => ["message.updated", "message.removed"].includes(event.event_type))) {
@@ -15406,6 +16383,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _retireSystemEventSubscription() {
+    this._childAgentsView.invalidate();
     this._systemEventGeneration += 1;
     if (this._systemEventUnsubscribe) {
       this._systemEventUnsubscribe();
@@ -15538,6 +16516,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _stopEventSubscription({ preserveReconnectAttempt = false } = {}) {
+    this._childAgentsView.invalidate();
     this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
       this._eventUnsubscribe();
@@ -15861,6 +16840,10 @@ class CodexBridgePanel extends HTMLElement {
     return thread?.schedule_eligible === false;
   }
 
+  _threadCanBeDefault(thread) {
+    return this._threadIsPrimaryActive(thread) && !this._isAssistantThread(thread);
+  }
+
   _assistantThreads() {
     const query = this._searchQuery.trim().toLowerCase();
     return this._threads.filter((thread) => {
@@ -15935,9 +16918,9 @@ class CodexBridgePanel extends HTMLElement {
     }
     const replacement =
       this._threads.find(
-        (thread) => this._threadIsPrimaryActive(thread) && (!preferProjectId || thread.project_id === preferProjectId)
+        (thread) => this._threadCanBeDefault(thread) && (!preferProjectId || thread.project_id === preferProjectId)
       ) ||
-      this._threads.find((thread) => this._threadIsPrimaryActive(thread)) ||
+      this._threads.find((thread) => this._threadCanBeDefault(thread)) ||
       null;
     const selectionEpoch = this._setSelectedThreadId(replacement?.thread_id || null);
     this._selectedProjectId = replacement?.project_id || preferProjectId || this._directProject()?.project_id || null;

@@ -1,0 +1,1229 @@
+{
+  "baseline": "1.12.0",
+  "target": "1.13.0",
+  "bridge_target": "0.20.0",
+  "codex": "0.157.1",
+  "updated_utc": "2026-09-27T09:34:51.677267+00:00",
+  "items": [
+    {
+      "id": "CB-002",
+      "issue": 166,
+      "source_owner": "CB-002 Copy and quote responses",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb002",
+      "status": "implemented_tested_committed_ready_for_coordinator_review",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb002\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/message-actions.test.js --config D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb002/vitest.config.mjs --configLoader native --no-cache --maxWorkers=1",
+          "tests": 11,
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb002\\vitest-after-config.log",
+          "result": "passed"
+        },
+        {
+          "environment": {
+            "CB002_EVIDENCE_DIR": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb002\\browser",
+            "PWTEST_CACHE_DIR": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb002\\playwright-cache"
+          },
+          "command": "node node_modules/@playwright/test/cli.js test frontend/e2e/cb002-message-actions.spec.js --workers=1 --reporter=line --output=D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb002/browser/results-final",
+          "tests": 3,
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb002\\playwright-final.log",
+          "result": "passed"
+        },
+        {
+          "result": "passed",
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/codex-bridge-panel.js frontend/src/message-actions.js frontend/test/message-actions.test.js frontend/e2e/cb002-message-actions.spec.js"
+        },
+        {
+          "result": "passed",
+          "command": "git diff --check"
+        },
+        {
+          "result": "clean_assigned_branch",
+          "command": "git status --short --branch"
+        }
+      ],
+      "integrated_feature_delta": {
+        "method": "reviewed feature delta; git apply check then apply; preserves dirty baseline",
+        "remaining": "combined gates/generated/DEV; follow-up settings/browser deltas tracked separately",
+        "integratedCommit": "b5f784b22cadd8c67998c0b99bfcc4689c4adf38",
+        "scopeReview": "passed",
+        "integratedUtc": "2026-09-27T07:15:15.2257016Z",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "cb002",
+        "followups": [
+          {
+            "record": "math-selection-result.json",
+            "integratedUtc": "2026-09-27T08:23:44.016450+00:00",
+            "exactBase": "b5f784b22cadd8c67998c0b99bfcc4689c4adf38",
+            "exactCommit": "871c7686a15266fbcd483f24d87fca9f08e9d7f6",
+            "scopeReview": "passed",
+            "remaining": "combined gates/generated/native DEV/release"
+          }
+        ]
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Automated Chromium Shadow DOM selection, keyboard activation and emulated touch taps; no physical long-press/phone acceptance or WebKit/Firefox matrix",
+        "Source-bundled local fixture; no generated served asset/native HA acceptance",
+        "Final combined design/light-dark/generated/full repository/release gates owned by coordinator"
+      ],
+      "dependencies": [
+        "Coordinator feature review/cherry-pick",
+        "Existing _setDraftForThread persistence owner remains unchanged"
+      ]
+    },
+    {
+      "id": "CB-006",
+      "issue": 169,
+      "source_owner": "CB-006 Recover unsent drafts",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb006",
+      "status": "implemented_scoped_tests_passed_ready_for_coordinator_review",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb006\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/draft-recovery.js frontend/src/codex-bridge-panel.js frontend/test/draft-recovery.test.js frontend/test/draft-recovery-panel.test.js",
+          "exitCode": 0
+        },
+        {
+          "command": "node --check frontend/src/draft-recovery.js; node --check frontend/src/codex-bridge-panel.js",
+          "exitCode": 0
+        },
+        {
+          "command": "git diff --check",
+          "exitCode": 0
+        },
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/draft-recovery.test.js frontend/test/draft-recovery-panel.test.js frontend/test/composer.test.js --environment jsdom --maxWorkers=1 --no-file-parallelism --cache=false",
+          "exitCode": 1,
+          "passed": 16,
+          "failedSuites": 2,
+          "reason": "Vite denied dependency CSS read through node_modules junction; no panel tests executed",
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb006\\vitest-focused.log"
+        },
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/draft-recovery.test.js frontend/test/draft-recovery-panel.test.js frontend/test/composer.test.js --config D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb006\\vitest-local.config.mjs --environment jsdom --maxWorkers=1 --no-file-parallelism --cache=false",
+          "exitCode": 0,
+          "passed": 58,
+          "filesPassed": 3,
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb006\\vitest-focused-configured.log",
+          "config": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb006\\vitest-local.config.mjs"
+        },
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/draft-recovery.js frontend/src/codex-bridge-panel.js frontend/test/draft-recovery.test.js frontend/test/draft-recovery-panel.test.js",
+          "exitCode": 0,
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb006\\eslint.log"
+        },
+        {
+          "command": "git diff --check; git status --short --branch",
+          "exitCode": 0,
+          "workingTreeClean": true
+        }
+      ],
+      "integrated_feature_delta": {
+        "method": "reviewed feature delta; git apply check then apply; preserves dirty baseline",
+        "remaining": "combined gates/generated/DEV; follow-up settings/browser deltas tracked separately",
+        "integratedCommit": "2b7e2fac08b3619da0d16de260e7c0615b34b8f2",
+        "scopeReview": "passed",
+        "integratedUtc": "2026-09-27T07:15:15.2248037Z",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "cb006",
+        "followups": [
+          {
+            "record": "browser-fixture-result.json",
+            "integratedUtc": "2026-09-27T08:23:44.016572+00:00",
+            "exactBase": "2b7e2fac08b3619da0d16de260e7c0615b34b8f2",
+            "exactCommit": "0c72ad855580b3262d669fc48db21c44552fc097",
+            "scopeReview": "passed",
+            "remaining": "combined gates/generated/native DEV/release"
+          }
+        ]
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Browser fixture verification and native DEV acceptance still owed; focused tests use in-file IndexedDB fake and jsdom",
+        "Full lint/unit/release gates, generated frontend build and integration review owned by coordinator",
+        "Storage expiry is lazy on the next user-owned store operation; site storage remains browser-local and not encrypted by the feature"
+      ],
+      "dependencies": [
+        "Coordinator shared panel integration with CB022/CB067; all existing mutation fields retained",
+        "Coordinator real IndexedDB browser fixture verification"
+      ]
+    },
+    {
+      "id": "CB-012",
+      "issue": 173,
+      "source_owner": "CB-012 Build the attention inbox",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb012",
+      "status": "focused_slice_verified_visual_full_generated_native_pending",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb012\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/codex-bridge-panel.js frontend/test/attention-inbox.test.js",
+          "result": "passed"
+        },
+        {
+          "command": "python -m ruff check bridge_service/tests/test_attention_inbox.py tests/custom_components/codex_bridge/test_websocket_api.py",
+          "result": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "result": "passed"
+        },
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/attention-inbox.test.js frontend/test/assistant-default-selection.test.js --environment jsdom --maxWorkers=1 --config D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb012\\vitest-local.config.mjs",
+          "result": "15 passed across 2 files"
+        },
+        {
+          "command": "python -m pytest -q bridge_service/tests/test_attention_inbox.py",
+          "result": "Coordinator central combined Git/attention Bridge gate: 17 passed"
+        },
+        {
+          "command": "python -m pytest -q tests/custom_components/codex_bridge/test_websocket_api.py -k attention_inbox",
+          "result": "Coordinator central corrected HA attention gate: 2 passed, 68 deselected"
+        }
+      ],
+      "integrated_feature_delta": {
+        "method": "reviewed feature delta; git apply check then apply; preserves dirty baseline",
+        "remaining": "combined gates/generated/DEV; follow-up settings/browser deltas tracked separately",
+        "integratedCommit": "3509c041ce04c563f3422ea46c37b833237f4454",
+        "scopeReview": "passed",
+        "integratedUtc": "2026-09-27T07:15:15.2252019Z",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "cb012"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Focused frontend, combined Bridge attention/Git and corrected HA attention gates pass. Full combined qualification remains coordinator-owned.",
+        "Upgrade can seed only retained lifecycle events, not previously compacted outcomes.",
+        "Filters cover bounded returned view and browser visit only.",
+        "Actual light/dark narrow/desktop keyboard/touch rendered verification, generated assets and full combined gates belong to coordinator.",
+        "No release or native acceptance claimed."
+      ],
+      "dependencies": [
+        "Attention-only hass setter hook approved by coordinator.",
+        "Canonical design guidance read; selector wrapper/label/chevron reused.",
+        "HA tests appended locally to shared websocket test file: integrate feature-only append."
+      ]
+    },
+    {
+      "id": "CB-014",
+      "issue": 175,
+      "source_owner": "CB-014 Show repository status",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb014",
+      "status": "feature_committed_focused_checks_passed",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb014\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "python -m ruff check bridge_service/src/codex_bridge_service/routes/git_review.py bridge_service/tests/test_git_context.py",
+          "result": "passed"
+        },
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/test/git-context-panel.test.js frontend/src/codex-bridge-panel.js",
+          "result": "passed"
+        },
+        {
+          "command": "node --check frontend/src/codex-bridge-panel.js",
+          "result": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "result": "passed"
+        },
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/git-context-panel.test.js --config D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb014/vitest.config.mjs --maxWorkers=1",
+          "result": "5 passed",
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb014\\vitest-fixed-config.log"
+        },
+        {
+          "command": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p pytest_asyncio.plugin -p pytest_timeout -q bridge_service/tests/test_git_context.py --basetemp=D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/cb014/pytest-portable-0817",
+          "result": "8 passed; TEMP/TMP owned D output",
+          "log": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb014\\pytest-portable-fixture.log"
+        },
+        {
+          "command": "git status --short --branch",
+          "result": "clean feature checkout after commit"
+        }
+      ],
+      "integrated_feature_delta": {
+        "integratedUtc": "2026-09-27T07:35:32.7764775Z",
+        "method": "reviewed feature delta; git apply check then apply",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "cb014",
+        "remaining": "combined gates/generated/DEV",
+        "integratedCommit": "4a2749c55cf860ff164dc3d2d551f7725445428c",
+        "scopeReview": "passed"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Rendered browser verification and combined Integration/Linux/release gates remain coordinator-owned",
+        "No native HA qualification",
+        "Exact-root-only repository discovery; unsupported external Git metadata stays rejected",
+        "External compatibility workspaces outside the private state root use a basename label; transport remains thread/workspace-bound",
+        "Windows pytest automatic HA plugin cannot collect due to Linux-only fcntl; portable Bridge slice uses explicit pytest plugins",
+        "Windows global autocrlf initially caused unchanged fixture files to appear dirty under sanitised Git config. Test repositories now explicitly disable conversion. Existing private snapshot excludes repository/global config; broader Windows line-ending parity remains unqualified.",
+        "First Vitest attempt denied CSS at junction target. Owned config now allows read access to shared node_modules and writes cache only under owned D output; no dependency writes/install.",
+        "jsdom canvas capability warning emitted; terminal/canvas rendering was not exercised"
+      ],
+      "dependencies": [
+        "Coordinator combines shared panel hunks and owns generated assets",
+        "Scoped response contract approved by coordinator"
+      ]
+    },
+    {
+      "id": "CB-022",
+      "issue": 182,
+      "source_owner": "CB-022 Attach file and line context",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb022",
+      "status": "feature_delta_verified_ready_for_combined_integration",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb022\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node --check frontend/src/workspace-context.js; node --check frontend/src/codex-bridge-panel.js",
+          "result": "passed"
+        },
+        {
+          "command": ".\\node_modules\\.bin\\eslint.cmd frontend/src/workspace-context.js frontend/src/codex-bridge-panel.js frontend/test/workspace-context.test.js",
+          "result": "passed"
+        },
+        {
+          "command": "python -m ruff check bridge_service/src/codex_bridge_service/routes/workspace_context.py bridge_service/tests/test_workspace_context.py",
+          "result": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "result": "passed; pre-existing repository CRLF normalisation warning only"
+        },
+        {
+          "command": ".\\node_modules\\.bin\\vitest.cmd run frontend/test/workspace-context.test.js frontend/test/composer.test.js --config D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb022\\vitest.config.mjs --configLoader runner --maxWorkers 1 --no-file-parallelism --no-cache",
+          "result": "40 passed (13 workspace-context, 27 composer)",
+          "log": "vitest-focused-rerun.log"
+        },
+        {
+          "command": "central Linux route/runtime-state/full-broker suite",
+          "result": "279 passed, 14 failed; unqualified",
+          "log": "linux-route-broker/pytest.log",
+          "xml": "linux-route-broker/result.xml",
+          "receipt": "linux-route-broker/receipt.json"
+        },
+        {
+          "command": "python -m ruff check bridge_service/tests/test_workspace_context.py bridge_service/tests/test_runtime_broker.py; git diff --check",
+          "result": "passed after fixture corrections"
+        },
+        {
+          "command": "central affected Linux workspace route/broker subset",
+          "result": "13 passed, 2 failed, 271 deselected; unqualified",
+          "log": "linux-workspace-corrected/pytest.log",
+          "xml": "linux-workspace-corrected/result.xml"
+        },
+        {
+          "command": "python -m ruff check bridge_service/src/codex_bridge_service/workspace_context.py bridge_service/tests/test_workspace_context.py bridge_service/tests/test_runtime_broker.py; git diff --check",
+          "result": "passed after formatter/recovery fixture corrections"
+        },
+        {
+          "command": "central affected Linux workspace route/broker subset on latest committed source",
+          "result": "22 passed, 271 deselected",
+          "log": "linux-workspace-final/pytest.log",
+          "xml": "linux-workspace-final/result.xml",
+          "receipt": "linux-workspace-final/receipt.json"
+        }
+      ],
+      "integrated_feature_delta": {
+        "scopeReview": "passed",
+        "integratedUtc": "2026-09-27T07:40:25.5522271Z",
+        "feature": "cb022",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "35b023bafb48ee4714d1aaabce2b1964edea35c3",
+        "remaining": "combined gates/browser/generated/DEV",
+        "method": "reviewed feature diff + guarded three-way panel merge; one CAS overlap manually resolved"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Fresh combined full Linux/broker/runtime-state gate after integration remains coordinator-owned",
+        "Rendered desktop/narrow/light-dark/keyboard/touch/reduced-motion browser acceptance pending",
+        "No generated assets/build/release/native operations performed"
+      ],
+      "dependencies": [
+        "CB006 revision-bound draft CAS must preserve additive workspaceContext/workspaceContextRevision fields and clearCaptured hooks",
+        "CB067 webSearch semantics retained; coordinator resolves shared _sendPrompt overlap",
+        "Final shared Linux/build/browser/release/native gates owned by coordinator"
+      ]
+    },
+    {
+      "id": "CB-062",
+      "issue": 214,
+      "source_owner": "CB-062 Search full conversation history",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb062",
+      "status": "feature_committed_focused_checks_passed_ready_for_integration",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb062\\implementation-result.json"
+      ],
+      "local_verification": [],
+      "integrated_feature_delta": {
+        "feature": "cb062",
+        "integratedUtc": "2026-09-27T07:53:29.682852+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "b3643ff59d67fff7bc05ed6fb4a5497d99ee8a8e",
+        "method": "reviewed delta plus guarded three-way import/docs unions; EventStore integrated once",
+        "scopeReview": "passed",
+        "checks": "58 central Linux backend tests and twenty final frontend tests passed",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Combined generated assets/build, complete regression matrix, browser light/dark/narrow/keyboard/touch/reduced-motion visual acceptance and native qualification remain coordinator-owned",
+        "History no longer in either owner cannot be reconstructed",
+        "Original-anchor backfill is bounded best effort; unknown legacy anchors remain null and use separate search-local DOM identity",
+        "Counts may change between requests as matching messages change; rerun Find to refresh positions",
+        "Native maths DOM/source is deliberately excluded from actual-message highlighting; exact rendered-formula glyph highlighting is not claimed"
+      ],
+      "dependencies": [
+        "Coordinator-approved narrow _renderMessages and HA preference-owner invalidation hooks overlap shared frontend entrypoint",
+        "Coordinator regenerates generated frontend assets after integrating feature deltas",
+        "CB065 source preview/capture/revalidation consumes CB062 internal listing adapter; raw cursor is revision metadata"
+      ]
+    },
+    {
+      "id": "CB-064",
+      "issue": 216,
+      "source_owner": "CB-064 Improve code readability",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb064",
+      "status": "scoped_commit_ready_for_integration_review",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb064\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/code-blocks.test.js --environment jsdom --maxWorkers 1",
+          "result": "pass",
+          "tests": 16,
+          "log": "vitest-final.log"
+        },
+        {
+          "command": "node node_modules/@playwright/test/cli.js test frontend/e2e/code-blocks.spec.js --workers 1 --reporter line --output <owned D output>",
+          "environment": {
+            "TMP": "same as TEMP",
+            "TEMP": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb064\\browser-temp",
+            "CODEX_BRIDGE_CB064_EVIDENCE_DIR": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb064\\browser-final-line-after"
+          },
+          "result": "pass",
+          "tests": 5,
+          "log": "geometry-after.log"
+        },
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/code-blocks.js frontend/src/codex-bridge-panel.js frontend/test/code-blocks.test.js frontend/e2e/code-blocks.spec.js",
+          "result": "pass"
+        },
+        {
+          "command": "git diff --check",
+          "result": "pass"
+        }
+      ],
+      "integrated_feature_delta": {
+        "feature": "cb064",
+        "integratedUtc": "2026-09-27T07:50:30.368922+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "627c8af5dc525bea17be14415cdaa4c7af256694",
+        "method": "reviewed four-file feature delta; git apply check then apply; exact raw parser already integrated",
+        "scopeReview": "passed",
+        "checks": "16 units and five dedicated browser cases passed; causal empty-line geometry before/after",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Isolated baseline retains older Markdown parser: browser equivalence covers closed LF fence; renderer units cover raw CRLF/CR",
+        "Fixture source bundle only; generated assets and combined gates belong to coordinator",
+        "No native Home Assistant qualification or release claim",
+        "Browser scenarios include native keyboard and pointer activation; no separate physical touch-device acceptance"
+      ],
+      "dependencies": [
+        "Integrate response_formatting raw fenced-body preservation via unchanged createCodeBlock callback before full end-to-end CRLF/CR/unfinished-fence acceptance"
+      ]
+    },
+    {
+      "id": "CB-067",
+      "issue": 219,
+      "source_owner": "CB-067 Add per-turn web search controls",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb067",
+      "status": "focused_verified_ready_for_scoped_integration",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb067\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "python -m ruff check [six touched Python paths]",
+          "result": "passed"
+        },
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/codex-bridge-panel.js frontend/test/composer.test.js",
+          "result": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "result": "passed"
+        },
+        {
+          "log": "composer-tests.log",
+          "command": "Vitest run composer.test.js with D: config/cache/output, one worker",
+          "report": "composer-results.json",
+          "result": "33 passed"
+        },
+        {
+          "log": "composer-causal-before.log",
+          "command": "Vitest targeted newer-choice acknowledgements with old unconditional clearing, then restore exact source",
+          "report": "composer-causal-before-results.json",
+          "result": "2 expected failures (response/event); restored source full suite passes"
+        },
+        {
+          "command": "Central three Bridge files",
+          "result": "42 passed",
+          "log": "linux-web-search-final/pytest.log"
+        },
+        {
+          "command": "Central selected HA web-search transport",
+          "result": "12 passed, 1 failed: missing protocol known-code entry",
+          "log": "linux-ha-web-search-final/pytest.log"
+        },
+        {
+          "result": "passed",
+          "command": "Ruff protocol.py and test_protocol.py, git diff --check"
+        },
+        {
+          "command": "Central corrected HA/protocol selected cases",
+          "result": "20 passed, 1 failed: success assertion accidentally at tail of refusal fixture",
+          "log": "linux-ha-protocol-corrected/pytest.log"
+        },
+        {
+          "result": "passed; success result/no-error assertions restored to original override case; refusal retains empty-results/safe-errors checks",
+          "command": "Ruff test_websocket_api.py, git diff --check"
+        },
+        {
+          "xml": "linux-ha-protocol-final/result.xml",
+          "command": "Central final HA/protocol selected cases",
+          "log": "linux-ha-protocol-final/pytest.log",
+          "result": "21 passed, 97 deselected"
+        }
+      ],
+      "integrated_feature_delta": {
+        "feature": "cb067",
+        "integratedUtc": "2026-09-27T07:59:19.222583+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "6bf9e70e667a0fb37459b294df685de4537f18c0",
+        "method": "reviewed delta plus guarded four-overlap panel merge preserving draft/context CAS",
+        "scopeReview": "passed",
+        "checks": "42 central backend, 33 composer, 21 final HA/protocol tests passed",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Focused local/central checks establish source behaviour only; no release or native qualification claimed",
+        "Rendered light/dark/narrow accessibility and served generated assets require coordinator combined gates",
+        "Combined repository checks, release publication and native acceptance remain coordinator-owned"
+      ],
+      "dependencies": [
+        "Coordinator scoped integration of four feature commits; preserve CB006 draft/context acknowledgement CAS seams",
+        "Coordinator integration, generated assets, visual accessibility verification, final full gates and native qualification"
+      ]
+    },
+    {
+      "id": "account_entities",
+      "issue": 241,
+      "source_owner": "Add per-account HA limit and reset sensors",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\account_entities",
+      "status": "focused_verified_committed_ready_for_coordinator_review",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\account_entities\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "ruff check (six changed Python files)",
+          "result": "passed"
+        },
+        {
+          "command": "git diff --check",
+          "result": "passed"
+        },
+        {
+          "command": "python -m pytest -q tests/custom_components/codex_bridge/test_account_profile_sensors.py tests/custom_components/codex_bridge/test_entities.py bridge_service/tests/test_account_profile_details.py bridge_service/tests/test_app_server_account_limits.py",
+          "log": "linux-focused/pytest.log",
+          "result": "140 passed, 2 failed; fixture API and HA unavailable-attribute semantics corrected; rerun pending",
+          "receipt": "linux-focused/receipt.json"
+        },
+        {
+          "result": "23 passed",
+          "log": "linux-ha-corrected/pytest.log",
+          "executedBy": "coordinator offline Linux lane",
+          "receipt": "linux-ha-corrected/receipt.json",
+          "command": "python -m pytest -q -p no:cacheprovider -o asyncio_mode=auto tests/custom_components/codex_bridge/test_account_profile_sensors.py"
+        }
+      ],
+      "integrated_feature_delta": {
+        "integratedUtc": "2026-09-27T07:35:32.7852177Z",
+        "method": "reviewed feature delta; git apply check then apply",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "account_entities",
+        "remaining": "combined gates/generated/DEV",
+        "integratedCommit": "8adb905a2322eae491da356a26f3f1a6f24886cf",
+        "scopeReview": "passed"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Broader initial suite: 140 passed, 2 failed; corrected HA module separately passed all 23, not one fresh combined 142-pass run",
+        "Final combined full gates and independent integration review belong to coordinator",
+        "Multi-account cases use controlled fixtures; no live additional sign-in or native DEV acceptance",
+        "No GitHub publication, release/version/generated-asset change or production operation"
+      ],
+      "dependencies": [
+        "Coordinator runs allocated Linux focused suite",
+        "Coordinator owns combined release gates and native DEV acceptance"
+      ]
+    },
+    {
+      "id": "default_chat",
+      "issue": null,
+      "source_owner": "Fix default Home Assistant chat selection",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\default_chat",
+      "status": "complete_local_verification",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\default_chat\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/assistant-default-selection.test.js frontend/test/assistant-chat-navigation.test.js frontend/test/thread-creation.test.js frontend/test/chat-context-menu.test.js frontend/test/panel-event-fallback.test.js --config D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/default_chat/vitest.config.mjs --maxWorkers=1 --no-file-parallelism --cache=false",
+          "result": "170 passed across 5 files after product repair",
+          "log": "after.log"
+        },
+        {
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/assistant-default-selection.test.js --config D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/default_chat/vitest.config.mjs --maxWorkers=1 --no-file-parallelism --cache=false",
+          "result": "23 passed after final tests added",
+          "log": "final-selection.log"
+        },
+        {
+          "command": "node node_modules/@playwright/test/cli.js test frontend/e2e/default-chat-selection.spec.js --workers=1 --output=D:/CodexTemp/bridge-chat-eight-20260927/feature-chats/default_chat/browser-results",
+          "result": "5 passed",
+          "log": "browser.log"
+        },
+        {
+          "result": "passed",
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/codex-bridge-panel.js frontend/test/assistant-default-selection.test.js frontend/e2e/default-chat-selection.spec.js"
+        },
+        {
+          "result": "passed",
+          "command": "git diff --check and git diff --cached --check"
+        }
+      ],
+      "integrated_feature_delta": {
+        "feature": "default_chat",
+        "integratedUtc": "2026-09-27T07:47:42.039982+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "46749e7b0bf6f54794b2b48f636ae09e2c1e2063",
+        "method": "reviewed scoped delta; git apply check then apply; preserves combined work",
+        "scopeReview": "passed",
+        "remaining": "combined gates/generated/DEV",
+        "checks": "170 related unit tests; 23 final selection tests; five isolated browser cases passed"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Browser fixture serves isolated source and mocks HA transport; no served release asset/native HA acceptance",
+        "Combined build, full repository gates and integration/release remain coordinator-owned"
+      ],
+      "dependencies": [
+        "Coordinator cherry-pick and combined source review; only _loadThreads product region changed"
+      ]
+    },
+    {
+      "id": "response_formatting",
+      "issue": null,
+      "source_owner": "Verify plain-text and Markdown responses",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\response_formatting",
+      "status": "complete_local_feature_commit",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\response_formatting\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "result": "90 passed, one obsolete pre-feature activity assertion failed; corrected with coordinator approval",
+          "log": "focused-vitest.log",
+          "command": "node node_modules/vitest/vitest.mjs run --config D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\response_formatting\\vitest.config.mjs --configLoader runner"
+        },
+        {
+          "result": "21 passed; affected fixture-only rerun; seven other suites already passed unchanged product",
+          "log": "activity-rerun.log",
+          "command": "node node_modules/vitest/vitest.mjs run frontend/test/panel-run-activity.test.js --config D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\response_formatting\\vitest.config.mjs --configLoader runner"
+        },
+        {
+          "result": "passed",
+          "log": "scoped-lint.log",
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/markdown.js frontend/src/codex-bridge-panel.js frontend/test/response-formatting.test.js frontend/test/panel-run-activity.test.js"
+        },
+        {
+          "result": "passed",
+          "command": "node --check frontend/src/markdown.js; node --check frontend/test/response-formatting.test.js"
+        },
+        {
+          "result": "passed before commit",
+          "command": "git diff --cached --check"
+        }
+      ],
+      "integrated_feature_delta": {
+        "integratedUtc": "2026-09-27T07:35:32.7859298Z",
+        "method": "reviewed feature delta; git apply check then apply",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "response_formatting",
+        "remaining": "combined gates/generated/DEV",
+        "integratedCommit": "a9e6a994f9be01e8c591193db1fce0b2c2fb1619",
+        "scopeReview": "passed"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "No fresh served-environment diagnosis for user latest plaintext report; need target/version/example before attributing old prose appearance",
+        "No live/browser/native/production changes or release claim",
+        "Completed native agent text remains bounded at Bridge ingress and history retention unchanged",
+        "Local tests use jsdom; visual browser/build/Linux/native gates remain coordinator-owned",
+        "Existing non-fatal jsdom HTMLCanvasElement getContext warning retained in test logs"
+      ],
+      "dependencies": [
+        "CB064 unchanged callback contract approved via coordinator",
+        "CB063 future math hooks remain separate; no math edits in this commit",
+        "Shared panel regions require scoped integration",
+        "node_modules reuse junction unchanged; owned D-drive config/cache"
+      ]
+    },
+    {
+      "id": "design_language",
+      "issue": null,
+      "source_owner": "Align new controls with the existing design",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\design_language",
+      "status": "implemented_focused_verified",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\design_language\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "command": "node node_modules/eslint/bin/eslint.js frontend/src/codex-bridge-panel.js frontend/e2e/design-language.spec.js frontend/e2e/chat-enhancements.spec.js",
+          "result": "pass"
+        },
+        {
+          "result": "5 passed",
+          "log": "browser/final-run.log",
+          "command": "node node_modules/@playwright/test/cli.js test frontend/e2e/design-language.spec.js --workers=1 --reporter=line --output=<feature-directory>/browser/final"
+        },
+        {
+          "result": "1 passed",
+          "log": "browser/shared-fixture-run.log",
+          "command": "node node_modules/@playwright/test/cli.js test frontend/e2e/chat-enhancements.spec.js --grep=real Shadow DOM passage --workers=1 --reporter=line --output=<feature-directory>/browser/shared-fixture"
+        },
+        {
+          "command": "git diff --check",
+          "result": "pass"
+        }
+      ],
+      "integrated_feature_delta": {
+        "method": "reviewed feature delta; git apply check then apply; preserves dirty baseline",
+        "remaining": "combined gates/generated/DEV; follow-up settings/browser deltas tracked separately",
+        "integratedCommit": "8f8f3c59e42cfa0403dd0f7f18ffcc37bc6db6a6",
+        "scopeReview": "passed",
+        "integratedUtc": "2026-09-27T07:15:15.2195826Z",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "feature": "design_language",
+        "accessibilityFollowUp": {
+          "base": "7cffa8f838fff188b204e784d75b91f3d60c1ba7",
+          "commit": "af1b9f871ac0b8da0a1b13d7741a13ba22bac85d",
+          "integratedUtc": "2026-09-27T07:59:48.653403+00:00",
+          "method": "reviewed two-file incremental delta; git apply check then apply",
+          "checks": "three keyboard/native scroll/full-panel narrow theme axe cases passed",
+          "remaining": "combined served/native acceptance"
+        }
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Source-bundled fixture checks only; coordinator must regenerate and inspect served combined assets.",
+        "Full shared chat-enhancements spec not qualified here; only corrected passage helper case rerun.",
+        "Full-panel axe reports scrollable-region-focusable on empty conversation-scroll at narrow width; allocated Collaboration/Git regions pass scoped axe.",
+        "No native HA, release or production acceptance."
+      ],
+      "dependencies": [
+        "Coordinator regenerates assets and runs combined gates",
+        "Shared panel changes need scoped cherry-pick/review"
+      ]
+    },
+    {
+      "id": "CB-063",
+      "issue": 215,
+      "source_owner": "CB-063 Render mathematical notation safely",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb063",
+      "status": "feature_committed_ready_for_independent_integration_review",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb063\\implementation-result.json"
+      ],
+      "local_verification": [],
+      "integrated_feature_delta": {
+        "feature": "cb063",
+        "integratedUtc": "2026-09-27T08:21:15.310564+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "6437ae17232bcfd81d71200f31786d1679e89d9a",
+        "method": "Reviewed feature-only new files and guarded shared parser/panel three-way merges; exact fence source and overflow fallback retained; pinned KaTeX package",
+        "scopeReview": "passed",
+        "checks": "41 isolated unit and 5 browser cases; scoped lint and static combined syntax/diff pass; combined maths/source composition pending",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [],
+      "dependencies": {
+        "pin": "katex@0.18.9",
+        "fontsOrCdnRequired": false,
+        "privateRuntime": "D:\\CodexTemp\\bridge-chat-eight-20260927\\math-runtime",
+        "packageAndLockOwner": "coordinator"
+      }
+    },
+    {
+      "id": "CB-065",
+      "issue": 217,
+      "source_owner": "CB-065 Attach previous chats as context",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb065",
+      "status": "verified_ready_for_coordinator_review",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb065\\implementation-result.json"
+      ],
+      "local_verification": [],
+      "integrated_feature_delta": {
+        "feature": "cb065",
+        "integratedUtc": "2026-09-27T08:09:15.267971+00:00",
+        "exactBase": "ed58aabeb7637d132b161eb93cad9083cfa9cbee",
+        "integratedCommit": "275b090590a0ec5c2c04db30e515c32ce589abd5",
+        "method": "own range only after verified EventStore; reviewed guarded panel/HA merges preserving CAS",
+        "scopeReview": "passed",
+        "checks": "19 central backend, six HA transport, nine frontend and five rendered browser cases passed",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Browser tests use the source fixture and mocked HA transport; actual native/live/release acceptance remains coordinator-owned.",
+        "Combined composer integration and generated asset/full gates remain coordinator-owned."
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "CB-010",
+      "issue": 171,
+      "source_owner": "CB-010 Manage durable goals across turns",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb010",
+      "status": "focused_verified_ready_for_scoped_integration",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb010\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "result": "passed",
+          "command": "Ruff all touched Python"
+        },
+        {
+          "result": "passed",
+          "command": "ESLint touched frontend and goal tests"
+        },
+        {
+          "result": "passed",
+          "command": "Node syntax checks and git diff checks"
+        },
+        {
+          "result": "8 passed before new immutable/dispatch cases",
+          "command": "Earlier test_goals.py"
+        },
+        {
+          "result": "8 passed before owner regressions",
+          "command": "Earlier goal-controls.test.js"
+        },
+        {
+          "result": "6 passed, 1 cold recovery fixture failed; corrected to existing crash checkpoint helper, pending rerun",
+          "command": "Earlier test_goal_runtime.py"
+        },
+        {
+          "command": "Archived-project correction: ESLint panel/regression, node syntax, git diff checks",
+          "result": "passed; inherited archived-project UI regression added but runner held"
+        },
+        {
+          "command": "Central Linux goal suite",
+          "result": "17 failures: missing-file error translated by outbox yield; evidence linux-goals-final/pytest.log"
+        },
+        {
+          "command": "Missing-state correction Ruff, py_compile and diff checks",
+          "result": "passed; fresh create/readback and three Linux no-follow regressions added, rerun pending"
+        },
+        {
+          "command": "Goal browser fixture/spec ESLint, node syntax and diff checks",
+          "result": "passed; six browser cases prepared, not executed"
+        },
+        {
+          "command": "Central corrected Linux goals",
+          "result": "20 passed, 1 cold recovery fixture failed: missing account owner prerequisite; evidence linux-goals-missing-file-final/pytest.log"
+        },
+        {
+          "command": "Cold owner fixture correction Ruff, py_compile, diff",
+          "result": "passed; rerun held"
+        },
+        {
+          "command": "Central Linux goal backend + HA contract",
+          "result": "21 backend passed; combined30 passed,6 real HA cases failed before POST due json keyword; evidence linux-goals-owner-final/pytest.log"
+        },
+        {
+          "command": "HA goal body correction Ruff, py_compile, diff",
+          "result": "passed; real transport rerun held"
+        },
+        {
+          "command": "Central final backend goal cases",
+          "result": "21 passed",
+          "log": "linux-goals-owner-final/pytest.log"
+        },
+        {
+          "command": "Central corrected HA goal transport/refusals",
+          "result": "15 passed",
+          "log": "linux-goals-ha-body-final/pytest.log"
+        },
+        {
+          "command": "Goal controls, panel owner/archive, existing composer Vitest",
+          "result": "40 passed",
+          "log": "vitest-final.log",
+          "report": "vitest-result.json"
+        },
+        {
+          "command": "Actual panel browser lifecycle/theme/owner/touch/focus/overflow/axe",
+          "result": "6 passed; zero axe violations for active and completed states across1280/390 light/dark",
+          "log": "playwright-final.log",
+          "report": "browser-result.json"
+        },
+        {
+          "command": "Final scoped ESLint and git diff check",
+          "result": "passed"
+        }
+      ],
+      "integrated_feature_delta": {
+        "feature": "cb010",
+        "integratedUtc": "2026-09-27T08:42:46.358970+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "f1f4c51b6baa05064b09d48c5bc8eecb92330f80",
+        "method": "Guarded additive shared merges; exact chat/workspace plus immutable goal context; real HA body follow-up and keyboard fixture correction",
+        "scopeReview": "passed",
+        "checks": "21 Linux backend, 15 real HA transport, 40 units and 6 browser cases; scoped combined Ruff and syntax pass",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Source proof establishes child parent config inheritance and role false-only feature overrides; cold child native proof remains coordinator-owned",
+        "No isolated native HA App acceptance performed",
+        "Home Assistant Linux plugin prevents normal Windows HA test runner; central Linux lane required"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "CB-011",
+      "issue": 172,
+      "source_owner": "CB-011 Inspect and control subagents",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb011",
+      "status": "feature_local_and_central_checks_pass_native_acceptance_and_followup_unresolved",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb011\\implementation-result.json"
+      ],
+      "local_verification": [
+        {
+          "kind": "Python",
+          "result": "19 passed",
+          "freshness": "preliminary service snapshot"
+        },
+        {
+          "kind": "Python",
+          "result": "20 passed, 1 skipped",
+          "freshness": "preliminary service plus Windows broker snapshot; HA confinement test skipped"
+        },
+        {
+          "kind": "frontend",
+          "result": "68 passed across four files",
+          "freshness": "preliminary child/controller/panel/activity/composer snapshot, using temporary Vite fs.allow configuration"
+        },
+        {
+          "reason": "coordinator exclusive CB064 resource lane; not acceptance evidence",
+          "kind": "Python final regression",
+          "result": "interrupted before results"
+        },
+        {
+          "kind": "static",
+          "result": "Ruff, ESLint and diff checks passed",
+          "freshness": "final changed source/test files; no executing tests after hold"
+        },
+        {
+          "kind": "central Linux service/broker",
+          "result": "25 passed, 2 failed",
+          "freshness": "previous frozen candidate; full log/XML/source manifest in linux-children-final",
+          "diagnosis": "Immediate parent run account_owner_marker was unset because acceptance captured it only for queued runs. Both broker cases failed before native child read."
+        },
+        {
+          "kind": "static correction",
+          "result": "Ruff and diff checks passed",
+          "freshness": "immediate parent owner capture and two broker ownership assertions; execution held"
+        },
+        {
+          "kind": "central Linux immediate-owner backend rerun",
+          "result": "26 passed, 1 failed",
+          "freshness": "previous owner-corrected candidate; log/XML in linux-children-owner-backend",
+          "diagnosis": "Fixture embedded private child IDs in deliberately public item_id values. Child control and parent-completion race passed; remaining privacy assertion failed from fixture identity aliasing."
+        },
+        {
+          "kind": "static fixture correction",
+          "result": "Ruff and diff checks passed",
+          "freshness": "Distinct item coalescing IDs, retained journal privacy assertion, exact aggregate allow-list assertion and browser projection privacy assertion. Execution held."
+        },
+        {
+          "kind": "coordinator combined Linux feature/owner gate",
+          "result": "68 passed",
+          "freshness": "Coordinator reported final combined children/goal/usage/queued-owner cases passing, including latest child fixture correction; combined seam qualification owned by coordinator"
+        },
+        {
+          "kind": "coordinator Linux real HA and composition",
+          "result": "9 passed",
+          "freshness": "Seven real HA child contracts and two context/duration composition cases; linux-context-duration-child-ha-final"
+        },
+        {
+          "kind": "final feature frontend",
+          "result": "73 passed, zero failed, four files",
+          "freshness": "Final product source; unit-final.json; final fixture-only browser assertion addition does not change unit source"
+        },
+        {
+          "kind": "final feature browser",
+          "result": "4 passed, zero failed, one worker",
+          "freshness": "Final E2E source; browser-result.json and browser-results-final",
+          "assertions": "390/1280 light/dark; touch target isolation, keyboard focus retention, stale/disabled controls, follow-up unavailable, reduced-motion media, scoped WCAG2/2.1 A/AA axe zero violations",
+          "visual": "All four actual screenshots inspected; readable status/controls, no horizontal overflow or clipped content"
+        },
+        {
+          "kind": "final fixture static",
+          "result": "ESLint and diff checks passed",
+          "freshness": "Final committed browser fixture"
+        }
+      ],
+      "integrated_feature_delta": {
+        "feature": "cb011",
+        "integratedUtc": "2026-09-27T08:52:51.203277+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "65801591452860b1768c18d6d3abf151eaaf3ff7",
+        "method": "Guarded additive shared methods/lifecycle merges and one admitted account capture; independent public item IDs and browser axe follow-up",
+        "scopeReview": "passed",
+        "checks": "Final combined backend includes all child cases; 7 real HA child contracts; 73 frontend units and 4 rendered browser states; direct child follow-up explicitly unsupported/issue remains partial",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance",
+        "additional_blocker": "Direct v2 child follow-up is unsupported by the pinned runtime; keep issue open for partial delivery"
+      },
+      "limitations": [
+        "direct multi-agent v2 follow-up; explicit unavailable",
+        "conditional v1 follow-up is not enabled because positive stable runtime support is not established"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "CB-060",
+      "issue": 212,
+      "source_owner": "CB-060 Track task usage and budgets",
+      "checkout": "D:\\CodexWork\\bridge-chat-fanout-20260927\\checkouts\\cb060",
+      "status": "implementing_runtime_contract_discovery",
+      "implementation_evidence": [
+        "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\cb060\\implementation-result.json"
+      ],
+      "local_verification": [],
+      "integrated_feature_delta": {
+        "feature": "cb060",
+        "integratedUtc": "2026-09-27T08:42:46.448669+00:00",
+        "exactBase": "a8a8e97da5f7920a868f595b778431f1e34b4b15",
+        "integratedCommit": "eadc7cf53dba59a6b4e4166779d72de5b49e2110",
+        "method": "Guarded shared merges preserving all context/draft/web/duration CAS; composed duration request fingerprints; single admitted account capture with queued-only missing-marker rejection",
+        "scopeReview": "passed",
+        "checks": "28 Linux usage and selected HA cases before last guard restoration; 49 units and 5 browser cases; scoped combined Ruff/syntax pass; final guard included in combined gate",
+        "remaining": "combined gates/generated/native DEV/release"
+      },
+      "native_acceptance": [],
+      "release": null,
+      "closure": {
+        "completed": false,
+        "requires": "Verified release and applicable acceptance"
+      },
+      "limitations": [
+        "Best-effort runtime observations; no exact billing, currency cost or token budget.",
+        "Duration is a targeted stop trigger, with possible in-flight overshoot and truthful unconfirmed state.",
+        "Existing single-active-turn base cannot demonstrate simultaneous active sibling preservation; root concurrency integration owns that gate.",
+        "Root combined checks required after final queued-only missing-marker guard restoration.",
+        "No generated assets, package versions, native installation, publication or release acceptance in feature chat."
+      ],
+      "dependencies": []
+    }
+  ],
+  "excluded": [
+    {
+      "id": "CB-037",
+      "issue": 197,
+      "state": "CLOSED",
+      "reason": "NOT_PLANNED",
+      "decision": "Anthony declined per-work isolated saved-account binding",
+      "verified_utc": "2026-09-27T07:20:30Z"
+    }
+  ],
+  "production_installation_authorised": false,
+  "pending_separate_decisions": [
+    "local MCP action-time consent",
+    "physical phone readiness"
+  ],
+  "reported_default_selection_journey": {
+    "screenshot": "D:\\CodexTemp\\bridge-chat-eight-20260927\\assist-default-selection-user-example.png",
+    "installed_version": "not established by screenshot",
+    "acceptance": [
+      "Opening, reopening and reloading the served DEV panel must not automatically select Assist",
+      "Persisted former Assist selection, collapsed Assist group and mixed ordinary/project inventories use an eligible ordinary chat or usable empty/new-chat state",
+      "Stale refresh, archive/delete fallback and project-inherited archives retain only eligible defaults",
+      "Explicit deliberate Assist selection and authenticated deep links remain supported"
+    ],
+    "served_DEV_verified": false,
+    "production_installation_authorised": false
+  },
+  "combined_qualification": {
+    "integration": {
+      "passed": 798,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\full-integration-1130-final\\receipt.json"
+    },
+    "bridgeAffected": {
+      "passed": 22,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\bridge-readiness-native-config-isolated-final2\\receipt.json"
+    },
+    "integrationAffected": {
+      "passed": 58,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\integration-lifecycle-ready-fixes-final\\receipt.json"
+    },
+    "frontendFull": {
+      "state": "passed",
+      "passed": 1097,
+      "files": 74,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\full-frontend-1130-final\\receipt.json"
+    },
+    "bridgeFull": {
+      "state": "passed",
+      "passed": 2643,
+      "skipped": 27,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\full-bridge-1130-final\\receipt.json"
+    },
+    "browserFull": {
+      "state": "pending"
+    },
+    "readinessFix": "Advertised selected runtime capabilities now accepted by canonical Bridge readiness model and HA consumer; asset cache version aligned.",
+    "lifecycleFix": "Account allowance owner closed during permanent removal after failed platform unload; identity preserved until successful shutdown.",
+    "reviewReports": [
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-followup.md",
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-readiness-followup.md",
+      "D:\\CodexTemp\\bridge-chat-eight-20260927\\combined-review-lifecycle-followup.md"
+    ],
+    "native": null,
+    "release": null,
+    "lintFinal": {
+      "state": "passed",
+      "observedUtc": "2026-09-27T09:31:46.851269+00:00",
+      "command": "npm run lint"
+    },
+    "rootRestore": {
+      "state": "passed",
+      "passed": 8,
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\full-restore-1130-final\\receipt.json"
+    },
+    "staticFinal": {
+      "state": "passed",
+      "receipt": "D:\\CodexTemp\\bridge-chat-eight-20260927\\feature-chats\\combined\\static-final\\receipt.json"
+    },
+    "windowsUpdater": {
+      "state": "passed",
+      "passed": 10,
+      "evidence": "D:\\CodexTemp\\bridge-chat-eight-20260927\\windows-updater-final.xml"
+    }
+  }
+}

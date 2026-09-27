@@ -575,6 +575,8 @@ async def test_web_search_mode_is_forwarded_server_side_for_prompts_and_manual_r
         ("follow_up_mode", "steer"),
         ("collaboration_mode", "plan"),
         ("collaboration_mode", "default"),
+        ("web_search", "live"),
+        ("web_search", "disabled"),
     ],
 )
 async def test_send_prompt_rejects_explicit_semantics_without_capability(
@@ -603,6 +605,52 @@ async def test_send_prompt_rejects_explicit_semantics_without_capability(
         (43, "capabilities_unavailable", "Codex capabilities are temporarily unavailable")
     ]
     runtime.client.async_send_prompt.assert_not_awaited()
+
+
+@pytest.mark.parametrize("configured,override", [("live", "disabled"), ("disabled", "live")])
+async def test_prompt_web_search_override_replaces_configured_mode(configured, override):
+    runtime, _broker = _runtime()
+    runtime.capabilities = ("web_search_v1",)
+    runtime.web_search_mode = configured
+    runtime.client.async_send_prompt = AsyncMock(return_value={"run_id": "run_1"})
+    hass = _Hass(runtime)
+    connection = _Connection()
+    ws_send_prompt(hass, connection, {
+        "id": 44, "type": f"{DOMAIN}/send_prompt", "thread_id": "thr_1",
+        "prompt": "Review", "web_search": override,
+    })
+    await hass.finish()
+    runtime.client.async_send_prompt.assert_awaited_once_with(
+        "thr_1", "Review", client_request_id=None, web_search=override,
+    )
+    assert connection.results == [(44, {"run_id": "run_1"})]
+    assert connection.errors == []
+
+
+async def test_prompt_web_search_conflict_preserves_code_and_safe_queue_guidance():
+    runtime, _broker = _runtime()
+    runtime.capabilities = ("web_search_v1", "prompt_queue_v1")
+    runtime.client.async_send_prompt = AsyncMock(side_effect=BridgeApiProblemError(
+        problem=ProblemRecord.from_payload(409, {"detail": {
+            "code": "web_search_requires_queue", "retryable": False,
+            "message": "private-token-sentinel",
+        }}),
+    ))
+    hass = _Hass(runtime)
+    connection = _Connection()
+    ws_send_prompt(hass, connection, {
+        "id": 44, "type": f"{DOMAIN}/send_prompt", "thread_id": "thr_1",
+        "prompt": "Review", "web_search": "disabled", "follow_up_mode": "steer",
+    })
+    await hass.finish()
+    assert connection.results == []
+    assert connection.errors == [(44, "web_search_requires_queue",
+        "Choose Queue or wait for the active response to finish to change web search")]
+    runtime.client.async_send_prompt.assert_awaited_once_with(
+        "thr_1", "Review", client_request_id=None,
+        web_search="disabled", follow_up_mode="steer",
+    )
+    assert "private-token-sentinel" not in repr(connection.errors)
 
 
 @pytest.mark.parametrize(
@@ -1575,3 +1623,36 @@ async def test_thread_ids_without_thread_scope_are_rejected_before_subscribing()
         (17, "invalid_event_filter", "Event subscription is invalid")
     ]
     assert not broker._subscribers
+
+
+async def test_attention_inbox_websocket_forwards_without_read_or_ack_mutation() -> None:
+    from custom_components.codex_bridge.websocket_api import ws_attention_inbox
+
+    runtime, _broker = _runtime()
+    hass = _Hass(runtime)
+    connection = _Connection()
+    expected = {"items": [{"kind": "interaction", "thread_id": "waiting"}], "truncated": False}
+    runtime.client.async_attention_inbox = AsyncMock(return_value=expected)
+    message = {"id": 93, "type": f"{DOMAIN}/attention_inbox"}
+    ws_attention_inbox(hass, connection, message)
+    await hass.finish()
+    runtime.client.async_attention_inbox.assert_awaited_once_with()
+    assert connection.results == [(93, expected)]
+    assert connection.errors == []
+
+
+async def test_attention_inbox_client_requires_capability_before_private_request() -> None:
+    from custom_components.codex_bridge.bridge_api import BridgeApiCapabilityError
+
+    client = BridgeApiClient(
+        Mock(), "http://127.0.0.1:8766", "bridge-token-0123456789abcdef0123456789"
+    )
+    client._api_version = 1
+    client._capabilities = frozenset()
+    client._async_json = AsyncMock(return_value={"items": [], "truncated": False})
+    with pytest.raises(BridgeApiCapabilityError):
+        await client.async_attention_inbox()
+    client._async_json.assert_not_awaited()
+    client._capabilities = frozenset({"attention_inbox_v1"})
+    assert await client.async_attention_inbox() == {"items": [], "truncated": False}
+    client._async_json.assert_awaited_once_with("GET", "/attention")

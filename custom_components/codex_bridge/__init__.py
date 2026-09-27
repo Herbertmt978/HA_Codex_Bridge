@@ -244,6 +244,12 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         domain_data = hass.data.get(DOMAIN)
         entries = domain_data.get(DATA_ENTRIES) if isinstance(domain_data, dict) else None
         runtime = entries.get(entry.entry_id) if isinstance(entries, dict) else None
+        allowances = domain_data.get("account_allowance_coordinators", {}) if isinstance(domain_data, dict) else {}
+        allowance_coordinator = allowances.get(entry.entry_id)
+        if allowance_coordinator is not None:
+            await allowance_coordinator.async_close()
+            if allowances.get(entry.entry_id) is allowance_coordinator:
+                allowances.pop(entry.entry_id, None)
         if runtime is not None:
             # A cancelled/failed unload may still own an admitted delivery. HA
             # can proceed to remove without another unload, so drain that owner
@@ -314,6 +320,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
             return False
     if runtime is not None:
+        allowances = domain_data.get("account_allowance_coordinators", {})
+        allowance_coordinator = allowances.get(entry.entry_id)
+        if allowance_coordinator is not None:
+            await allowance_coordinator.async_close()
+            if allowances.get(entry.entry_id) is allowance_coordinator:
+                allowances.pop(entry.entry_id, None)
         await runtime.async_close()
         # Preserve the draining owner on cancellation/error, so permanent
         # removal cannot race a still-admitted timer or mobile action.

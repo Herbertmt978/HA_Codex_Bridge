@@ -1,7 +1,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ..auth import require_bridge_token
 from ..feature_capabilities import supports_web_search
@@ -9,22 +9,34 @@ from ..models import QueuedPromptRecord, RunRecord
 from ..runner import NoActiveRunError, ThreadBusyError
 from ..runtime_broker import (
     RuntimeCollaborationModeConflictError,
+    RuntimeWebSearchModeConflictError,
     RuntimeCollaborationModeUnavailableError,
     QueuedPromptNotFoundError,
     QueuedPromptRevisionConflictError,
+    RuntimeWorkspaceContextStaleError,
+    RuntimeWorkspaceContextLimitError,
 )
 from ..readiness import evaluate_readiness
 from ..storage import ThreadNotFoundError
+from ..chat_context import ChatContextReference, ChatContextError
+from .chat_context import context_http_error
+from ..workspace_context import MAX_WORKSPACE_CONTEXTS, WorkspaceContextReference
 
 router = APIRouter()
 
 
 class PromptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     prompt: str
+    chat_context: list[ChatContextReference] = Field(default_factory=list, max_length=8)
     client_request_id: str | None = Field(default=None, min_length=1, max_length=256)
     web_search: Literal["live", "disabled"] | None = None
     follow_up_mode: Literal["queue", "steer"] | None = None
     collaboration_mode: Literal["default", "plan"] | None = None
+    workspace_context: list[WorkspaceContextReference] = Field(
+        default_factory=list, max_length=MAX_WORKSPACE_CONTEXTS
+    )
+    max_duration_seconds: int | None = Field(default=None, strict=True, ge=1, le=86_400)
 
     @field_validator("prompt")
     @classmethod
@@ -81,6 +93,12 @@ def submit_prompt(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail={"code": "capabilities_unavailable", "retryable": False},
         )
+    if payload.max_duration_seconds is not None:
+        broker = request.app.state.runner
+        if "elapsed_time_limit_v1" not in request.app.state.feature_capabilities:
+            raise HTTPException(422, detail={"code": "capabilities_unavailable"})
+        if payload.max_duration_seconds > min(broker.limits.run_total_timeout_seconds, broker.turn_timeout_seconds):
+            raise HTTPException(422, detail={"code": "elapsed_time_limit_invalid"})
     if payload.follow_up_mode == "queue" and payload.client_request_id is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -117,6 +135,24 @@ def submit_prompt(
                 "retryable": False,
             },
         )
+    if payload.workspace_context and (
+        request.app.state.storage.runtime_profile.value != "home_assistant"
+        or "workspace_context_v1"
+        not in getattr(request.app.state, "feature_capabilities", ())
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail={
+                "code": "capabilities_unavailable",
+                "capability": "workspace_context_v1",
+                "retryable": False,
+            },
+        )
+    if payload.chat_context and (
+        request.app.state.storage.runtime_profile.value != "home_assistant"
+        or "chat_context_v1" not in getattr(request.app.state, "feature_capabilities", ())
+    ):
+        raise HTTPException(status_code=422, detail={"code": "capabilities_unavailable", "capability": "chat_context_v1"})
     try:
         if request.app.state.storage.runtime_profile.value == "home_assistant":
             return request.app.state.runner.submit_prompt(
@@ -126,14 +162,23 @@ def submit_prompt(
                 web_search=payload.web_search,
                 follow_up_mode=(payload.follow_up_mode or "auto"),
                 collaboration_mode=payload.collaboration_mode,
+                workspace_context=payload.workspace_context,
+                chat_context=payload.chat_context,
+                **({"max_duration_seconds": payload.max_duration_seconds} if payload.max_duration_seconds is not None else {}),
             )
         return request.app.state.runner.submit_prompt(thread_id, payload.prompt)
     except ThreadBusyError as exc:
         raise HTTPException(status_code=409, detail="thread already running") from exc
-    except RuntimeCollaborationModeConflictError as exc:
+    except (RuntimeCollaborationModeConflictError, RuntimeWebSearchModeConflictError) as exc:
         raise HTTPException(status_code=409, detail=exc.public_detail()) from exc
     except RuntimeCollaborationModeUnavailableError as exc:
         raise HTTPException(status_code=422, detail=exc.public_detail()) from exc
+    except ChatContextError as exc:
+        raise context_http_error(exc) from None
+    except RuntimeWorkspaceContextStaleError as exc:
+        raise HTTPException(status_code=409, detail=exc.public_detail()) from None
+    except RuntimeWorkspaceContextLimitError as exc:
+        raise HTTPException(status_code=413, detail=exc.public_detail()) from None
     except ThreadNotFoundError as exc:
         raise HTTPException(status_code=404, detail="thread not found") from exc
 
@@ -204,6 +249,8 @@ def update_queued_prompt(
         )
     except QueuedPromptNotFoundError as exc:
         raise HTTPException(status_code=409, detail=exc.public_detail()) from exc
+    except ChatContextError as exc:
+        raise context_http_error(exc) from None
     except QueuedPromptRevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=exc.public_detail()) from exc
     except ThreadNotFoundError as exc:

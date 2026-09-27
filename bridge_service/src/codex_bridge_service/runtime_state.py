@@ -8,7 +8,7 @@ from threading import Lock
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from .event_store import (
     DurableOutbox,
@@ -21,6 +21,14 @@ from .event_store import (
     StoredEventRecord,
 )
 from .models import InteractionDisplayRecord, RunMode
+from .chat_context import ChatContextAttachment, append_chat_context
+from .goals import GoalSnapshot
+from .workspace_context import (
+    MAX_WORKSPACE_CONTEXT_BYTES,
+    MAX_WORKSPACE_CONTEXTS,
+    WorkspaceContextAttachment,
+    visible_prompt,
+)
 
 RunStatus = Literal[
     "queued",
@@ -73,6 +81,8 @@ class RuntimeStateVersionError(RuntimeStateError):
 class RuntimeRunState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    goal_context: GoalSnapshot | None = None
+
     run_id: str = Field(min_length=1, max_length=128)
     client_request_id: str = Field(min_length=1, max_length=256)
     thread_id: str = Field(min_length=1, max_length=128)
@@ -89,9 +99,14 @@ class RuntimeRunState(BaseModel):
     message_sequence: int | None = Field(default=None, ge=1)
     prompt: str | None = Field(default=None, max_length=1024 * 1024, repr=False)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
+    workspace_context: tuple[WorkspaceContextAttachment, ...] = Field(
+        default_factory=tuple, max_length=8, repr=False
+    )
+    chat_context: tuple[ChatContextAttachment, ...] = Field(default_factory=tuple, max_length=8, repr=False)
     account_owner_marker: str | None = Field(
         default=None, pattern=r"^[a-f0-9]{64}$", repr=False
     )
+    account_usage_label: str | None = Field(default=None, max_length=160)
     mode: RunMode
     host_access_grant: str | None = Field(default=None, pattern=r"^[a-f0-9]{32}$")
     model: str = Field(min_length=1, max_length=128)
@@ -109,11 +124,29 @@ class RuntimeRunState(BaseModel):
     created_at: str = Field(min_length=1, max_length=64)
     total_deadline_at: str | None = Field(default=None, max_length=64)
     started_at: str | None = Field(default=None, max_length=64)
+    max_duration_seconds: int | None = Field(default=None, strict=True, ge=1, le=86_400)
+    budget_deadline_at: str | None = Field(default=None, max_length=64)
+    stop_reason: Literal["elapsed_time_limit"] | None = None
+    budget_stop_unconfirmed: bool = False
     last_activity_at: str = Field(min_length=1, max_length=64)
     cancellation_requested_at: str | None = Field(default=None, max_length=64)
     terminal_message: str | None = Field(default=None, max_length=256)
     emitted_signatures: list[str] = Field(default_factory=list, max_length=2048)
     completed_item_ids: list[str] = Field(default_factory=list, max_length=4096)
+
+    @model_validator(mode="after")
+    def validate_workspace_context(self) -> "RuntimeRunState":
+        if self.unattended and self.goal_context is not None:
+            raise ValueError("unattended runs cannot carry a manual goal")
+        if len(self.workspace_context) > MAX_WORKSPACE_CONTEXTS:
+            raise ValueError("workspace context count exceeds its limit")
+        if sum(len(item.excerpt.encode("utf-8")) for item in self.workspace_context) > MAX_WORKSPACE_CONTEXT_BYTES:
+            raise ValueError("workspace context exceeds its aggregate limit")
+        if self.chat_context:
+            append_chat_context(self.prompt or "", self.chat_context, workspace_items=self.workspace_context)
+        elif self.prompt is not None:
+            visible_prompt(self.prompt, self.workspace_context)
+        return self
 
 
 class RuntimeInteractionState(BaseModel):
@@ -234,6 +267,7 @@ class RuntimeStateStore:
                         )
                         run.setdefault("turn_start_dispatched", False)
                         run.setdefault("total_deadline_at", None)
+                        run.setdefault("workspace_context", [])
                     for request_id, value in tuple(request_outcomes.items()):
                         if isinstance(value, dict) and "run_status" not in value:
                             run = runs.get(value.get("run_id"))

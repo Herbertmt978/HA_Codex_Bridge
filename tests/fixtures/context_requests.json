@@ -1,0 +1,77 @@
+{
+  "read_file": {
+    "type": "codex_bridge/read_workspace_context",
+    "thread_id": "destination",
+    "path": "notes.txt",
+    "start_line": null,
+    "end_line": null
+  },
+  "read_chat": {
+    "type": "codex_bridge/read_chat_context",
+    "thread_id": "destination",
+    "source_thread_id": "earlier-chat"
+  },
+  "refresh_chat": {
+    "type": "codex_bridge/read_chat_context",
+    "thread_id": "destination",
+    "source_thread_id": "earlier-chat",
+    "message_sequence": null,
+    "start_char": null,
+    "end_char": null
+  },
+  "send_file": {
+    "type": "codex_bridge/send_prompt",
+    "thread_id": "destination",
+    "prompt": "Review",
+    "workspace_context": [
+      {
+        "path": "notes.txt",
+        "start_line": null,
+        "end_line": null,
+        "content_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ]
+  },
+  "send_chat": {
+    "type": "codex_bridge/send_prompt",
+    "thread_id": "destination",
+    "prompt": "Review",
+    "chat_context": [
+      {
+        "source_thread_id": "earlier-chat",
+        "message_sequence": null,
+        "start_char": null,
+        "end_char": null,
+        "content_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  },
+  "send_message": {
+    "type": "codex_bridge/send_prompt",
+    "thread_id": "destination",
+    "prompt": "Review",
+    "chat_context": [
+      {
+        "source_thread_id": "earlier-chat",
+        "message_sequence": 4,
+        "start_char": null,
+        "end_char": null,
+        "content_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  },
+  "send_range": {
+    "type": "codex_bridge/send_prompt",
+    "thread_id": "destination",
+    "prompt": "Review",
+    "chat_context": [
+      {
+        "source_thread_id": "earlier-chat",
+        "message_sequence": 4,
+        "start_char": 0,
+        "end_char": 3,
+        "content_revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    ]
+  }
+}

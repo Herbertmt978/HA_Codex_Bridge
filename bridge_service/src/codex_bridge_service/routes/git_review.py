@@ -61,6 +61,26 @@ class GitReviewResponse(BaseModel):
     state_token: str
 
 
+class GitContextFile(BaseModel):
+    path: str
+    status: str
+    original_path: str | None = None
+
+
+class GitContextResponse(BaseModel):
+    repository: bool
+    workspace_path: str
+    repository_path: str | None = None
+    files: list[GitContextFile] = Field(default_factory=list)
+    files_truncated: bool = False
+    branch: str | None = None
+    detached: bool = False
+    dirty: bool | None = None
+    changed_files: int | None = None
+    base_name: str | None = None
+    base_available: bool | None = None
+
+
 class GitReviewError(Exception):
     def __init__(self, code: str) -> None:
         self.code = code
@@ -142,7 +162,7 @@ def _private_git_snapshot(workspace: Path) -> Iterator[None]:
         if os.name == "nt":
             _copy_git_metadata_windows(workspace, git_dir, deadline)
             (git_dir / "config").write_text(
-                "[core]\n\trepositoryformatversion = 0\n\tbare = false\n",
+                "[core]\n\trepositoryformatversion = 0\n\tbare = false\n\tfilemode = false\n",
                 encoding="ascii",
             )
             git_token = _GIT_DIR.set(git_dir)
@@ -1082,6 +1102,104 @@ def _read_bounded_diff(workspace: Path, *args: str) -> tuple[bytes, bool]:
     return _read_bounded_process(
         _git_prefix(workspace) + ["-C", _git_worktree_path(workspace), *args], workspace
     )
+
+
+def _context_path_bytes(value: bytes) -> str:
+    try:
+        return _context_path(value.decode("utf-8", errors="strict"))
+    except UnicodeDecodeError as error:
+        raise GitReviewError("git_path_invalid") from error
+
+
+def _context_path(value: str) -> str:
+    if any(ord(char) < 32 or ord(char) == 127 or char in "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069" for char in value):
+        raise GitReviewError("git_path_invalid")
+    return _safe_relative_path(value)
+
+
+@router.get("/threads/{thread_id}/git-context", response_model=GitContextResponse)
+def get_git_context(
+    thread_id: str,
+    request: Request,
+    base_ref: str | None = Query(default=None, min_length=1, max_length=256),
+    authorization: str | None = Header(default=None),
+) -> GitContextResponse:
+    """Read real repository state through the existing confined Git snapshot."""
+    require_bridge_token(
+        authorization=authorization, request=request,
+        expected_token=request.app.state.auth_token,
+    )
+    try:
+        thread = request.app.state.storage.get_thread(thread_id)
+        workspace = request.app.state.storage.resolve_workspace_path(thread.workspace_path)
+        storage = request.app.state.storage
+        public_root = storage.workspace_root or storage.root
+        try:
+            workspace_label = workspace.relative_to(public_root.resolve()).as_posix()
+        except ValueError:
+            workspace_label = workspace.name
+        if workspace_label != ".":
+            workspace_label = _context_path(workspace_label)
+        if base_ref is not None and any(ord(char) < 32 or ord(char) == 127 for char in base_ref):
+            raise GitReviewError("git_ref_invalid")
+        try:
+            (workspace / ".git").lstat()
+        except FileNotFoundError:
+            return GitContextResponse(repository=False, workspace_path=workspace_label)
+        with _private_git_snapshot(workspace):
+            repo = _repo_root(workspace)
+            raw_branch, truncated = _read_bounded_process(
+                _git_prefix(repo) + ["-C", _git_worktree_path(repo), "symbolic-ref", "--quiet", "--short", "HEAD"],
+                repo, max_bytes=1024, accepted_returncodes=frozenset({0, 1}),
+            )
+            if truncated:
+                raise GitReviewError("git_output_too_large")
+            branch = raw_branch.decode("utf-8", errors="replace").strip() or None
+            raw = _git(repo, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+            records = raw.split(b"\0")
+            changed = 0
+            files = []
+            index = 0
+            while index < len(records):
+                entry = records[index]
+                index += 1
+                if not entry:
+                    continue
+                if len(entry) < 4 or entry[2:3] != b" ":
+                    raise GitReviewError("git_state_unavailable")
+                changed += 1
+                status = entry[:2].decode("ascii", errors="strict")
+                filename = _context_path_bytes(entry[3:])
+                original_path = None
+                if b"R" in entry[:2] or b"C" in entry[:2]:
+                    if index >= len(records) or not records[index]:
+                        raise GitReviewError("git_state_unavailable")
+                    original_path = _context_path_bytes(records[index])
+                    index += 1
+                if len(files) < _MAX_FILES:
+                    files.append(GitContextFile(path=filename, status=status, original_path=original_path))
+            base_available = None
+            if base_ref is not None:
+                try:
+                    _resolve_commit(repo, base_ref)
+                    base_available = True
+                except GitReviewError as error:
+                    if error.code not in {"git_ref_invalid", "git_state_unavailable"}:
+                        raise
+                    base_available = False
+            return GitContextResponse(
+                repository=True, workspace_path=workspace_label,
+                repository_path=".", files=files, files_truncated=changed > _MAX_FILES,
+                branch=branch, detached=branch is None,
+                dirty=changed > 0, changed_files=changed,
+                base_name=base_ref, base_available=base_available,
+            )
+    except ThreadNotFoundError as error:
+        raise HTTPException(status_code=404, detail="thread not found") from error
+    except (WorkspaceBoundaryError, OSError) as error:
+        raise HTTPException(status_code=400, detail="invalid workspace path") from error
+    except GitReviewError as error:
+        raise HTTPException(status_code=503, detail={"code": error.code}) from error
 
 
 @router.get("/threads/{thread_id}/git-review", response_model=GitReviewResponse)

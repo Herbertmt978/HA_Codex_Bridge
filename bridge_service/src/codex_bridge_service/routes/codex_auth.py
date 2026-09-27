@@ -136,6 +136,20 @@ def list_account_profiles(
     return _invoke_profile_operation(store.list_profiles)
 
 
+@router.get("/auth/profiles/telemetry")
+def account_profile_telemetry(
+    request: Request, authorization: str | None = Header(default=None)
+) -> dict[str, object]:
+    """Expose cached profile usage without starting or changing a sign-in."""
+    _profiles(request, authorization)
+    if "account_profile_telemetry_v1" not in request.app.state.feature_capabilities:
+        raise HTTPException(409, detail={"code": "capability_unavailable", "retryable": False})
+    probe = getattr(request.app.state, "account_profile_details", None)
+    if probe is None:
+        raise HTTPException(503, detail={"code": "account_profiles_unavailable", "retryable": True})
+    return _invoke_profile_operation(probe.cached_telemetry)
+
+
 @router.get("/auth/profiles/{profile_id}/details")
 def account_profile_details(
     profile_id: str,

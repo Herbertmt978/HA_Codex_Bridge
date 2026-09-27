@@ -50,6 +50,164 @@ describe("prompt composer mutation contract", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each([
+    ["live", "configured", "live"], ["disabled", "configured", "disabled"],
+    ["live", "disabled", "disabled"], ["disabled", "live", "live"],
+  ])("submits the reviewed web-search mode for the next prompt (%s/%s)", async (configured, choice, expected) => {
+    const panel = createPanel();
+    panel._config.capabilities = ["web_search_v1"];
+    panel._config.web_search_mode = configured;
+    if (choice !== "configured") panel._webSearchChoices.set("thread-alpha", choice);
+    panel._refreshActiveThread = vi.fn(async () => {});
+    panel._callWS = vi.fn(async () => ({}));
+    panel._renderComposerState(panel._activeThread);
+    panel.shadowRoot.getElementById("prompt-input").value = "Use the selected mode";
+    expect(panel.shadowRoot.getElementById("web-search-availability").textContent).toContain(expected === "live" ? "Live" : "Off");
+    await panel._sendPrompt();
+    expect(panel._callWS).toHaveBeenCalledWith("send_prompt", expect.objectContaining({ web_search: expected }));
+    expect(panel._webSearchChoices.has("thread-alpha")).toBe(false);
+    expect(panel._effectivePromptWebSearch()).toBe(configured);
+  });
+
+  it("retains the original effective web-search mode and request on an uncertain retry", async () => {
+    const panel = createPanel();
+    panel._config.capabilities = ["web_search_v1"];
+    panel._config.web_search_mode = "live";
+    panel._webSearchChoices.set("thread-alpha", "disabled");
+    panel._refreshActiveThread = vi.fn(async () => {});
+    panel._callWS = vi.fn(async () => { throw new Error("Response lost"); });
+    panel.shadowRoot.getElementById("prompt-input").value = "Retain the reviewed settings";
+    await panel._sendPrompt();
+    panel._webSearchChoices.set("thread-alpha", "live");
+    panel._config.web_search_mode = "live";
+    panel._renderComposerState(panel._activeThread);
+    expect(panel.shadowRoot.getElementById("web-search-mode").disabled).toBe(true);
+    expect(panel._effectivePromptWebSearch()).toBe("disabled");
+    await panel._sendPrompt();
+    expect(panel._callWS.mock.calls[1]).toEqual(panel._callWS.mock.calls[0]);
+    expect(panel._callWS.mock.calls[1][1].web_search).toBe("disabled");
+  });
+
+  it("explains unavailable web search and omits unsupported next-prompt settings", async () => {
+    const panel = createPanel();
+    panel._webSearchChoices.set("thread-alpha", "live");
+    panel._refreshActiveThread = vi.fn(async () => {});
+    panel._callWS = vi.fn(async () => ({}));
+    panel._renderComposerState(panel._activeThread);
+    expect(panel.shadowRoot.getElementById("web-search-mode").disabled).toBe(true);
+    expect(panel.shadowRoot.getElementById("web-search-availability").textContent).toContain("unavailable");
+    panel.shadowRoot.getElementById("prompt-input").value = "Older App request";
+    await panel._sendPrompt();
+    expect(panel._callWS.mock.calls[0][1]).not.toHaveProperty("web_search");
+  });
+
+  it("keeps a refused search-mode change editable and sends it only after choosing Queue", async () => {
+    const panel = createPanel();
+    panel._activeThread.status = "running";
+    panel._config.capabilities = ["web_search_v1", "prompt_queue_v1"];
+    panel._config.web_search_mode = "live";
+    panel._webSearchChoices.set("thread-alpha", "disabled");
+    panel._followUpMode = "steer";
+    panel._refreshActiveThread = vi.fn(async () => {});
+    panel._callWS = vi.fn().mockRejectedValueOnce({
+      code: "web_search_requires_queue",
+      message: "Choose Queue or wait for the active response to finish to change web search",
+    }).mockResolvedValueOnce({});
+    const prompt = panel.shadowRoot.getElementById("prompt-input");
+    prompt.value = "Continue without search";
+    await panel._sendPrompt();
+    expect(panel._promptMutationForThread("thread-alpha")).toBeNull();
+    expect(prompt.value).toBe("Continue without search");
+    expect(prompt.disabled).toBe(false);
+    expect(panel._webSearchChoices.get("thread-alpha")).toBe("disabled");
+    expect(panel.shadowRoot.getElementById("web-search-mode").disabled).toBe(false);
+    expect(panel._error).toContain("Choose Queue");
+    expect(panel._refreshActiveThread).not.toHaveBeenCalled();
+    panel._followUpMode = "queue";
+    await panel._sendPrompt();
+    const [refused, queued] = panel._callWS.mock.calls.map((call) => call[1]);
+    expect(refused).toMatchObject({ web_search: "disabled", follow_up_mode: "steer" });
+    expect(queued).toMatchObject({ web_search: "disabled", follow_up_mode: "queue" });
+    expect(queued.client_request_id).not.toBe(refused.client_request_id);
+    expect(panel._webSearchChoices.has("thread-alpha")).toBe(false);
+  });
+
+  it("keeps next-prompt search choices separate between chats", () => {
+    const panel = createPanel();
+    panel._config.capabilities = ["web_search_v1"];
+    panel._config.web_search_mode = "live";
+    panel._webSearchChoices.set("thread-alpha", "disabled");
+    panel._selectedThreadId = "thread-beta";
+    expect(panel._effectivePromptWebSearch()).toBe("live");
+    panel._webSearchChoices.set("thread-beta", "live");
+    panel._selectedThreadId = "thread-alpha";
+    expect(panel._effectivePromptWebSearch()).toBe("disabled");
+  });
+
+  it.each(["response", "event"])("preserves newer web-search choices on %s acknowledgement, including ABA", async (acknowledgement) => {
+    for (const newerChoices of [["live"], ["configured"], ["live", "disabled"], ["disabled"]]) {
+      const panel = createPanel();
+      panel._config.capabilities = ["web_search_v1"];
+      panel._config.web_search_mode = "disabled";
+      panel._setWebSearchChoice("thread-alpha", "disabled");
+      const pending = deferred();
+      panel._callWS = vi.fn(() => pending.promise);
+      panel._refreshActiveThread = vi.fn(async () => {});
+      panel.shadowRoot.getElementById("prompt-input").value = "Original prompt";
+      const sending = panel._sendPrompt();
+      const mutation = panel._promptMutationForThread("thread-alpha");
+      expect(mutation.webSearch).toBe("disabled");
+      panel._selectedThreadId = "thread-beta";
+      panel._setWebSearchChoice("thread-beta", "live");
+      panel._selectedThreadId = "thread-alpha";
+      for (const choice of newerChoices) panel._setWebSearchChoice("thread-alpha", choice);
+      if (acknowledgement === "event") {
+        panel._handleSubscribedEvent("thread-alpha", {
+          event_id: "event-search-accepted", sequence: 1, thread_id: "thread-alpha",
+          event_type: "message.created",
+          payload: { text: "Original prompt", client_request_id: mutation.clientRequestId },
+        });
+      }
+      pending.resolve({ accepted: true });
+      await sending;
+      expect(panel._promptMutationForThread("thread-alpha")).toBeNull();
+      expect(panel._webSearchChoices.get("thread-alpha")).toBe(newerChoices.at(-1));
+      expect(panel._webSearchChoices.get("thread-beta")).toBe("live");
+      panel.remove();
+    }
+  });
+
+  it("consumes only the captured raw choice, revision and HA owner's setting", () => {
+    const panel = createPanel();
+    panel._hass = { user: { id: "owner-first" } };
+    panel._webSearchChoices.set("thread-alpha", "disabled");
+    const mutation = {
+      threadId: "thread-alpha", ownerKey: "owner-first",
+      webSearchChoice: "disabled", webSearchChoiceRevision: 0,
+    };
+    panel._hass = { user: { id: "owner-next" } };
+    panel._clearAcceptedWebSearchChoice(mutation);
+    expect(panel._webSearchChoices.get("thread-alpha")).toBe("disabled");
+    panel._hass = { user: { id: "owner-first" } };
+    panel._webSearchChoices.set("thread-alpha", "configured");
+    panel._clearAcceptedWebSearchChoice(mutation);
+    expect(panel._webSearchChoices.get("thread-alpha")).toBe("configured");
+    panel._webSearchChoices.set("thread-alpha", "disabled");
+    panel._clearAcceptedWebSearchChoice(mutation);
+    expect(panel._webSearchChoices.has("thread-alpha")).toBe(false);
+  });
+
+  it("increments search choice revision through the composer change handler", () => {
+    const panel = createPanel();
+    panel._config.capabilities = ["web_search_v1"];
+    const select = panel.shadowRoot.getElementById("web-search-mode");
+    for (let revision = 1; revision <= 2; revision += 1) {
+      select.value = "disabled";
+      panel._handleChange({ target: select });
+      expect(panel._webSearchChoiceRevisions.get("thread-alpha")).toBe(revision);
+    }
+  });
+
   it("keeps keyboard guidance accessible without a persistent idle status row", () => {
     const panel = createPanel();
     panel._render(true);
