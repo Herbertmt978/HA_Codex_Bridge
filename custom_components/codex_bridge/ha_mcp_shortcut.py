@@ -13,6 +13,7 @@ from time import time
 from typing import Any
 
 from homeassistant.auth.models import TOKEN_TYPE_NORMAL, User
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.helpers import llm
@@ -80,7 +81,6 @@ class HaMcpShortcut:
         self._remove_timer: Callable[[], None] | None = None
         self._remove_revoke: Callable[[], None] | None = None
         self._remove_start_listener: Callable[[], None] | None = None
-        self._startup_settled = False
         self._invalid_journal = False
         self._loaded = False
         self._closed = False
@@ -105,9 +105,10 @@ class HaMcpShortcut:
                 elif not self._environment():
                     if self._environment_pending():
                         self._notice = "unavailable"
-                        self._remove_start_listener = self.hass.bus.async_listen_once(
-                            EVENT_HOMEASSISTANT_STARTED, self._after_start,
-                        )
+                        if self.hass.state is not CoreState.running:
+                            self._remove_start_listener = self.hass.bus.async_listen_once(
+                                EVENT_HOMEASSISTANT_STARTED, self._after_start,
+                            )
                         self._watch_revocation()
                     else:
                         await self._disconnect_locked()
@@ -155,9 +156,14 @@ class HaMcpShortcut:
                 return self._status(self._notice or ("not_connected" if self._environment() else "unavailable"))
             if self._record["state"] != "connected":
                 return self._status("cleanup_pending")
+            token = await self._owned_token()
+            if token is None:
+                await self._disconnect_locked()
+                self._notice = "reauthorise"
+                return self._status("cleanup_pending" if self._record else "reauthorise")
             if not self._environment() and self._environment_pending():
                 return self._status("unavailable")
-            if not self._environment() or await self._owned_token() is None:
+            if not self._environment():
                 await self._disconnect_locked()
                 self._notice = "reauthorise"
                 return self._status("cleanup_pending" if self._record else "reauthorise")
@@ -307,13 +313,27 @@ class HaMcpShortcut:
             return False
 
     def _environment_pending(self) -> bool:
-        """An installed optional integration may still be loading during HA boot."""
-        return (not self._startup_settled and self.hass.state is not CoreState.running
-                and bool(self.hass.config_entries.async_entries("mcp_server")))
+        """An enabled MCP entry may be between unload and setup during reload."""
+        try:
+            if (self.connection_type != CONNECTION_TYPE_SUPERVISOR
+                    or not all(self._supports(capability) is True for capability in _CAPABILITIES)):
+                return False
+            entries = self.hass.config_entries.async_entries(
+                "mcp_server", include_ignore=False, include_disabled=False,
+            )
+            if len(entries) != 1:
+                return False
+            return entries[0].state in {
+                ConfigEntryState.NOT_LOADED,
+                ConfigEntryState.UNLOAD_IN_PROGRESS,
+                ConfigEntryState.SETUP_IN_PROGRESS,
+                ConfigEntryState.SETUP_RETRY,
+            }
+        except Exception:  # noqa: BLE001 - uncertain entry state cannot preserve authority
+            return False
 
     async def _after_start(self, _event: Any) -> None:
         self._remove_start_listener = None
-        self._startup_settled = True
         if not self._closed:
             await self.async_status()
 

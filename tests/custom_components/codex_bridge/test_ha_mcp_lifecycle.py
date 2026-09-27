@@ -38,6 +38,11 @@ async def _prepare_removal(case, monkeypatch):
     factory = Mock(return_value=case.client)
     monkeypatch.setattr(integration, "BridgeApiClient", factory)
     monkeypatch.setattr(integration, "async_get_clientsession", lambda _hass: object())
+    # This fixture supplies a mock HA auth environment for grant ownership.
+    # Question lifecycle/store behaviour is covered through real HA entries.
+    monkeypatch.setattr(integration, "Store", lambda *_args: SimpleNamespace(
+        async_load=AsyncMock(return_value=None), async_save=AsyncMock(),
+    ))
     entry = SimpleNamespace(entry_id="entry-owned", data={
         CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
         CONF_BRIDGE_URL: "http://127.0.0.1:8766",

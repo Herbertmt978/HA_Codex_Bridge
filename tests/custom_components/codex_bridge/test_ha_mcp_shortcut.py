@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.config_entries import HANDLERS, ConfigEntryDisabler, ConfigEntryState
 from homeassistant.core import CoreState, HomeAssistant
+from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry, MockModule, mock_integration, mock_platform
 
 from custom_components.codex_bridge.bridge_api import BridgeApiError
 from custom_components.codex_bridge.const import CONNECTION_TYPE_SUPERVISOR
@@ -445,7 +448,9 @@ async def _restore_during_mcp_startup(case, *, startup_state=CoreState.not_runni
     case.hass.is_running = HomeAssistant.is_running.__get__(
         SimpleNamespace(state=startup_state), HomeAssistant,
     )
-    case.hass.config_entries.async_entries.return_value = [SimpleNamespace(domain="mcp_server")]
+    case.hass.config_entries.async_entries.return_value = [
+        SimpleNamespace(domain="mcp_server", state=ConfigEntryState.NOT_LOADED)
+    ]
     case.hass.config_entries.async_loaded_entries.return_value = []
     remove_listener = Mock()
     case.hass.bus.async_listen_once.return_value = remove_listener
@@ -485,7 +490,6 @@ async def test_pending_startup_preserves_existing_grant_without_renewal(shortcut
     case.hass.state = CoreState.running
     case.hass.is_running = True
     await callback(SimpleNamespace())
-    assert case.helper._startup_settled is True
     assert case.helper._remove_start_listener is None
     assert (await case.helper.async_status())["state"] == "paused"
     assert case.store.saved == saved
@@ -501,8 +505,8 @@ async def test_settled_failed_mcp_startup_revokes_existing_grant(shortcut):
     name, _, callback, _ = await _restore_during_mcp_startup(case)
     case.hass.state = CoreState.running
     case.hass.is_running = True
+    case.hass.config_entries.async_entries.return_value[0].state = ConfigEntryState.SETUP_ERROR
     await callback(SimpleNamespace())
-    assert case.helper._startup_settled is True
     assert case.tokens == {}
     assert case.store.saved == {"record": None}
     assert (await case.helper.async_status())["state"] == "reauthorise"
@@ -543,3 +547,160 @@ async def test_absent_optional_entry_does_not_defer_revocation_until_start(short
     assert case.tokens == {}
     assert case.store.saved == {"record": None}
     case.hass.bus.async_listen_once.assert_not_called()
+
+
+@pytest.mark.parametrize("invalidity", [
+    "missing_token", "invalid_refresh_token", "inactive_owner", "missing_capability",
+])
+async def test_pending_entry_does_not_preserve_invalid_authority(shortcut, invalidity):
+    case = shortcut
+    await _connect(case)
+    case.auth.async_create_access_token.reset_mock()
+    case.hass.config_entries.async_loaded_entries.return_value = []
+    case.hass.config_entries.async_entries.return_value = [
+        SimpleNamespace(domain="mcp_server", state=ConfigEntryState.SETUP_IN_PROGRESS)
+    ]
+    if invalidity == "missing_token":
+        case.tokens.clear()
+    elif invalidity == "invalid_refresh_token":
+        case.auth.async_validate_refresh_token.side_effect = ValueError("revoked")
+    elif invalidity == "inactive_owner":
+        case.user.is_active = False
+    else:
+        case.support.side_effect = lambda capability: capability != "mcp_tool_permissions_v1"
+
+    result = await case.helper.async_status()
+
+    assert result["state"] == "reauthorise"
+    assert case.store.saved == {"record": None}
+    assert case.client.async_remove_managed_mcp.await_count == 1
+    case.auth.async_create_access_token.assert_not_called()
+    case.client.async_replace_mcp_credential.assert_not_called()
+
+
+async def _mount_real_enabled_mcp_entry(case, hass, monkeypatch):
+    """Use HA's real manager and state flow; mock only optional MCP callbacks."""
+    assert await async_setup_component(hass, "homeassistant", {})
+    mcp_module = MockModule(
+        "mcp_server",
+        async_setup_entry=AsyncMock(return_value=True),
+        async_unload_entry=AsyncMock(return_value=True),
+        async_remove_entry=AsyncMock(),
+    )
+    mock_integration(hass, mcp_module)
+    mock_platform(hass, "mcp_server.config_flow", SimpleNamespace())
+    monkeypatch.setitem(HANDLERS, "mcp_server", SimpleNamespace(VERSION=1, MINOR_VERSION=1))
+    entry = MockConfigEntry(domain="mcp_server", title="Home Assistant MCP", data={})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    case.hass.config_entries = hass.config_entries
+    return entry, mcp_module
+
+
+async def test_public_mcp_reload_preserves_grant_during_unload_and_setup(hass, shortcut, monkeypatch):
+    case = shortcut
+    entry, mcp_module = await _mount_real_enabled_mcp_entry(case, hass, monkeypatch)
+    name = await _connect(case)
+    case.auth.async_create_access_token.reset_mock()
+    case.client.async_list_mcp.return_value = [{
+        "name": name, "enabled": True, "startup": "ready", "credential_configured": True,
+        "tool_policy": "selected", "tool_count": 1,
+    }]
+
+    original_setup = mcp_module.async_setup_entry
+    setup_started = asyncio.Event()
+    resume_setup = asyncio.Event()
+
+    async def pause_reload_setup(hass_arg, entry_arg):
+        setup_started.set()
+        await resume_setup.wait()
+        return await original_setup(hass_arg, entry_arg)
+
+    monkeypatch.setattr(mcp_module, "async_setup_entry", pause_reload_setup)
+    reload_task = asyncio.create_task(hass.config_entries.async_reload(entry.entry_id))
+    try:
+        await asyncio.wait_for(setup_started.wait(), timeout=2)
+        assert entry.state is ConfigEntryState.SETUP_IN_PROGRESS
+        result = await case.helper.async_status()
+        assert result["state"] == "unavailable" and result["available"] is False
+        with pytest.raises(HaMcpShortcutError):
+            await case.helper.async_refresh()
+        assert case.tokens
+        assert case.store.saved["record"]["state"] == "connected"
+        case.auth.async_remove_refresh_token.assert_not_called()
+        case.auth.async_create_access_token.assert_not_called()
+        case.client.async_replace_mcp_credential.assert_not_called()
+    finally:
+        resume_setup.set()
+        assert await asyncio.wait_for(reload_task, timeout=2)
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert (await case.helper.async_status())["state"] == "connected"
+    assert case.tokens and case.store.saved["record"]["state"] == "connected"
+    case.auth.async_remove_refresh_token.assert_not_called()
+    case.auth.async_create_access_token.assert_not_called()
+
+
+async def test_public_mcp_reload_cancellation_revokes_after_setup_fails(hass, shortcut, monkeypatch):
+    case = shortcut
+    entry, mcp_module = await _mount_real_enabled_mcp_entry(case, hass, monkeypatch)
+    name = await _connect(case)
+
+    setup_started = asyncio.Event()
+
+    async def cancel_during_setup(_hass_arg, _entry_arg):
+        setup_started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(mcp_module, "async_setup_entry", cancel_during_setup)
+    reload_task = asyncio.create_task(hass.config_entries.async_reload(entry.entry_id))
+    try:
+        await asyncio.wait_for(setup_started.wait(), timeout=2)
+        assert entry.state is ConfigEntryState.SETUP_IN_PROGRESS
+        assert (await case.helper.async_status())["state"] == "unavailable"
+        reload_task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await reload_task
+    finally:
+        if not reload_task.done():
+            reload_task.cancel()
+            await asyncio.gather(reload_task, return_exceptions=True)
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    result = await case.helper.async_status()
+    assert result["state"] == "reauthorise"
+    assert case.tokens == {}
+    assert case.store.saved == {"record": None}
+    case.auth.async_remove_refresh_token.assert_called_once()
+    case.client.async_remove_managed_mcp.assert_awaited_once_with(name, {
+        "expected_url": FIXED_URL,
+        "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
+    })
+
+
+@pytest.mark.parametrize("action", ["disable", "remove"])
+async def test_public_disable_or_removal_revokes_grant(shortcut, hass, monkeypatch, action):
+    case = shortcut
+    entry, _mcp_module = await _mount_real_enabled_mcp_entry(case, hass, monkeypatch)
+    name = await _connect(case)
+
+    if action == "disable":
+        assert await hass.config_entries.async_set_disabled_by(
+            entry.entry_id, ConfigEntryDisabler.USER,
+        )
+        assert entry.state is ConfigEntryState.NOT_LOADED
+        assert entry.disabled_by is ConfigEntryDisabler.USER
+    else:
+        await hass.config_entries.async_remove(entry.entry_id)
+        assert hass.config_entries.async_get_entry(entry.entry_id) is None
+
+    result = await case.helper.async_status()
+
+    assert result["state"] == "reauthorise"
+    assert case.tokens == {}
+    assert case.store.saved == {"record": None}
+    case.auth.async_remove_refresh_token.assert_called_once()
+    case.client.async_remove_managed_mcp.assert_awaited_once_with(name, {
+        "expected_url": FIXED_URL,
+        "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
+    })

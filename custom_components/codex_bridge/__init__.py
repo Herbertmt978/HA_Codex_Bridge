@@ -1,4 +1,5 @@
 from inspect import iscoroutinefunction
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -48,6 +49,7 @@ from .task_events import TaskEventForwarder
 from .websocket_api import async_register_websocket_commands
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.CONVERSATION]
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -237,8 +239,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Revoke only this entry's managed Home Assistant MCP authorisation."""
+    """Clear this entry's question notices and revoke its managed MCP grant."""
+    async def clear_questions() -> None:
+        # Normal unload preserves delivery claims for restart. Permanent removal
+        # has no runtime to reconcile them, including on an external connection.
+        coordinator = QuestionNotificationCoordinator(
+            hass, None,
+            Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications"),
+        )
+        if not await coordinator.async_permanently_remove():
+            _LOGGER.warning("Question notification removal is incomplete; its cleanup ledger was retained")
+
     if entry.data.get(CONF_CONNECTION_TYPE) != CONNECTION_TYPE_SUPERVISOR:
+        await clear_questions()
         return
 
     async def detach(_name: str, _selected: bool) -> None:
@@ -250,7 +263,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass, entry.entry_id, None, connection_type=CONNECTION_TYPE_SUPERVISOR,
         supports_capability=lambda _value: False, selection_callback=detach,
     )
-    await local.async_remove()
+    try:
+        await local.async_remove()
+    finally:
+        # Revoke local authority before waiting for any notification service.
+        await clear_questions()
     try:
         client = BridgeApiClient(
             async_get_clientsession(hass), entry.data[CONF_BRIDGE_URL],

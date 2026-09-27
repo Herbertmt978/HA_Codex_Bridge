@@ -213,6 +213,45 @@ class QuestionNotificationCoordinator:
                 remove()
                 setattr(self, remove_name, None)
 
+    async def async_permanently_remove(self) -> bool:
+        """Clear this coordinator's managed notices and durable ledger.
+
+        Call after ``async_close`` during permanent config-entry removal. This
+        deliberately uses only the saved ledger and Home Assistant services;
+        it does not start the runtime or discover pending interactions.
+        """
+        await self.async_close()
+        async with self._lock:
+            if not self._loaded:
+                try:
+                    saved = await self._store.async_load()
+                except Exception:
+                    _LOGGER.warning("Question notification ledger could not be read for removal")
+                    return False
+                entries = self._normalise_ledger(saved)
+                if entries is None:
+                    _LOGGER.warning("Question notification ledger is invalid; removal cleanup is incomplete")
+                    return False
+                self._entries = entries
+                self._loaded = True
+
+            cleared = True
+            for entry in tuple(self._entries.values()):
+                if not await self._clear_entry(entry):
+                    cleared = False
+            if not cleared:
+                _LOGGER.warning("Question notification removal cleanup is incomplete")
+                return False
+
+            try:
+                await self._store.async_save({"interactions": []})
+            except Exception:
+                _LOGGER.warning("Question notification ledger could not be cleared for removal")
+                return False
+            self._entries.clear()
+            self._loaded = True
+            return True
+
     async def _on_tick(self, _now) -> None:
         await self.async_refresh()
 
@@ -611,24 +650,28 @@ class QuestionNotificationCoordinator:
             f"&interaction={quote(entry['interaction_id'], safe='')}"
         )
 
-    async def _clear_mobile(self, entry: Mapping, destination: Mapping) -> None:
+    async def _clear_mobile(self, entry: Mapping, destination: Mapping) -> bool:
         if not destination.get("attempted"):
-            return
+            return True
         service = destination.get("service")
         if not isinstance(service, str) or not self._hass.services.has_service("notify", service):
-            return
+            return False
         try:
             recipients = await async_resolve_question_recipients(
                 self._hass, [destination.get("registration_id")]
             )
         except Exception:
-            return
+            return False
         current = next(
             (r for r in recipients if r.registration_id == destination.get("registration_id")),
             None,
         )
-        if current is None or not self._recipient_matches(destination, current):
-            return
+        if current is None:
+            return False
+        if not self._recipient_matches(destination, current):
+            # The registration now belongs to a different device or user. Do
+            # not send the old clear action to the substituted recipient.
+            return True
         try:
             await self._hass.services.async_call(
                 "notify", service,
@@ -637,21 +680,30 @@ class QuestionNotificationCoordinator:
             )
         except Exception:
             _LOGGER.warning("Question notification clearing failed for a selected device")
+            return False
+        return True
 
-    async def _clear_persistent(self, entry: Mapping) -> None:
-        if self._hass.services.has_service("persistent_notification", "dismiss"):
-            try:
-                await self._hass.services.async_call(
-                    "persistent_notification", "dismiss", {"notification_id": self._tag(entry)}, blocking=True
-                )
-            except Exception:
-                _LOGGER.warning("Persistent question notification clearing failed")
+    async def _clear_persistent(self, entry: Mapping) -> bool:
+        if not self._hass.services.has_service("persistent_notification", "dismiss"):
+            return False
+        try:
+            await self._hass.services.async_call(
+                "persistent_notification", "dismiss", {"notification_id": self._tag(entry)}, blocking=True
+            )
+        except Exception:
+            _LOGGER.warning("Persistent question notification clearing failed")
+            return False
+        return True
 
-    async def _clear_entry(self, entry: Mapping) -> None:
+    async def _clear_entry(self, entry: Mapping) -> bool:
+        cleared = True
         for destination in entry.get("destinations", []):
-            await self._clear_mobile(entry, destination)
+            if not await self._clear_mobile(entry, destination):
+                cleared = False
         if entry.get("persistent"):
-            await self._clear_persistent(entry)
+            if not await self._clear_persistent(entry):
+                cleared = False
+        return cleared
 
     async def _persist(self) -> bool:
         if self._closed or not self._loaded:

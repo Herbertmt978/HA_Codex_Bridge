@@ -433,6 +433,131 @@ async def test_restart_restores_only_current_matching_question_and_unload_remove
     await second.async_close()
 
 
+async def test_permanent_removal_clears_notices_and_ledger_without_runtime(monkeypatch):
+    store = _Store()
+    owner, _runtime, client, services = _fixture(monkeypatch, store=store)
+    await owner.async_start()
+    assert store.value["interactions"]
+    await owner.async_close()
+
+    # Permanent removal constructs a fresh owner after the runtime is gone.
+    remover = QuestionNotificationCoordinator(owner._hass, None, store)
+    assert await remover.async_permanently_remove() is True
+    assert store.value == {"interactions": []}
+    assert remover._entries == {}
+    assert any(call[:2] == ("persistent_notification", "dismiss") for call in services.calls)
+    assert any(
+        call[:2] == ("notify", "mobile_app_phone")
+        and call[2].get("message") == "clear_notification"
+        for call in services.calls
+    )
+    assert client.async_list_pending_interactions.await_count == 1
+
+
+async def test_permanent_removal_failure_retains_ledger_for_retry(monkeypatch):
+    store = _Store()
+    owner, _runtime, _client, services = _fixture(monkeypatch, store=store)
+    await owner.async_start()
+    await owner.async_close()
+    saved = deepcopy(store.value)
+    services.fail = True
+
+    remover = QuestionNotificationCoordinator(owner._hass, None, store)
+    assert await remover.async_permanently_remove() is False
+    assert store.value == saved
+
+    services.fail = False
+    assert await remover.async_permanently_remove() is True
+    assert store.value == {"interactions": []}
+
+
+async def test_permanent_removal_invalid_ledger_is_preserved(monkeypatch):
+    saved = {"interactions": [{"interaction_id": "question-1", "attempted": True}]}
+    store = _Store(saved)
+    coordinator, _runtime, _client, services = _fixture(monkeypatch, store=store)
+    remover = QuestionNotificationCoordinator(coordinator._hass, None, store)
+
+    assert await remover.async_permanently_remove() is False
+    assert store.value == saved
+    assert store.save_count == 0
+    assert services.calls == []
+
+
+async def test_permanent_removal_ledger_save_failure_is_reported_and_retryable(monkeypatch):
+    store = _Store()
+    owner, _runtime, _client, services = _fixture(monkeypatch, store=store)
+    await owner.async_start()
+    await owner.async_close()
+    saved = deepcopy(store.value)
+    original_save = store.async_save
+
+    async def fail_save(_value):
+        raise RuntimeError("private storage detail")
+
+    store.async_save = fail_save
+    remover = QuestionNotificationCoordinator(owner._hass, None, store)
+    assert await remover.async_permanently_remove() is False
+    assert store.value == saved
+
+    store.async_save = original_save
+    assert await remover.async_permanently_remove() is True
+    assert store.value == {"interactions": []}
+
+
+async def test_permanent_removal_skips_substituted_mobile_recipient(monkeypatch):
+    store = _Store()
+    owner, _runtime, _client, services = _fixture(monkeypatch, store=store)
+    await owner.async_start()
+    await owner.async_close()
+
+    async def resolve_substituted(_hass, registration_ids):
+        assert registration_ids == ["phone-registration"]
+        return (_recipient(user_id="different-user"),)
+
+    monkeypatch.setattr(
+        "custom_components.codex_bridge.question_notifications.async_resolve_question_recipients",
+        resolve_substituted,
+    )
+    remover = QuestionNotificationCoordinator(owner._hass, None, store)
+    assert await remover.async_permanently_remove() is True
+    assert not any(
+        call[:2] == ("notify", "mobile_app_phone")
+        and call[2].get("message") == "clear_notification"
+        for call in services.calls
+    )
+    assert store.value == {"interactions": []}
+
+
+async def test_permanent_removal_cancellation_retains_ledger_for_retry(monkeypatch):
+    store = _Store()
+    owner, _runtime, _client, services = _fixture(monkeypatch, store=store)
+    await owner.async_start()
+    await owner.async_close()
+    saved = deepcopy(store.value)
+    started = asyncio.Event()
+    release = asyncio.Event()
+    original_call = services.async_call
+
+    async def blocked_call(domain, service, data, **kwargs):
+        if domain == "notify" and data.get("message") == "clear_notification":
+            started.set()
+            await release.wait()
+        await original_call(domain, service, data, **kwargs)
+
+    services.async_call = blocked_call
+    remover = QuestionNotificationCoordinator(owner._hass, None, store)
+    task = asyncio.create_task(remover.async_permanently_remove())
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert store.value == saved
+
+    services.async_call = original_call
+    assert await remover.async_permanently_remove() is True
+    assert store.value == {"interactions": []}
+
+
 async def test_disabled_by_default_does_not_subscribe_or_poll(monkeypatch):
     settings = {"enabled": False, "persistent": True, "preview": False, "mobile_targets": []}
     coordinator, _runtime, client, _services = _fixture(monkeypatch, settings=settings)

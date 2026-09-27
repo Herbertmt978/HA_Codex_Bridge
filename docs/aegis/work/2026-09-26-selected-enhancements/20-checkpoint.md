@@ -87,3 +87,28 @@ Final qualification requires a clean local commit, a canonical Git archive
 verified against every committed file, fresh applicable Linux gates and parent
 native acceptance. No combined publication or deployment has occurred.
 Production remains excluded; original fixtures and failed histories are retained.
+
+## PR #238 lifecycle review corrections — 27 September 2026
+
+A valid native HA MCP grant now survives a temporary unload or setup of one
+enabled server entry. Status reports unavailable and refresh does not rotate
+credentials until it is loaded again. Token and owner validation still precede
+that temporary status. Missing, disabled or failed entries, missing capabilities
+and invalid authority retain definitive cleanup. Restoration during running HA
+does not leave a listener waiting for a startup event that has already fired.
+
+Permanent Bridge entry removal now uses the question coordinator's own saved
+ledger contract after unload, on both Supervisor and external connections.
+It clears managed persistent and verified Companion notices without starting
+the runtime. Corrupt storage, failed service delivery, cancellation and failed
+ledger writes retain cleanup evidence. A changed recipient identity is never
+targeted. Normal reload still preserves claims and does not deliver twice.
+
+The focused Linux run passes 100 cases. The public Home Assistant entry manager
+drives setup, reload, disable and removal in the regressions; only optional MCP
+integration callbacks and external network/UI boundaries are mocked. No test
+dependency versions change. Independent scoped source review found no blocker.
+The corrected candidate requires fresh full Integration, static and validator
+checks. Unaffected Bridge, frontend and App gates may be carried only after
+exact canonical input equivalence is recorded. Parent owns publication and
+managed HA-DEV acceptance; no native or phone actions occurred in this follow-up.
