@@ -254,7 +254,7 @@ export class ChatContextMenu {
       control("Share", "copy-link", "upload"), control("Copy", "submenu", "copy", "", "copy"), null,
       ...(this.supported ? [control("Fork", "submenu", "pullRequest", "", "fork"), null] : []),
       control("Open in new window", "open", "external"),
-      ...(this.header ? [null, control("Goal", "compact-goal", "chat"), control("Find in chat", "compact-search", "search"), control("Repository review", "compact-review", "file"), control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : []),
+      ...(this.header ? [null, control("Goal", "compact-goal", "chat"), ...(this.panel._compactComposer?.canOpen("search") ? [control("Find in chat", "compact-search", "search")] : []), ...(this.panel._compactComposer?.canOpen("review") ? [control("Repository review", "compact-review", "file")] : []), control("Chat settings", "settings", "settings"), control("Refresh", "refresh", "refresh")] : []),
       ...((this.uncertain.has(this.threadId) || this.notice) && !this.header ? [null, control("Refresh", "refresh", "refresh")] : []),
     ];
   }

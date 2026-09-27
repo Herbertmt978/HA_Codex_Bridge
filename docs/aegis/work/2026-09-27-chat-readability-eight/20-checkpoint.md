@@ -205,3 +205,8 @@ passage selection, queue/duration, child control and scoped cleanup remain owed.
 ## Final compact browser correction
 
 The third frozen compact candidate passed all 1,107 frontend unit tests, lint, builds, generated-file equality and syntax checks. Its full Linux browser run passed 210 of 213 cases. Two duration-control tests toggled an already-open menu after keyboard submission; opening now follows the actual expanded state. The minimum-pane test now restores the real viewport descriptor, waits for rendered geometry and proves pointer capture before dragging. It retains the height-growth assertion and adds cleanup evidence. These changes affect tests only. All five affected duration/pane journeys pass on Linux. Full frozen qualification and independent review remain required before publication. Earlier failed receipts remain intact.
+
+
+## Hosted compatibility review correction
+
+PR #243's hosted review identified unavailable Find and Repository Review entries on older App pairings. Causal Linux coverage failed four of six capability cases before correction. Header and Add menu availability now use the compact surface owner's capability predicate; direct/stale surface opening is guarded, and capability loss closes an open surface. Either advertised Git context or Git review keeps the useful repository surface available. Hidden links explicitly retain hidden CSS behaviour. Six desktop/narrow capability cases and four existing viewport journeys pass on Linux; the Windows frontend suite passed 1,108 tests. Generated assets are rebuilt. The new source still requires a fresh frozen review and local qualification before the single verified PR update. Original candidate4 gates and public CI remain evidence of the preceding source only.

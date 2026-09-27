@@ -55,6 +55,22 @@ describe("compact composer presentation", () => {
     expect(p._workspaceContext.current()[0].stale).toBe(true);
     expect(p.shadowRoot.getElementById("elapsed-time-limit").value).toBe("300");
   });
+  it("rejects unsupported surfaces and closes an open surface when capabilities disappear", () => {
+    const p=panelFixture(), ui=p._compactComposer, root=p.shadowRoot, trigger=root.getElementById("chat-menu-button");
+    root.getElementById("prompt-input").value="Preserved draft";
+    ui.open("search",trigger);
+    expect(ui.openPage).toBe("search");
+    p._config.capabilities=[]; ui.sync();
+    expect(ui.openPage).toBeNull();
+    expect(root.getElementById("compact-surface-search").hidden).toBe(true);
+    ui.open("search",trigger); ui.open("review",trigger);
+    expect(ui.openPage).toBeNull();
+    expect(root.getElementById("prompt-input").value).toBe("Preserved draft");
+    expect(p._callWS.mock.calls.some(([command])=>["git_context","git_review","conversation_search","send_prompt"].includes(command))).toBe(false);
+    p._config.capabilities=["git_review_v1"];
+    expect(ui.canOpen("review")).toBe(true);
+    expect(ui.canOpen("search")).toBe(false);
+  });
   it("closes a surface when the selected chat changes without carrying context over", () => {
     const p=panelFixture(), ui=p._compactComposer;
     ui.sync(); ui.open("options",ui.options);

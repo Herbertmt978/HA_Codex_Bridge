@@ -436,3 +436,49 @@ test('minimum pane keeps its divider usable with visible controls in a panned vi
   await expect.poll(async()=>Number(await handle.getAttribute('aria-valuenow'))).toBeGreaterThan(Number(await handle.getAttribute('aria-valuemin')));
   await expect(panel.locator('.bottom-pane-drag-shield')).toBeHidden();
 });
+
+
+for(const width of [1280,390]) for(const capabilities of [[],['conversation_search_v1','git_context_v1'],['git_review_v1']]) {
+  test(`compact header honours App capabilities ${width} ${capabilities.join('+') || 'older App'}`,async({page})=>{
+    const panel=await openCompact(page,width,'light');
+    await panel.evaluate((p,capabilities)=>{
+      p._config={...p._config,capabilities:p._config.capabilities.filter(cap=>!['conversation_search_v1','git_context_v1','git_review_v1'].includes(cap)).concat(capabilities)};
+      p._render(true);
+    },capabilities);
+    await panel.locator('#prompt-input').fill('Preserved older-pairing draft');
+    const search=capabilities.includes('conversation_search_v1'),review=capabilities.some(cap=>['git_context_v1','git_review_v1'].includes(cap));
+    await panel.getByRole('button',{name:/Chat actions/}).click();
+    await expect(panel.getByRole('menuitem',{name:'Find in chat',exact:true})).toHaveCount(search?1:0);
+    await expect(panel.getByRole('menuitem',{name:'Repository review',exact:true})).toHaveCount(review?1:0);
+    await expect(panel.getByRole('menuitem',{name:'Refresh',exact:true})).toBeVisible();
+    await page.keyboard.press('Escape');
+    await panel.getByRole('button',{name:'Add to chat',exact:true}).click();
+    const addReview=panel.getByRole('button',{name:'Repository review',exact:true});
+    if(review) await expect(addReview).toBeVisible(); else await expect(addReview).toBeHidden();
+    await page.keyboard.press('Escape');
+    if(search) {
+      await panel.getByRole('button',{name:/Chat actions/}).click();
+      await panel.getByRole('menuitem',{name:'Find in chat',exact:true}).click();
+      await expect(panel.getByRole('searchbox',{name:'Find in selected chat',exact:true})).toBeVisible();
+      await page.keyboard.press('Escape');
+    } else {
+      await panel.evaluate(p=>p._compactComposer.open('search',p.shadowRoot.getElementById('chat-menu-button')));
+      await expect(panel.getByRole('dialog',{name:'Find in chat',exact:true})).toBeHidden();
+    }
+    if(review) {
+      await panel.getByRole('button',{name:/Chat actions/}).click();
+      await panel.getByRole('menuitem',{name:'Repository review',exact:true}).click();
+      const dialog=panel.getByRole('dialog',{name:'Repository review',exact:true});
+      if(capabilities.includes('git_context_v1')) await expect(dialog).toContainText('not a Git repository');
+      else await expect(dialog.getByRole('button',{name:'Review changes',exact:true})).toBeVisible();
+      await page.keyboard.press('Escape');
+    } else {
+      await panel.evaluate(p=>p._compactComposer.open('review',p.shadowRoot.getElementById('chat-menu-button')));
+      await expect(panel.getByRole('dialog',{name:'Repository review',exact:true})).toBeHidden();
+    }
+    await expect(panel.locator('#prompt-input')).toHaveValue('Preserved older-pairing draft');
+    expect(await panel.evaluate(p=>p._compactCalls.some(c=>c.command==='send_prompt'))).toBe(false);
+    if(!search) expect(await panel.evaluate(p=>p._compactCalls.some(c=>c.command==='conversation_search'))).toBe(false);
+    if(!review) expect(await panel.evaluate(p=>p._compactCalls.some(c=>['git_context','git_review'].includes(c.command)))).toBe(false);
+  });
+}

@@ -18,6 +18,7 @@ export const compactComposerStyles = `
   .compact-surface-header button { min-height:32px; }
   .compact-surface-body { min-width:0; }
   .compact-surface .compact-surface-link { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; border:0; background:transparent; padding:8px 10px; text-align:left; }
+  .compact-surface .compact-surface-link[hidden] { display:none; }
   .compact-surface .compact-surface-link:hover { background:var(--surface-muted); }
   .compact-surface .row-actions, .compact-surface #collaboration-controls, .compact-surface #compact-toolbar { display:flex; flex-wrap:wrap; gap:8px; }
   .compact-surface #collaboration-controls > .composer-utility, .compact-surface #compact-toolbar > .composer-utility { flex:1 1 100%; justify-content:space-between; min-width:0; padding:6px 0; border:0; }
@@ -150,8 +151,14 @@ export class CompactComposer {
     surface.append(header, body); this.root.append(surface); this.surfaces.set(page, surface);
     return body;
   }
+  canOpen(page) {
+    const capabilities = this.panel._config?.capabilities || [];
+    if (page === 'search') return capabilities.includes('conversation_search_v1');
+    if (page === 'review') return capabilities.includes('git_context_v1') || capabilities.includes('git_review_v1');
+    return true;
+  }
   open(page, trigger) {
-    if (!this.surfaces.has(page)) return;
+    if (!this.surfaces.has(page) || !this.canOpen(page)) return;
     this.sync();
     if (this.openPage === page) { this.close(true); return; }
     const returnTo = this.openPage === 'add' ? this.trigger : trigger;
@@ -187,6 +194,8 @@ export class CompactComposer {
   }
   sync() {
     const p = this.panel;
+    if (this.openPage && !this.canOpen(this.openPage)) this.close(true);
+    for (const link of this.surfaces.get('add').querySelectorAll('[aria-controls="compact-surface-review"]')) link.hidden = !this.canOpen('review');
     if (this.threadId !== p._selectedThreadId || p._activeDestination !== 'chats') { this.close(); this.threadId = p._selectedThreadId; }
     const choices = [];
     if (p._collaborationMode === 'plan') choices.push('Plan');
