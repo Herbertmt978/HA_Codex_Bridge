@@ -73,6 +73,11 @@ also requires manual review and setup, because the shortcut cannot safely
 identify its owner after a host change. Community in-process servers and webhook OAuth installations
 remain on the manual connection path.
 
+If saving succeeds but runtime reload cannot be confirmed, the Bridge blocks
+new work and connection actions. Restart the Codex Bridge App, then refresh
+Settings and review the retained connection and tool selection. The shortcut
+never retries that uncertain operation automatically.
+
 If the App's connection path or destination changes, refresh Settings. A saved
 connection is never silently retargeted. Remove the old Bridge connection and
 review the current destination before reconnecting; a replacement again starts

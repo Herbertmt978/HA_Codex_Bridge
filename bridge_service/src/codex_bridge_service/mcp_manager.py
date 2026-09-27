@@ -690,7 +690,14 @@ class McpManager:
                         except Exception:
                             raise McpUnavailableError() from None
                     raise
-                self._reload()
+                try:
+                    self._reload()
+                except McpManagerError:
+                    # The write committed, but runtime activation is uncertain.
+                    # Retain the private binding for restart reconciliation while
+                    # deactivating this endpoint and blocking new work now.
+                    self._require_recovery(definition.name)
+                    raise McpRecoveryRequiredError() from None
                 self._active_names = self._active_names | {definition.name}
         return self._view_for_created(definition)
 

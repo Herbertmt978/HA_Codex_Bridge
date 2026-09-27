@@ -40,6 +40,19 @@ describe("community HA-MCP quick connect", () => {
     expect(panel._fetchHaApi).toHaveBeenCalledTimes(1); expect(consent(panel).checked).toBe(false);
     expect(panel.shadowRoot.textContent).not.toContain("private-fixture");
   });
+  it("removes stale consent controls and blocks explicit retries when restart is required", async () => {
+    const panel = setup();
+    panel._fetchHaApi = vi.fn().mockResolvedValue(response(status({ state: "restart_required", destination: null, version: null, consent_revision: null }), false));
+    const staleConsent = consent(panel); staleConsent.checked = true;
+    staleConsent.dispatchEvent(new Event("change", { bubbles: true }));
+    await panel._handleDesktopAction("community-mcp-connect");
+    expect(control(panel)).toBeNull(); expect(consent(panel)).toBeNull();
+    expect(panel.shadowRoot.textContent).toContain("Restart the Codex Bridge App");
+    // Even a stale mounted checkbox cannot revive an uncertain operation.
+    staleConsent.checked = true; panel.shadowRoot.append(staleConsent);
+    await panel._handleDesktopAction("community-mcp-connect");
+    expect(panel._fetchHaApi).toHaveBeenCalledTimes(1);
+  });
   it("keeps exact existing paused connection controls without allowing a duplicate", () => {
     const panel = setup(status({ state: "paused", server_name: "existing-home", reused: true }));
     expect(control(panel)).toBeNull();
@@ -51,9 +64,10 @@ describe("community HA-MCP quick connect", () => {
     await panel._handleDesktopAction("community-mcp-connect"); expect(panel._fetchHaApi).not.toHaveBeenCalled();
     expect(control(panel)).toBeNull();
   });
-  it.each(["ambiguous", "stopped", "connection_changed", "endpoint_unavailable", "secret_unavailable"])("offers actionable %s guidance without connecting", (state) => {
+  it.each(["ambiguous", "stopped", "connection_changed", "endpoint_unavailable", "secret_unavailable", "restart_required"])("offers actionable %s guidance without connecting", (state) => {
     const panel = setup(status({ state })); expect(control(panel)).toBeNull();
     expect(panel.shadowRoot.querySelector(".community-mcp-shortcut [role=status]")).toBeTruthy();
+    if (state === "restart_required") expect(panel.shadowRoot.textContent).toContain("Restart the Codex Bridge App");
   });
   it("retains only the public projection and refuses secret-bearing destinations", () => {
     expect(normalizeCommunityMcp({ ...status(), url: "private-fixture", token: "private-fixture" })).toEqual(status());

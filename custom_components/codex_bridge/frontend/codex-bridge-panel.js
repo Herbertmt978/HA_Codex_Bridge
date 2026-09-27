@@ -35388,6 +35388,7 @@ var COPY = Object.freeze({
   endpoint_unavailable: "A supported private Home Assistant address could not be confirmed. Check Home Assistant’s internal URL and the App’s published port, or use manual setup.",
   secret_unavailable: "The App has no supported saved connection path. Check its configuration and use manual setup if needed.",
   connection_changed: "The connection or destination changed. Refresh to review it again. If a saved connection still uses the old destination, remove it before reconnecting; its tools will need selecting again.",
+  restart_required: "The connection result is uncertain. Restart the Codex Bridge App before reviewing its status; no connection action will be retried automatically.",
   retry: "Codex is busy. Wait for active and queued work to finish, then refresh connection options.",
   enable_mcp: "Update the Bridge App and Integration and enable MCP and local MCP connections in the App, then refresh connection options."
 });
@@ -45529,6 +45530,10 @@ var CodexBridgePanel = class extends HTMLElement {
       const result = normalizeCommunityMcp(await response.json().catch(() => null));
       if (!response.ok || !result || !["configured", "paused"].includes(result.state)) {
         state.communityMcpError = result?.state || "unknown";
+        if (result?.state === "restart_required") {
+          state.data.community_mcp = result;
+          state.communityMcpError = "";
+        }
         return false;
       }
       state.data.community_mcp = result;

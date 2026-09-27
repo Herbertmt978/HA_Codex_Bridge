@@ -8444,6 +8444,10 @@ class CodexBridgePanel extends HTMLElement {
       const result = normalizeCommunityMcp(await response.json().catch(() => null));
       if (!response.ok || !result || !["configured", "paused"].includes(result.state)) {
         state.communityMcpError = result?.state || "unknown";
+        if (result?.state === "restart_required") {
+          state.data.community_mcp = result;
+          state.communityMcpError = "";
+        }
         return false;
       }
       state.data.community_mcp = result;

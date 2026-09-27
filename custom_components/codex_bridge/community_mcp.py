@@ -18,7 +18,7 @@ from .runtime import async_get_runtime
 
 _STATES = {"not_connected", "not_installed", "configured", "paused", "unavailable", "ambiguous", "stopped",
            "unsupported", "endpoint_unavailable", "secret_unavailable", "connection_changed",
-           "retry", "enable_mcp"}
+           "retry", "enable_mcp", "restart_required"}
 _NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _REVISION = re.compile(r"[a-f0-9]{64}\Z")
 
@@ -95,7 +95,7 @@ class CodexBridgeCommunityMcpView(HomeAssistantView):
         except CommunityMcpDiscoveryError as error:
             return web.json_response(_public(error.code), status=409 if connect else 200, headers=headers)
         except BridgeApiError as error:
-            code = "connection_changed" if error.code == "community_mcp_connection_changed" else (
+            code = "restart_required" if error.code == "mcp_restart_required" else "connection_changed" if error.code == "community_mcp_connection_changed" else (
                 "retry" if error.code in {"mcp_config_conflict", "runtime_mutation_conflict"} else "unavailable")
             return web.json_response(_public(code), status=409, headers=headers)
         except (ValueError, TypeError, KeyError, UnicodeError, asyncio.TimeoutError):

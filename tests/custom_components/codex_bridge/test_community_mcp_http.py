@@ -100,3 +100,12 @@ async def test_fixed_upstream_errors_never_reflect_private_detail(view):
     assert json.loads(response.text)["state"] == "connection_changed"
     view.discover.side_effect = CommunityMcpDiscoveryError("ambiguous")
     assert json.loads((await view.view.get(Request(view.user))).text)["state"] == "ambiguous"
+
+
+@pytest.mark.asyncio
+async def test_reload_uncertainty_requires_restart_without_a_configured_response(view):
+    view.client.async_community_mcp.side_effect = BridgeApiError("mcp_restart_required")
+    for method, request in ((view.view.get, Request(view.user)), (view.view.post, Request(view.user, {"acknowledged": True, "consent_revision": view.endpoint.consent_revision}))):
+        response = await method(request)
+        assert json.loads(response.text)["state"] == "restart_required"
+        assert "private-fixture" not in response.text

@@ -153,3 +153,55 @@ def test_rotated_host_of_reused_manual_connection_requires_removal():
         manager.community_connection(name=NAME, url=URL.replace("ha.local", "other-ha.local"),
                                      connect=True, acknowledged=True)
     manager._relay.add.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(os.name != "posix", reason="Private relay storage requires Linux")
+@pytest.mark.parametrize("community", [True, False])
+async def test_committed_create_reload_failure_blocks_status_retry_and_runtime_until_restart(tmp_path, community):
+    from copy import deepcopy
+    from aiohttp import ClientSession
+    from codex_bridge_service.mcp_manager import McpRecoveryRequiredError
+    from codex_bridge_service.runtime_gate import RuntimeGate
+    from codex_bridge_service.resource_limits import ResourceLimits
+    from test_mcp_management import NativeConfig
+
+    relay = McpRelay(tmp_path / "private", resolver=lambda _: ("192.168.1.20",))
+    await relay.start()
+    try:
+        native = NativeConfig()
+        original = deepcopy(native.servers)
+        gate = RuntimeGate(limits=ResourceLimits())
+        manager = McpManager(native, gate, enabled=True, relay=relay,
+                             resolver=lambda _: ("93.184.216.34",))
+        native.reload_failures = 1
+        def connect():
+            if community:
+                return manager.community_connection(name=NAME, url=URL, connect=True, acknowledged=True)
+            return manager.create_server(name=NAME, url=URL, local=True,
+                                         local_acknowledged=True, require_tool_selection=True)
+        with pytest.raises(McpRecoveryRequiredError):
+            connect()
+        assert native.servers["vendor"] == original["vendor"]
+        saved = native.servers[NAME]
+        assert saved["enabled_tools"] == []
+        assert len(native.writes) == 1
+        assert gate.snapshot().closed and not gate.snapshot().config_mutation_active
+        assert not manager.is_active_server(NAME)
+        binding = {key: saved[key] for key in ("url", "http_headers")}
+        assert relay.original_url(NAME, binding) == URL
+        async with ClientSession() as session:
+            response = await session.post(saved["url"], headers=saved["http_headers"], json={})
+            assert response.status == 403
+        for operation in (connect, lambda: manager.community_connection(name=NAME, url=URL), manager.list_servers):
+            with pytest.raises(McpRecoveryRequiredError):
+                operation()
+        assert len(native.writes) == 1
+        # A new manager after App restart reconciles the retained deny-all config.
+        restarted = McpManager(native, RuntimeGate(limits=ResourceLimits()), enabled=True, relay=relay,
+                               resolver=lambda _: ("93.184.216.34",))
+        assert restarted.community_connection(name=NAME, url=URL) == {
+            "state": "configured", "server_name": NAME, "reused": True}
+        assert native.servers[NAME]["enabled_tools"] == []
+    finally:
+        await relay.close()
