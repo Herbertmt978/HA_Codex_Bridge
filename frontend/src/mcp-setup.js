@@ -60,11 +60,13 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
     const toggle = text(doc, "label", "", "mcp-consent mcp-main-toggle");
     const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
     checkbox.dataset.homeMcpToggle = "native";
-    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve" && server?.tool_count > 0;
+    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve";
     checkbox.disabled = Boolean(state.haMcpBusy || state.loading);
     checkbox.setAttribute("aria-describedby", detail.id);
     toggle.append(checkbox, text(doc, "span", "Use Home Assistant tools"));
     card.append(toggle, detail);
+    if (server?.enabled && server.status_unavailable) card.append(text(doc, "p",
+      "Tool status is temporarily unavailable. Your switch and saved tool choices are unchanged.", "desktop-note"));
   } else if (!capabilities.includes("mcp_tool_approval_v1") && status && ["not_connected", "reauthorise"].includes(status.state)) {
     const detail = text(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.", "desktop-note");
     detail.id = "ha-mcp-consent-detail";

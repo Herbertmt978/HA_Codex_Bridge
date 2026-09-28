@@ -494,9 +494,10 @@ class McpManager:
                 descriptor = os.open(self._discovery_marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                 with os.fdopen(descriptor, "wb") as marker:
                     marker.write(json.dumps({
-                        "version": 1,
+                        "version": 2,
                         "server": name,
                         "enabled_tools": list(previous.enabled_tools),
+                        "approval_mode": previous.approval_mode,
                     }, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
                     marker.flush()
                     os.fsync(marker.fileno())
@@ -537,7 +538,7 @@ class McpManager:
             self._mutation_serial += 1
             return status, current_version
 
-    def _read_discovery_marker(self) -> tuple[str, tuple[str, ...]]:
+    def _read_discovery_marker(self) -> tuple[str, tuple[str, ...], str | None]:
         """Recover the saved policy before a temporary unfiltered read."""
         if self._discovery_marker is None:
             raise McpRecoveryRequiredError()
@@ -545,14 +546,22 @@ class McpManager:
             if self._discovery_marker.stat().st_size > _MAX_DISCOVERY_MARKER_BYTES:
                 raise ValueError()
             payload = json.loads(self._discovery_marker.read_text(encoding="utf-8"))
-            if (not isinstance(payload, dict) or set(payload) != {"version", "server", "enabled_tools"}
-                    or payload["version"] != 1):
+            if (not isinstance(payload, dict) or type(payload.get("version")) is not int
+                    or payload["version"] not in {1, 2}):
+                raise ValueError()
+            expected = ({"version", "server", "enabled_tools", "approval_mode"}
+                        if payload["version"] == 2 else {"version", "server", "enabled_tools"})
+            if set(payload) != expected:
                 raise ValueError()
             name = _validate_name(payload["server"])
             selected = _validate_enabled_tools(payload["enabled_tools"])
             if selected is None:
                 raise ValueError()
-            return name, selected
+            mode = payload.get("approval_mode")
+            if payload["version"] == 2 and (type(mode) is not str or mode not in {"auto", "prompt", "writes", "approve"}
+                                             or (mode == "approve" and not selected)):
+                raise ValueError()
+            return name, selected, mode
         except (OSError, ValueError, McpManagerError):
             self._require_recovery("")
             raise McpRecoveryRequiredError() from None
@@ -1142,9 +1151,11 @@ class McpManager:
                     # A previous process may have stopped while its native
                     # filter was temporarily removed. Restore its saved policy
                     # and pause every server without discarding other selections.
-                    discovered_name, selected = self._read_discovery_marker()
+                    discovered_name, selected, approval_mode = self._read_discovery_marker()
                     definitions = {name: replace(item, enabled=False,
-                        enabled_tools=selected if name == discovered_name else item.enabled_tools)
+                        enabled_tools=selected if name == discovered_name else item.enabled_tools,
+                        approval_mode=(approval_mode if approval_mode is not None else item.approval_mode)
+                            if name == discovered_name else item.approval_mode)
                         for name, item in definitions.items()}
                 if self._relay is not None:
                     try:

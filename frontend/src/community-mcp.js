@@ -63,11 +63,13 @@ export function renderCommunityMcp(doc, state, capabilities = []) {
     detail.id = "community-mcp-toggle-detail";
     const label = node("label", "", "mcp-consent mcp-main-toggle");
     const checkbox = doc.createElement("input"); checkbox.type = "checkbox"; checkbox.dataset.homeMcpToggle = "community";
-    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve" && server?.tool_count > 0;
+    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve";
     checkbox.disabled = Boolean(state.communityMcpBusy || state.loading);
     checkbox.setAttribute("aria-describedby", detail.id);
     label.append(checkbox, node("span", "Use community Home Assistant tools", ""));
     card.append(label, detail);
+    if (server?.enabled && server.status_unavailable) card.append(node("p",
+      "Tool status is temporarily unavailable. Your switch and saved tool choices are unchanged."));
   } else if (supported && status?.state === "not_connected" && status.destination && status.consent_revision) {
     const detail = node("p", `Connect Codex to ${status.destination} using this App’s existing private connection path. Allowed tools may control devices or edit configuration. HTTP carries the credential without encryption; the App’s private registry and backups retain a copy.`);
     detail.id = "community-mcp-consent-detail";

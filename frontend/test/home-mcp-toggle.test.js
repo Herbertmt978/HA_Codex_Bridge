@@ -28,6 +28,17 @@ function setup({ native = nativeStatus(), community = communityStatus(), servers
 describe("one-switch Home Assistant MCP setup", () => {
   beforeEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 
+  it("shows saved enablement even when tool status is unavailable", () => {
+    const servers = [nativeName, communityName].map((name) => ({
+      name, enabled: true, tool_policy: "selected", tool_approval_mode: "approve",
+      tool_count: 0, status_unavailable: true,
+    }));
+    const panel = setup({ servers });
+    expect(panel.shadowRoot.querySelector('[data-home-mcp-toggle="native"]').checked).toBe(true);
+    expect(panel.shadowRoot.querySelector('[data-home-mcp-toggle="community"]').checked).toBe(true);
+    expect(panel.shadowRoot.textContent.match(/Tool status is temporarily unavailable/g)).toHaveLength(2);
+  });
+
   it("shows one native switch and selects the current Assist tools on first use", async () => {
     const server = { name: nativeName, enabled: true, tool_policy: "selected", tool_approval_mode: "auto", tool_count: 0, revision: "r1" };
     const panel = setup({ servers: [server] });

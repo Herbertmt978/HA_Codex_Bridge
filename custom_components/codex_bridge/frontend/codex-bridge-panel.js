@@ -51302,11 +51302,17 @@ function renderHaMcpShortcut(doc, state, capabilities = []) {
     const checkbox = doc.createElement("input");
     checkbox.type = "checkbox";
     checkbox.dataset.homeMcpToggle = "native";
-    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve" && server?.tool_count > 0;
+    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve";
     checkbox.disabled = Boolean(state.haMcpBusy || state.loading);
     checkbox.setAttribute("aria-describedby", detail.id);
     toggle.append(checkbox, text2(doc, "span", "Use Home Assistant tools"));
     card.append(toggle, detail);
+    if (server?.enabled && server.status_unavailable) card.append(text2(
+      doc,
+      "p",
+      "Tool status is temporarily unavailable. Your switch and saved tool choices are unchanged.",
+      "desktop-note"
+    ));
   } else if (!capabilities.includes("mcp_tool_approval_v1") && status && ["not_connected", "reauthorise"].includes(status.state)) {
     const detail = text2(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.", "desktop-note");
     detail.id = "ha-mcp-consent-detail";
@@ -51891,11 +51897,15 @@ function renderCommunityMcp(doc, state, capabilities = []) {
     const checkbox = doc.createElement("input");
     checkbox.type = "checkbox";
     checkbox.dataset.homeMcpToggle = "community";
-    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve" && server?.tool_count > 0;
+    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve";
     checkbox.disabled = Boolean(state.communityMcpBusy || state.loading);
     checkbox.setAttribute("aria-describedby", detail.id);
     label.append(checkbox, node2("span", "Use community Home Assistant tools", ""));
     card.append(label, detail);
+    if (server?.enabled && server.status_unavailable) card.append(node2(
+      "p",
+      "Tool status is temporarily unavailable. Your switch and saved tool choices are unchanged."
+    ));
   } else if (supported && status?.state === "not_connected" && status.destination && status.consent_revision) {
     const detail = node2("p", `Connect Codex to ${status.destination} using this App’s existing private connection path. Allowed tools may control devices or edit configuration. HTTP carries the credential without encryption; the App’s private registry and backups retain a copy.`);
     detail.id = "community-mcp-consent-detail";

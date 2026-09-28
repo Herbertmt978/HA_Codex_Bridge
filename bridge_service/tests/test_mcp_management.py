@@ -700,6 +700,25 @@ def test_interrupted_unfiltered_discovery_restores_only_its_own_policy(tmp_path)
     assert not marker.exists()
 
 
+def test_interrupted_discovery_restores_approval_mode_before_activation(tmp_path):
+    native = NativeConfig()
+    native.servers["other"] = {"url": "https://other.example/stream", "enabled_tools": ["keep"],
+                                "default_tools_approval_mode": "writes"}
+    native.masked = True
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    marker.write_text(json.dumps({"version": 2, "server": "vendor", "enabled_tools": ["echo"],
+                                  "approval_mode": "approve"}))
+    manager, _ = manager_for(native, marker)
+    manager.sanitize_startup_servers()
+    manager.activate_validated_mcp_config()
+    assert native.servers["vendor"]["enabled"] is False
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert native.servers["vendor"]["default_tools_approval_mode"] == "approve"
+    assert native.servers["other"]["enabled"] is False
+    assert native.servers["other"]["default_tools_approval_mode"] == "writes"
+    assert not marker.exists()
+
+
 def test_damaged_discovery_marker_keeps_bootstrap_masked(tmp_path):
     native = NativeConfig()
     native.masked = True
@@ -715,6 +734,7 @@ def test_damaged_discovery_marker_keeps_bootstrap_masked(tmp_path):
 def test_failed_catalogue_probe_restores_filter_or_blocks_all_work(tmp_path):
     native = NativeConfig()
     native.servers["vendor"]["enabled_tools"] = ["echo"]
+    native.servers["vendor"]["default_tools_approval_mode"] = "approve"
     marker = tmp_path / "mcp-tool-discovery.pending"
     manager, gate = manager_for(native, marker)
     native.reload_failures = 1
@@ -727,7 +747,8 @@ def test_failed_catalogue_probe_restores_filter_or_blocks_all_work(tmp_path):
         manager.list_server_tools("vendor")
     assert marker.exists() and gate.snapshot().closed
     assert json.loads(marker.read_text()) == {
-        "version": 1, "server": "vendor", "enabled_tools": ["echo"],
+        "version": 2, "server": "vendor", "enabled_tools": ["echo"],
+        "approval_mode": "approve",
     }
 
 
