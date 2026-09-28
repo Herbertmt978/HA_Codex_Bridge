@@ -62715,6 +62715,11 @@ var CodexBridgePanel = class extends HTMLElement {
         }
         server = normalizeDesktopList(await this._callWS("list_mcp")).find((row) => row.name === name);
         if (!server) throw new Error("The Home Assistant connection could not be confirmed. Refresh its status.");
+        if (server.enabled === true && server.tool_policy === "all") {
+          await this._setHomeMcpServerState(name, server.revision, false);
+          server = normalizeDesktopList(await this._callWS("list_mcp")).find((row) => row.name === name);
+          if (!server || server.enabled !== false) throw new Error("The unrestricted connection did not pause. Refresh its status.");
+        }
         if (server.enabled === false) {
           if (server.tool_policy === "all") {
             await this._callWS("lock_down_mcp_tools", { name, revision: server.revision });
@@ -62727,6 +62732,7 @@ var CodexBridgePanel = class extends HTMLElement {
           server = normalizeDesktopList(await this._callWS("list_mcp")).find((row) => row.name === name);
           if (!server?.enabled) throw new Error("The Home Assistant connection did not start. Refresh its status.");
         }
+        if (server.tool_policy !== "selected") throw new Error("The Home Assistant tools are not limited to a selected list.");
         const inventory = await this._callWS("list_mcp_tools", { name });
         if (!inventory?.catalogue_available || inventory.catalogue_truncated || !Array.isArray(inventory.tools) || !inventory.tools.length || !Array.isArray(inventory.enabled_tools)) {
           throw new Error("The Home Assistant tool list is incomplete. Refresh server status and try again.");
@@ -62745,7 +62751,7 @@ var CodexBridgePanel = class extends HTMLElement {
       await this._loadDesktopDestination("settings", { force: true });
       return true;
     } catch {
-      state.error = "Could not confirm the Home Assistant setting. Refresh status before trying again. If it connected but still shows off, review the tool list.";
+      state.error = "Could not confirm the Home Assistant setting. The connection may have been paused for safety. Refresh its status before trying again.";
       state.loaded = false;
       await this._loadDesktopDestination("settings", { force: true });
       return false;
