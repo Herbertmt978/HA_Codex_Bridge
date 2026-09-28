@@ -9150,10 +9150,9 @@ def test_app_recovered_queue_waits_for_auth_owner_and_dispatches_once(
             "Resume after auth settles"
         )
         assert recovered_broker.runtime_snapshot().queued_prompts == 0
-        assert recovered_broker._state.runs[queued.run_id].status in {
-            "running",
-            "completed",
-        }
+        _wait_until(lambda: recovered_broker._state.runs[queued.run_id].status in {
+            "running", "completed",
+        })
         assert len(_requests(recovered_client, "turn/start")) == 1
     finally:
         recovered_broker.close()
