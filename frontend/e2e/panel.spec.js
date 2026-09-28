@@ -127,7 +127,7 @@ for (const width of [390, 1280]) {
     await expect(card.getByRole("button", { name: "Choose allowed tools", exact: true })).toBeVisible();
     expect(requests).toEqual([{ acknowledged: true, consent_revision: "c".repeat(64) }]);
     expect(await page.evaluate(() => window.communityServer.enabled_tools)).toEqual([]);
-    await expect(card).toContainText("turn on MCP in that chat’s settings");
+    await expect(card).toContainText("Allowed tools can be used in regular chats");
     const bounds = await card.boundingBox(); expect(bounds.x).toBeGreaterThanOrEqual(0);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);

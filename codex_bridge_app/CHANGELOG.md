@@ -2,6 +2,18 @@
 
 All notable App changes are recorded here.
 
+## 1.13.4
+
+- Adds a single switch for each installed Home Assistant MCP connection. Turning
+  it on keeps any existing tool choices, or selects the tools shown now if none
+  were chosen. Those tools can run without another approval prompt. Turning the
+  switch off pauses the connection. Newly advertised tools stay blocked.
+- Keeps **Choose allowed tools** for people who want a smaller tool set, and
+  explains the connection and device-control permissions in plain language.
+- Bundles the Sigstore-verified Codex runtime `0.157.1`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.0` without changing its Integration API compatibility.
+
 ## 1.13.3
 
 - Lets administrators allow all currently shown MCP tools in one step or open

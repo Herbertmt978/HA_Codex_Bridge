@@ -444,8 +444,8 @@ function renderSettings(documentRef, state, hasActiveProject = false, activeProj
     panel.append(card, text(documentRef, "p", "These choices only change Codex Bridge. Your Home Assistant theme stays the same.", "desktop-note"), saved);
   }
   if (tab === "mcp") {
-    panel.append(renderCommunityMcp(documentRef, state, config?.capabilities));
     panel.append(renderHaMcpShortcut(documentRef, state, config?.capabilities));
+    panel.append(renderCommunityMcp(documentRef, state, config?.capabilities));
     const recommendation = documentRef.createElement("section");
     recommendation.className = "schedule-card settings-card";
     recommendation.append(text(documentRef, "h3", "Other Home Assistant tools"), text(documentRef, "p", "Community HA-MCP and other servers have their own tools and permissions. Some tools can change more than the devices exposed to Assist. Check what each tool can do before allowing it. Full access to the Home Assistant OS machine is a separate choice."));
@@ -612,6 +612,10 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
   container.onchange = (event) => {
+    if (event.target?.matches?.("[data-home-mcp-toggle]")) {
+      onAction?.("toggle-home-mcp", { kind: event.target.dataset.homeMcpToggle, enabled: String(event.target.checked) }, event.target);
+      return;
+    }
     if (event.target?.matches?.("[data-community-mcp-acknowledged]")) {
       state.communityMcpAcknowledged = event.target.checked;
       const connect = container.querySelector('[data-desktop-action="community-mcp-connect"]');

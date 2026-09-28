@@ -1,5 +1,22 @@
 # Home Assistant tools through MCP
 
+## Turn on Home Assistant tools
+
+In **Codex Bridge → Settings → MCP servers**, switch on **Use Home Assistant
+tools** when Home Assistant's built-in MCP Server integration is installed. One
+tick connects it, chooses the tools it currently offers and lets those tools
+run in chats and scheduled tasks without another approval prompt. The switch
+uses your Home Assistant administrator account, so some tools can control
+devices. Switch it off to pause the connection. It does not turn on Assist
+voice.
+
+The community HA-MCP App has its own **Use community Home Assistant tools**
+switch. It keeps any tool choices you have already made; if none are selected,
+it chooses the current list. Community tools may also change Home Assistant
+settings. Both switches save a fixed list, so new or renamed tools stay blocked.
+Use **Choose allowed tools** to pick a smaller set. Turning a switch off saves
+the list and blocks that connection's tools in every chat and scheduled task.
+
 ## Choose allowed tools
 
 App and Integration 1.6.4 add **Choose allowed tools** in Settings → MCP servers
@@ -59,10 +76,9 @@ server-side; you do not need to copy it into the panel. The Bridge retains a
 copy in its existing private connection registry and backups.
 
 An exact existing local connection is reused with its pause state and tool
-permissions preserved. A new connection allows no tools. Use **Choose allowed
-tools**, then enable MCP in the regular chat's conversation settings. Select
-servers for Assist separately if you also want voice access; the shortcut does
-not enable Assist or change its selection.
+permissions preserved. The switch connects a new server and allows its current
+tools. Select servers for Assist separately if you also want voice access; the
+shortcut does not enable Assist or change its selection.
 
 The shortcut does not install, start or reconfigure the community App. Multiple
 matching Apps, an unsupported destination or a missing saved connection path
@@ -93,10 +109,9 @@ starts collapsed. Expand the section to open an Assist conversation.
 
 Home Assistant's own **MCP Server** integration can be connected from Bridge
 settings without copying a URL or token. Enable the App's MCP and local MCP
-options, install that HA integration, then explicitly authorise the native
-connection in **Settings → MCP servers**. It starts with no tools allowed.
-Choose the permitted tools before use. The connection is selected for Assist;
-review the agent's settings separately. See [Assist home control](home-assistant-assist.md#home-control)
+options, install that HA integration, then turn on **Use Home Assistant tools**
+in **Settings → MCP servers**. The connection is selected for Assist; review
+the agent's settings separately. See [Assist home control](home-assistant-assist.md#home-control)
 for authority, renewal and revocation behaviour.
 
 This shortcut does not install an integration or replace the custom-server
