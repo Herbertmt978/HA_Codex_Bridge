@@ -298,6 +298,64 @@ describe("MCP setup and access settings", () => {
 describe("MCP tool permissions", () => {
   beforeEach(() => { document.body.replaceChildren(); vi.restoreAllMocks(); });
 
+  it("selects a large current catalogue at once and saves only those tools", async () => {
+    const panel = setup(["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"]);
+    panel._desktopFeatures.settings.data.mcp_servers = [{ name: "vendor" }];
+    const tools = Array.from({ length: 300 }, (_, index) => ({ name: `tool_${index}` }));
+    panel._callWS = vi.fn(async (operation) => operation === "list_mcp_tools" ? {
+      server: "vendor", mode: "selected", enabled_tools: ["old_tool"], tools,
+      stale_tools: ["old_tool"], catalogue_available: true, catalogue_truncated: true,
+      revision: "a".repeat(64), catalogue_revision: "b".repeat(64),
+    } : {});
+    await panel._handleDesktopAction("edit-mcp-tools", { id: "vendor" });
+    panel._renderDesktopSurface();
+    const selectAll = panel.shadowRoot.querySelector('[data-mcp-tool-selection="all"]');
+    expect(selectAll.checked).toBe(false);
+    expect(selectAll.labels[0].textContent).toContain("300 tools shown");
+    expect(panel.shadowRoot.querySelector(".mcp-individual-tools").hidden).toBe(false);
+    selectAll.click();
+    expect(selectAll.checked).toBe(true);
+    expect(panel.shadowRoot.querySelector(".mcp-individual-tools").hidden).toBe(true);
+    expect(panel.shadowRoot.querySelectorAll("[data-mcp-current-tool]:checked")).toHaveLength(300);
+    expect(panel.shadowRoot.querySelector('[data-mcp-tool="old_tool"]').checked).toBe(false);
+    panel._renderDesktopSurface();
+    expect(panel.shadowRoot.querySelector('[data-mcp-tool-selection="all"]').checked).toBe(true);
+    expect(panel.shadowRoot.querySelector(".mcp-individual-tools").hidden).toBe(true);
+    await panel._handleDesktopAction("submit-mcp-tools", {}, action(panel, "submit-mcp-tools"));
+    const saved = panel._callWS.mock.calls.find(([operation]) => operation === "set_mcp_tools")[1];
+    expect(saved.enabled_tools).toEqual(tools.map((tool) => tool.name));
+  });
+
+  it("clears the bulk selection, then tracks individual changes", async () => {
+    const panel = setup(["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"]);
+    panel._desktopFeatures.settings.data.mcp_servers = [{ name: "vendor" }];
+    panel._callWS = vi.fn(async (operation) => operation === "list_mcp_tools" ? {
+      server: "vendor", mode: "all", enabled_tools: [], tools: [{ name: "read" }, { name: "write" }],
+      stale_tools: [], catalogue_available: true,
+      revision: "a".repeat(64), catalogue_revision: "b".repeat(64),
+    } : {});
+    await panel._handleDesktopAction("edit-mcp-tools", { id: "vendor" });
+    panel._renderDesktopSurface();
+    const selectAll = panel.shadowRoot.querySelector('[data-mcp-tool-selection="all"]');
+    const individual = panel.shadowRoot.querySelector('[data-mcp-tool-selection="individual"]');
+    expect(selectAll.checked).toBe(true);
+    expect(panel.shadowRoot.querySelector(".mcp-individual-tools").hidden).toBe(true);
+    individual.click();
+    expect(panel.shadowRoot.querySelector(".mcp-individual-tools").hidden).toBe(false);
+    action(panel, "clear-mcp-tool-selection").click();
+    expect(panel.shadowRoot.querySelectorAll("[data-mcp-tool]:checked")).toHaveLength(0);
+    const read = panel.shadowRoot.querySelector('[data-mcp-tool="read"]');
+    read.click();
+    expect(selectAll.checked).toBe(false);
+    panel._renderDesktopSurface();
+    expect(panel.shadowRoot.querySelector('[data-mcp-tool-selection="individual"]').checked).toBe(true);
+    expect(panel.shadowRoot.querySelector(".mcp-individual-tools").hidden).toBe(false);
+    expect(panel.shadowRoot.querySelector('[data-mcp-tool="read"]').checked).toBe(true);
+    expect(panel.shadowRoot.querySelector('[data-mcp-tool="write"]').checked).toBe(false);
+    await panel._handleDesktopAction("submit-mcp-tools", {}, action(panel, "submit-mcp-tools"));
+    expect(panel._callWS).toHaveBeenCalledWith("set_mcp_tools", expect.objectContaining({ enabled_tools: ["read"] }));
+  });
+
   it("shows untrusted descriptions as text and saves an explicit allow-list", async () => {
     const panel = setup(["mcp_admin_v1", "mcp_management_v1", "mcp_tool_permissions_v1"]);
     panel._desktopFeatures.settings.data.mcp_servers = [{ name: "vendor", tool_policy: "all", revision: "a".repeat(64) }];
@@ -309,6 +367,7 @@ describe("MCP tool permissions", () => {
     panel._renderDesktopSurface();
     await panel._handleDesktopAction("edit-mcp-tools", { id: "vendor" });
     panel._renderDesktopSurface();
+    panel.shadowRoot.querySelector('[data-mcp-tool-selection="individual"]').click();
     expect(panel.shadowRoot.querySelector(".mcp-tool-list img")).toBeNull();
     expect(panel.shadowRoot.querySelector(".mcp-tool-list").textContent).toContain("Claims destructive");
     const deleteTool = [...panel.shadowRoot.querySelectorAll("[data-mcp-tool]")].find((input) => input.dataset.mcpTool === "delete");
@@ -338,6 +397,7 @@ describe("MCP tool permissions", () => {
     await panel._handleDesktopAction("edit-mcp-tools", { id: "vendor" });
     panel._renderDesktopSurface();
     expect(action(panel, "submit-mcp-tools").disabled).toBe(true);
+    expect(panel.shadowRoot.querySelector('[data-mcp-tool-selection="all"]').disabled).toBe(true);
     expect(panel.shadowRoot.textContent).toContain("previously allowed tool is no longer advertised");
   });
 });

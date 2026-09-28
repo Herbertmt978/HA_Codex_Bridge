@@ -231,7 +231,7 @@ for (const width of [390, 1280]) for (const theme of ["light", "dark"]) {
     expect(configuredBounds.x + configuredBounds.width).toBeLessThanOrEqual(width);
     await panel.screenshot({ path: testInfo.outputPath("home-assistant-mcp-configured-deny-all.png") });
     await card.getByRole("button", { name: "Choose allowed tools", exact: true }).click();
-    await expect(panel.getByRole("group", { name: "Allowed tools", exact: true })).toBeVisible();
+    await expect(panel.getByRole("group", { name: "Individual tools", exact: true })).toBeVisible();
     await expect(panel.getByRole("checkbox", { name: /read_state/ })).not.toBeChecked();
     expect(await page.evaluate(() => window.shortcutToolRequests)).toEqual([{ name: serverName }]);
     const toolBounds = await panel.locator(".mcp-tool-permissions").boundingBox();
@@ -3698,8 +3698,9 @@ for (const width of [1440, 390]) {
     });
   });
 
-  test(`MCP tool selection is readable and keyboard accessible at ${width}px`, async ({ page }) => {
+  for (const theme of ["light", "dark"]) test(`MCP tool selection is readable and keyboard accessible at ${width}px in ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
     await selectHarnessThread(page);
     await page.evaluate(() => {
@@ -3723,10 +3724,20 @@ for (const width of [1440, 390]) {
     const panel = page.locator("codex-bridge-panel");
     await panel.getByRole("tab", { name: "MCP servers", exact: true }).click();
     await panel.getByRole("button", { name: "Choose allowed tools" }).click();
-    await expect(panel.getByRole("group", { name: "Allowed tools" })).toBeVisible();
-    const erase = panel.getByRole("checkbox", { name: /erase/ });
-    await erase.focus();
+    const selectAll = panel.getByRole("radio", { name: /Select all tools/ });
+    const individual = panel.getByRole("radio", { name: /Select individual tools/ });
+    await expect(selectAll).toBeChecked();
+    await expect(panel.getByRole("group", { name: "Individual tools" })).toBeHidden();
+    await panel.locator(".mcp-tool-permissions").screenshot({ path: testInfo.outputPath("all-tools.png"), animations: "disabled" });
+    await individual.focus();
     await page.keyboard.press("Space");
+    await expect(individual).toBeChecked();
+    await expect(panel.getByRole("group", { name: "Individual tools" })).toBeVisible();
+    await panel.locator(".mcp-tool-permissions").screenshot({ path: testInfo.outputPath("individual-tools.png"), animations: "disabled" });
+    await panel.getByRole("button", { name: "Clear selection" }).click();
+    const read = panel.getByRole("checkbox", { name: /read/ });
+    await read.check();
+    const erase = panel.getByRole("checkbox", { name: /erase/ });
     await expect(erase).not.toBeChecked();
     const bounds = await panel.locator(".mcp-tool-permissions").boundingBox();
     expect(bounds.x).toBeGreaterThanOrEqual(0);
