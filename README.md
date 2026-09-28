@@ -236,8 +236,8 @@ hardware before a stable release. Browser tools and the Host Access App are not
 included in that ARM64 support. See [ARM64 testing status](docs/arm64-development.md).
 
 **Does it sync with the desktop Codex app?** App accounts, chats and workspaces
-are separate. Chat links require Home Assistant sign-in; public snapshots are
-not available.
+are separate. Sharing uses chat links that require Home Assistant sign-in;
+anonymous chat snapshots are not supported.
 
 ## Updates and recovery
 
