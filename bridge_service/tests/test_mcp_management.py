@@ -674,7 +674,8 @@ def test_interrupted_discovery_pauses_servers_before_startup_activation(tmp_path
     native.servers["other"] = {"url": "https://other.example/stream", "enabled_tools": ["keep"]}
     native.masked = True
     marker = tmp_path / "mcp-tool-discovery.pending"
-    marker.write_text(json.dumps({"version": 1, "server": "vendor", "enabled_tools": ["echo"]}))
+    marker.write_text(json.dumps({"version": 2, "server": "vendor", "enabled_tools": ["echo"],
+                                  "approval_mode": "auto"}))
     manager, _ = manager_for(native, marker)
     manager.sanitize_startup_servers()
     manager.activate_validated_mcp_config()
@@ -690,7 +691,8 @@ def test_interrupted_unfiltered_discovery_restores_only_its_own_policy(tmp_path)
     native.servers["other"] = {"url": "https://other.example/stream", "enabled_tools": ["keep"]}
     native.masked = True
     marker = tmp_path / "mcp-tool-discovery.pending"
-    marker.write_text(json.dumps({"version": 1, "server": "vendor", "enabled_tools": ["echo"]}))
+    marker.write_text(json.dumps({"version": 2, "server": "vendor", "enabled_tools": ["echo"],
+                                  "approval_mode": "auto"}))
     manager, _ = manager_for(native, marker)
     manager.sanitize_startup_servers()
     manager.activate_validated_mcp_config()
@@ -717,6 +719,18 @@ def test_interrupted_discovery_restores_approval_mode_before_activation(tmp_path
     assert native.servers["other"]["enabled"] is False
     assert native.servers["other"]["default_tools_approval_mode"] == "writes"
     assert not marker.exists()
+
+
+def test_legacy_discovery_marker_without_approval_mode_blocks_startup(tmp_path):
+    native = NativeConfig()
+    native.masked = True
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    marker.write_text(json.dumps({"version": 1, "server": "vendor", "enabled_tools": ["echo"]}))
+    manager, gate = manager_for(native, marker)
+    with pytest.raises(McpRecoveryRequiredError):
+        manager.sanitize_startup_servers()
+    assert native.masked and marker.exists() and not native.writes
+    assert gate.snapshot().closed
 
 
 def test_damaged_discovery_marker_keeps_bootstrap_masked(tmp_path):

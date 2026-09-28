@@ -538,8 +538,8 @@ class McpManager:
             self._mutation_serial += 1
             return status, current_version
 
-    def _read_discovery_marker(self) -> tuple[str, tuple[str, ...], str | None]:
-        """Recover the saved policy before a temporary unfiltered read."""
+    def _read_discovery_marker(self) -> tuple[str, tuple[str, ...], str]:
+        """Recover the saved policy; older markers require manual recovery."""
         if self._discovery_marker is None:
             raise McpRecoveryRequiredError()
         try:
@@ -547,19 +547,16 @@ class McpManager:
                 raise ValueError()
             payload = json.loads(self._discovery_marker.read_text(encoding="utf-8"))
             if (not isinstance(payload, dict) or type(payload.get("version")) is not int
-                    or payload["version"] not in {1, 2}):
-                raise ValueError()
-            expected = ({"version", "server", "enabled_tools", "approval_mode"}
-                        if payload["version"] == 2 else {"version", "server", "enabled_tools"})
-            if set(payload) != expected:
+                    or payload["version"] != 2
+                    or set(payload) != {"version", "server", "enabled_tools", "approval_mode"}):
                 raise ValueError()
             name = _validate_name(payload["server"])
             selected = _validate_enabled_tools(payload["enabled_tools"])
             if selected is None:
                 raise ValueError()
-            mode = payload.get("approval_mode")
-            if payload["version"] == 2 and (type(mode) is not str or mode not in {"auto", "prompt", "writes", "approve"}
-                                             or (mode == "approve" and not selected)):
+            mode = payload["approval_mode"]
+            if (type(mode) is not str or mode not in {"auto", "prompt", "writes", "approve"}
+                    or (mode == "approve" and not selected)):
                 raise ValueError()
             return name, selected, mode
         except (OSError, ValueError, McpManagerError):
@@ -1154,8 +1151,7 @@ class McpManager:
                     discovered_name, selected, approval_mode = self._read_discovery_marker()
                     definitions = {name: replace(item, enabled=False,
                         enabled_tools=selected if name == discovered_name else item.enabled_tools,
-                        approval_mode=(approval_mode if approval_mode is not None else item.approval_mode)
-                            if name == discovered_name else item.approval_mode)
+                        approval_mode=approval_mode if name == discovered_name else item.approval_mode)
                         for name, item in definitions.items()}
                 if self._relay is not None:
                     try:
