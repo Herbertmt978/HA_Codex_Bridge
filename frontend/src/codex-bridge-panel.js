@@ -57,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.2";
+const PANEL_VERSION = "1.13.3";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -3243,7 +3243,17 @@ template.innerHTML = `
     .desktop-table-actions { min-width: 180px; }
     .mcp-connection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .mcp-connection-actions .desktop-action-note { flex-basis: 100%; }
-    .mcp-tool-list { display: grid; gap: 4px; min-width: 0; max-height: min(48vh, 480px); overflow: auto; padding: 12px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; }
+    .mcp-tool-choices { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
+    .mcp-tool-choices legend { margin-bottom: 10px; font-weight: 600; }
+    .mcp-tool-choice { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 2px 12px; align-items: center; min-height: 64px; padding: 12px 14px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; background: var(--secondary-background-color, #f5f5f5); cursor: pointer; }
+    .mcp-tool-choice:has(input:checked) { border-color: var(--accent-color); }
+    .mcp-tool-choice:focus-within { outline: 2px solid var(--accent-color); outline-offset: 2px; }
+    .mcp-tool-choice:has(input:disabled) { opacity: 0.6; cursor: not-allowed; }
+    .mcp-tool-choice input { grid-row: 1 / span 2; width: 20px; height: 20px; margin: 0; accent-color: var(--accent-color); }
+    .mcp-tool-choice .desktop-note { grid-column: 2; margin: 0; }
+    .mcp-individual-tools { display: grid; gap: 12px; justify-items: start; }
+    .mcp-individual-tools[hidden] { display: none; }
+    .mcp-tool-list { display: grid; gap: 4px; width: 100%; min-width: 0; max-height: min(48vh, 480px); box-sizing: border-box; overflow: auto; padding: 12px; border: 1px solid var(--divider-color, #d9d9d9); border-radius: 12px; }
     .mcp-tool-list legend { font-weight: 600; padding-inline: 4px; }
     .mcp-tool-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 10px; align-items: start; padding: 9px 4px; border-bottom: 1px solid var(--divider-color, #d9d9d9); overflow-wrap: anywhere; }
     .mcp-tool-row:last-child { border-bottom: 0; }
@@ -8600,6 +8610,7 @@ class CodexBridgePanel extends HTMLElement {
           ? { ...inventory, endpoint: "Isolated App worker" }
           : inventory;
         state.mcpToolDraft = null;
+        state.mcpToolSelectionMode = null;
         state.form = "mcp-tools";
       } catch (error) { state.error = normalizeDesktopError(error); }
       finally { state.loading = false; }
@@ -8614,7 +8625,7 @@ class CodexBridgePanel extends HTMLElement {
       try {
         await this._callWS("set_mcp_tools", { name: inventory.server, enabled_tools,
           revision: inventory.revision, catalogue_revision: inventory.catalogue_revision });
-        state.form = null; state.mcpToolInventory = null; state.mcpToolDraft = null;
+        state.form = null; state.mcpToolInventory = null; state.mcpToolDraft = null; state.mcpToolSelectionMode = null;
         state.notice = "Allowed tools saved. The policy applies to subsequent turns in chats and scheduled tasks; newly discovered tools stay blocked.";
         state.loaded = false;
         await this._loadDesktopDestination("settings", { force: true });

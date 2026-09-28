@@ -30,7 +30,7 @@ to the App or Bridge.
 
 ## Current compatibility statement
 
-- This release pairs App `1.13.2`, Integration and panel `1.13.2`, Bridge `0.20.0` and
+- This release pairs App `1.13.3`, Integration and panel `1.13.3`, Bridge `0.20.0` and
   Codex `0.157.1`. App images support `amd64` Home Assistant OS. Historical
   release evidence remains in the changelog and GitHub Releases.
 - App/Integration/panel `1.0.3` completed signed publication and bounded DEV

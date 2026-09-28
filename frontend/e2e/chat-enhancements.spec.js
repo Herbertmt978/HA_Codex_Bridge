@@ -131,7 +131,7 @@ async function setDraftRecoveryPreference(panel, value) {
   const picker = panel.getByRole("combobox", { name: "Recover unsent drafts in this browser" });
   await picker.click();
   await panel.getByRole("option", { name: value === "on" ? "On" : "Off", exact: true }).click();
-  await expect(panel.getByText("Saved for this Home Assistant user in this browser.", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Saved in this browser.", { exact: true })).toBeVisible();
   await panel.evaluate((element) => element._selectDesktopDestination("chats"));
 }
 
@@ -259,7 +259,7 @@ for (const width of [390, 1280]) {
       expect(focusStyle.outlineStyle).not.toBe("none");
       expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThan(0);
       await copyCode.press("Enter");
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("const answer = 42;\n  keep indentation\n");
+      await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replaceAll("\r\n", "\n"))).toBe("const answer = 42;\n  keep indentation\n");
       const reducedMotion = await copyCode.evaluate((button) => Number.parseFloat(getComputedStyle(button).transitionDuration));
       expect(reducedMotion).toBeLessThan(0.001);
       const colors = await copyCode.evaluate((button) => ({ color: getComputedStyle(button).color, background: getComputedStyle(button).backgroundColor }));

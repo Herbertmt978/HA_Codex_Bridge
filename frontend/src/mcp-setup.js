@@ -394,15 +394,44 @@ export function renderMcpToolPermissions(doc, state) {
   if (inventory.stale_tools?.length) form.append(text(doc, "p", inventory.catalogue_truncated
     ? `${inventory.stale_tools.length} previously allowed tool${inventory.stale_tools.length === 1 ? " is" : "s are"} not shown in this limited catalogue. They remain on the saved list until removed.`
     : `${inventory.stale_tools.length} previously allowed tool${inventory.stale_tools.length === 1 ? " is" : "s are"} no longer advertised. They remain on the saved list until removed; a renamed tool needs separate approval.`, "desktop-note"));
+  const tools = inventory.tools || [];
+  const allowed = new Set(state.mcpToolDraft || inventory.enabled_tools || []);
+  const selected = (name) => state.mcpToolDraft ? allowed.has(name) : inventory.mode === "all" || allowed.has(name);
+  const selectedCount = tools.filter((tool) => selected(tool.name)).length;
+  const hasAllowedStaleTool = (inventory.stale_tools || []).some((name) => allowed.has(name));
+  const choice = state.mcpToolSelectionMode || (tools.length && selectedCount === tools.length && !hasAllowedStaleTool ? "all" : "individual");
+  const choices = doc.createElement("fieldset");
+  choices.className = "mcp-tool-choices";
+  choices.append(text(doc, "legend", "How would you like to choose tools?"));
+  for (const [value, label, help] of [
+    ["all", "Select all tools", `Allow all ${tools.length} tools shown here. Tools added later will still need approval.`],
+    ["individual", "Select individual tools", "Show the list and tick only the tools you want."],
+  ]) {
+    const option = text(doc, "label", "", "mcp-tool-choice");
+    const input = doc.createElement("input");
+    input.type = "radio"; input.name = "mcp-tool-selection"; input.value = value;
+    input.dataset.mcpToolSelection = value;
+    input.checked = choice === value;
+    input.disabled = !inventory.catalogue_available || (value === "all" && !tools.length) || state.loading;
+    option.append(input, text(doc, "strong", label), text(doc, "span", help, "desktop-note"));
+    choices.append(option);
+  }
+  form.append(choices);
+  const individual = text(doc, "div", "", "mcp-individual-tools");
+  individual.hidden = choice !== "individual";
+  const clear = button(doc, "Clear selection", "clear-mcp-tool-selection");
+  clear.type = "button";
+  clear.disabled = !inventory.catalogue_available || state.loading;
+  individual.append(clear);
   const list = doc.createElement("fieldset");
   list.className = "mcp-tool-list";
-  list.append(text(doc, "legend", "Allowed tools"));
-  const allowed = new Set(state.mcpToolDraft || inventory.enabled_tools || []);
-  for (const tool of inventory.tools || []) {
+  list.append(text(doc, "legend", "Individual tools"));
+  for (const tool of tools) {
     const row = doc.createElement("label"); row.className = "mcp-tool-row";
     const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
     checkbox.dataset.mcpTool = tool.name;
-    checkbox.checked = state.mcpToolDraft ? allowed.has(tool.name) : inventory.mode === "all" || allowed.has(tool.name);
+    checkbox.dataset.mcpCurrentTool = "";
+    checkbox.checked = selected(tool.name);
     row.append(checkbox, text(doc, "strong", tool.name));
     if (tool.description) row.append(text(doc, "span", tool.description, "desktop-note"));
     const hints = [tool.read_only && "Claims read-only", tool.write_possible && "May write", tool.destructive && "Claims destructive", tool.idempotent && "Claims idempotent"].filter(Boolean);
@@ -416,7 +445,8 @@ export function renderMcpToolPermissions(doc, state) {
     row.append(checkbox, text(doc, "strong", name), text(doc, "small", inventory.catalogue_truncated ? "Not in the displayed catalogue" : "Not in the latest catalogue", "desktop-note"));
     list.append(row);
   }
-  form.append(list);
+  individual.append(list);
+  form.append(individual);
   if (state.formError) { const error = text(doc, "p", state.formError, "desktop-error"); error.setAttribute("role", "alert"); form.append(error); }
   const actions = text(doc, "div", "", "desktop-form-actions");
   const save = button(doc, "Save allowed tools", "submit-mcp-tools");

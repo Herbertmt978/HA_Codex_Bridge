@@ -603,6 +603,11 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
   if (!container) return;
   const documentRef = container.ownerDocument || globalThis.document;
   container.onclick = (event) => {
+    if (event.target.closest?.('[data-desktop-action="clear-mcp-tool-selection"]')) {
+      container.querySelectorAll("[data-mcp-tool]").forEach((input) => { input.checked = false; });
+      state.mcpToolDraft = [];
+      return;
+    }
     const target = event.target.closest?.("[data-desktop-action]");
     if (target) onAction?.(target.dataset.desktopAction, target.dataset, target);
   };
@@ -619,7 +624,17 @@ export function renderDesktopFeatureSurface(container, { destination = "schedule
       if (connect) connect.disabled = !event.target.checked || Boolean(state.haMcpBusy);
       syncDesktopFeatureDrafts(container, state);
     }
-    if (event.target?.matches?.("[data-mcp-tool]")) {
+    if (event.target?.matches?.("[data-mcp-tool-selection]")) {
+      state.mcpToolSelectionMode = event.target.value;
+      const individual = container.querySelector(".mcp-individual-tools");
+      if (individual) individual.hidden = event.target.value !== "individual";
+      if (event.target.value === "all") {
+        container.querySelectorAll("[data-mcp-tool]").forEach((input) => {
+          input.checked = input.hasAttribute("data-mcp-current-tool");
+        });
+      }
+    }
+    if (event.target?.matches?.("[data-mcp-tool], [data-mcp-tool-selection]")) {
       state.mcpToolDraft = [...container.querySelectorAll("[data-mcp-tool]:checked")].map((input) => input.dataset.mcpTool);
     }
   };
