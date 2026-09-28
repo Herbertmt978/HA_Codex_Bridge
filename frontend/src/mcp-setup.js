@@ -38,20 +38,35 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
   const status = normalizeHaMcpShortcut(state.data.ha_mcp_shortcut);
   const card = text(doc, "section", "", "schedule-card settings-card mcp-ha-shortcut");
   card.setAttribute("aria-labelledby", "ha-mcp-shortcut-title");
-  const title = text(doc, "h3", "Installed Home Assistant MCP", "desktop-subheading");
+  const title = text(doc, "h3", "Built-in Home Assistant tools", "desktop-subheading");
   title.id = "ha-mcp-shortcut-title";
-  card.append(title, text(doc, "p", "This optional connection uses Home Assistant’s own MCP Server and Assist API. It starts off. Community HA-MCP and other servers have separate settings below."));
+  card.append(title, text(doc, "p", "Use Home Assistant’s built-in Assist tools in Codex chats and scheduled tasks."));
+  const simple = capabilities.includes("mcp_tool_approval_v1");
   const notice = text(doc, "p", !supported
     ? "Update the Bridge App and Integration, turn on MCP and local MCP connections in the App, then refresh this page. You can still add a server manually."
+    : simple && status?.state === "configured" ? "Home Assistant is connected. Turn on the switch below to use its tools."
+    : simple && status?.state === "paused" ? "Off. Your tool choices are saved for next time."
     : status ? haMcpShortcutMessage(status.state) : "Refresh connection options to check whether the native Home Assistant MCP is available.", "desktop-note");
   notice.setAttribute("role", "status"); card.append(notice);
   if (state.haMcpError) { const error = text(doc, "p", haMcpShortcutMessage(state.haMcpError), "desktop-error"); error.setAttribute("role", "alert"); card.append(error); }
   if (!supported) return card;
   const actions = text(doc, "div", "", "desktop-form-actions");
-  const connectable = status && ["not_connected", "reauthorise"].includes(status.state);
-  if (connectable) {
-    const warning = text(doc, "div", "", "mcp-local-warning");
-    const detail = text(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.");
+  const server = state.data.mcp_servers?.find((row) => row.name === status?.server_name);
+  const canToggle = capabilities.includes("mcp_tool_approval_v1") && capabilities.includes("mcp_management_v1")
+    && status && !["unavailable", "expired", "cleanup_pending", "invalid_journal", "retry"].includes(status.state);
+  if (canToggle) {
+    const detail = text(doc, "p", "Turning this on uses your Home Assistant administrator account. The current Assist tools can run without another approval prompt, and some can control devices. New tools stay off until you choose them. The connection is saved in Home Assistant backups and uses unencrypted traffic on your local network.", "desktop-note");
+    detail.id = "ha-mcp-toggle-detail";
+    const toggle = text(doc, "label", "", "mcp-consent mcp-main-toggle");
+    const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
+    checkbox.dataset.homeMcpToggle = "native";
+    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve" && server?.tool_count > 0;
+    checkbox.disabled = Boolean(state.haMcpBusy || state.loading);
+    checkbox.setAttribute("aria-describedby", detail.id);
+    toggle.append(checkbox, text(doc, "span", "Use Home Assistant tools"));
+    card.append(toggle, detail);
+  } else if (!capabilities.includes("mcp_tool_approval_v1") && status && ["not_connected", "reauthorise"].includes(status.state)) {
+    const detail = text(doc, "p", "Allowed MCP tools can control your home without confirmation under your administrator identity. Other selected MCP servers may grant access beyond Assist’s exposed entities. A separate revocable Home Assistant session renews short-lived access tokens hourly and follows Home Assistant’s normal activity expiry. Local HTTP carries tokens without encryption; protect Home Assistant and App backups.", "desktop-note");
     detail.id = "ha-mcp-consent-detail";
     const consent = text(doc, "label", "", "mcp-consent");
     const checkbox = doc.createElement("input"); checkbox.type = "checkbox";
@@ -59,9 +74,8 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
     checkbox.setAttribute("aria-describedby", detail.id);
     checkbox.checked = state.haMcpAcknowledged === true;
     checkbox.disabled = Boolean(state.haMcpBusy);
-    consent.append(checkbox, text(doc, "span", "I authorise Codex to use my administrator identity for the allowed tools and accept these connection and backup risks."));
-    warning.append(text(doc, "strong", "Allow Codex to control Home Assistant?"), detail, consent);
-    card.append(warning);
+    consent.append(checkbox, text(doc, "span", "I authorise Codex to use my administrator identity for the tools I select."));
+    card.append(consent, detail);
     const connect = button(doc, status.state === "reauthorise" ? "Reauthorise Home Assistant" : "Connect Home Assistant", "ha-mcp-connect");
     connect.disabled = state.haMcpBusy || !checkbox.checked;
     actions.append(connect);
@@ -69,14 +83,15 @@ export function renderHaMcpShortcut(doc, state, capabilities = []) {
   if (status?.server_name) {
     if (status.configured) {
       const chooseTools = button(doc, "Choose allowed tools", "edit-mcp-tools", { id: status.server_name }); chooseTools.classList.add("settings-primary-action"); actions.append(chooseTools);
-      const server = state.data.mcp_servers?.find((row) => row.name === status.server_name);
       if (server?.enabled === false && capabilities.includes("mcp_management_v1")) actions.append(button(doc, "Resume", "resume-mcp", { id: status.server_name }));
       actions.append(button(doc, "Refresh authorisation", "ha-mcp-refresh"));
     }
     actions.append(button(doc, status.state === "cleanup_pending" ? "Retry authorisation cleanup" : "Revoke home authorisation", "ha-mcp-disconnect"));
   }
   if (state.haMcpBusy) actions.querySelectorAll("button").forEach((control) => { control.disabled = true; });
-  card.append(actions, text(doc, "p", "Connecting here does not turn on the Assist conversation agent. Set up Assist separately if you want it. Removing this connection leaves your other servers alone."));
+  card.append(actions, text(doc, "p", capabilities.includes("mcp_tool_approval_v1")
+    ? "For a smaller set of tools, use Choose allowed tools. Assist voice is a separate setting. This connection does not change your other MCP servers."
+    : "Connecting here does not turn on the Assist conversation agent. Configure Assist separately and select only the tools you intend to make available. Revoking this shortcut leaves unrelated servers unchanged."));
   return card;
 }
 

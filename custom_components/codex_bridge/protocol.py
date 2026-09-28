@@ -84,6 +84,7 @@ _KNOWN_CAPABILITIES = frozenset(
         "mcp_admin_v1",
         "mcp_management_v1",
         "mcp_tool_permissions_v1",
+        "mcp_tool_approval_v1",
         "mcp_stdio_v1",
         "mcp_local_v1",
         "community_mcp_quick_connect_v1",

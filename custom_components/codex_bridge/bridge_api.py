@@ -1996,9 +1996,19 @@ class BridgeApiClient:
     async def async_set_mcp_tools(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
         self.require_capability("mcp_tool_permissions_v1")
+        if "approval_mode" in payload:
+            self.require_capability("mcp_tool_approval_v1")
         return await self._async_json(
             "PUT", f"/mcp/servers/{_path_segment(name)}/tools",
             json_body=_bounded_mapping(payload), request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
+        )
+
+    async def async_lock_down_mcp_tools(self, name: str, revision: str) -> dict[str, Any]:
+        self._require_mcp_capability()
+        self.require_capability("mcp_tool_approval_v1")
+        return await self._async_json(
+            "POST", f"/mcp/servers/{_path_segment(name)}/tools/lockdown",
+            json_body={"revision": revision}, request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 
     async def async_login_mcp(self, name: str) -> dict[str, Any]:

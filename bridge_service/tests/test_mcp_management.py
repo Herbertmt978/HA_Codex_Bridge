@@ -493,6 +493,55 @@ def test_tool_policy_survives_restart_and_new_or_renamed_tools_stay_blocked(tmp_
     assert not marker.exists()
 
 
+def test_explicitly_allowed_tools_can_run_without_a_second_approval(tmp_path):
+    native = NativeConfig()
+    marker = tmp_path / "mcp-tool-discovery.pending"
+    manager, _ = manager_for(native, marker)
+    inventory = manager.list_server_tools("vendor")
+    saved = manager.set_server_tools(
+        "vendor", enabled_tools=["echo"], approval_mode="approve",
+        revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"],
+    )
+    assert saved["tool_approval_mode"] == "approve"
+    assert native.servers["vendor"]["enabled_tools"] == ["echo"]
+    assert native.servers["vendor"]["default_tools_approval_mode"] == "approve"
+    native.tools["new_tool"] = {}
+    native.masked = True
+    restarted, _ = manager_for(native, marker)
+    restarted.sanitize_startup_servers()
+    restarted.activate_validated_mcp_config()
+    current = restarted.list_server_tools("vendor")
+    assert current["tool_approval_mode"] == "approve"
+    assert current["enabled_tools"] == ["echo"]
+    assert "new_tool" not in native.servers["vendor"]["enabled_tools"]
+    disabled = restarted.set_server_tools(
+        "vendor", enabled_tools=["echo"], approval_mode="auto",
+        revision=current["revision"], catalogue_revision=current["catalogue_revision"],
+    )
+    assert disabled["tool_approval_mode"] == "auto"
+    assert "default_tools_approval_mode" not in native.servers["vendor"]
+
+
+def test_tool_auto_approval_requires_an_explicit_nonempty_allowlist():
+    native = NativeConfig()
+    manager, _ = manager_for(native)
+    inventory = manager.list_server_tools("vendor")
+    with pytest.raises(McpValidationError):
+        manager.set_server_tools(
+            "vendor", enabled_tools=[], approval_mode="approve",
+            revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"],
+        )
+    assert not native.writes
+
+
+def test_existing_nondefault_codex_approval_modes_are_preserved():
+    native = NativeConfig()
+    native.servers["vendor"]["default_tools_approval_mode"] = "writes"
+    manager, _ = manager_for(native)
+    assert manager.list_servers()[0]["tool_approval_mode"] == "writes"
+    assert native.servers["vendor"]["default_tools_approval_mode"] == "writes"
+
+
 def test_tool_policy_rejects_stale_catalogue_and_changes_during_work():
     native = NativeConfig()
     manager, gate = manager_for(native)
@@ -552,9 +601,9 @@ def test_tool_discovery_error_is_not_an_empty_successful_catalogue(tmp_path):
             revision=inventory["revision"], catalogue_revision=inventory["catalogue_revision"])
 
 
-def test_tool_policy_route_requires_admin_token_and_does_not_cache_catalogue():
+def test_tool_policy_route_requires_admin_token_and_does_not_cache_catalogue(tmp_path):
     native = NativeConfig()
-    manager, _ = manager_for(native)
+    manager, _ = manager_for(native, tmp_path / "mcp-tool-discovery.pending")
     app = FastAPI()
     app.include_router(router)
     app.state.auth_token = "synthetic-bridge-token"
@@ -570,6 +619,38 @@ def test_tool_policy_route_requires_admin_token_and_does_not_cache_catalogue():
     assert client.put("/mcp/servers/vendor/tools", json=payload).status_code == 401
     saved = client.put("/mcp/servers/vendor/tools", headers=headers, json=payload)
     assert saved.status_code == 200 and saved.headers["Cache-Control"] == "no-store"
+    assert native.servers["vendor"]["enabled_tools"] == []
+    fresh = client.post("/mcp/servers/vendor/tools/discover", headers=headers).json()
+    approve = {"enabled_tools": ["echo"], "revision": fresh["revision"],
+               "catalogue_revision": fresh["catalogue_revision"], "approval_mode": "approve"}
+    enabled = client.put("/mcp/servers/vendor/tools", headers=headers, json=approve)
+    assert enabled.status_code == 200
+    assert enabled.json()["tool_approval_mode"] == "approve"
+    assert native.servers["vendor"]["default_tools_approval_mode"] == "approve"
+
+
+def test_paused_unrestricted_server_is_locked_down_before_resume(tmp_path):
+    native = NativeConfig(enabled=False)
+    manager, _ = manager_for(native, tmp_path / "mcp-tool-discovery.pending")
+    app = FastAPI()
+    app.include_router(router)
+    app.state.auth_token = "synthetic-bridge-token"
+    app.state.storage = SimpleNamespace(runtime_profile="external_legacy")
+    app.state.mcp_manager = manager
+    client = TestClient(app)
+    revision = manager.list_servers()[0]["revision"]
+    path = "/mcp/servers/vendor/tools/lockdown"
+    assert client.post(path, json={"revision": revision}).status_code == 401
+    assert not native.writes
+    headers = {"Authorization": "Bearer synthetic-bridge-token"}
+    secured = client.post(path, headers=headers, json={"revision": revision})
+    assert secured.status_code == 200 and secured.headers["Cache-Control"] == "no-store"
+    assert secured.json()["tool_policy"] == "selected"
+    assert native.servers["vendor"]["enabled"] is False
+    assert native.servers["vendor"]["enabled_tools"] == []
+    assert client.post(path, headers=headers, json={"revision": revision}).status_code == 409
+    resumed = manager.set_server_enabled("vendor", enabled=True, revision=secured.json()["revision"])
+    assert resumed["enabled"] is True
     assert native.servers["vendor"]["enabled_tools"] == []
 
 

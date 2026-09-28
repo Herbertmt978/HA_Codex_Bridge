@@ -44,6 +44,9 @@ For Home Assistant device and automation management, consider the community
 [HA-MCP server](https://github.com/homeassistant-ai/ha-mcp) as an optional
 companion. Our [connection guide](docs/home-assistant-mcp.md) explains how to
 enable it in Bridge and choose a public HTTPS or optional local connection.
+When Home Assistant's built-in MCP Server integration is installed, use the
+**Use Home Assistant tools** switch in **Settings → MCP servers**. The community
+connection has its own switch, so you can choose which tool set to use.
 
 The App supports **Home Assistant OS on amd64**. You need administrator access,
 HACS and a ChatGPT account with Codex access. Home Assistant Container cannot
@@ -136,7 +139,7 @@ from ordinary projects. Assist-only projects keep their project actions inside
 this group, including restore and delete actions when archived. Their workspace
 and history are retained; continue their messages through Home Assistant Assist.
 
-This release pairs App **1.13.3**, Integration and panel **1.13.3**, with Bridge **0.20.0**
+This release pairs App **1.13.4**, Integration and panel **1.13.4**, with Bridge **0.20.0**
 and Codex **0.157.1**. Assistant Markdown, transcript search, explicit Queue/Steer, native Plan
 and scoped Git review are described in [the conversation controls guide](docs/selected-enhancements.md). It prepares ARM64 development builds; published images
 remain **amd64-only** until native hardware qualification. It retains write-only

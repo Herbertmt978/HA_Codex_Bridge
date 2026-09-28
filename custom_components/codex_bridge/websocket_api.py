@@ -212,6 +212,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_rollback_stdio_mcp,
         ws_list_mcp_tools,
         ws_set_mcp_tools,
+        ws_lock_down_mcp_tools,
         ws_add_mcp,
         ws_remove_mcp,
         ws_login_mcp,
@@ -2355,13 +2356,26 @@ async def ws_list_mcp_tools(hass, connection, msg) -> None:
     vol.Required("enabled_tools"): vol.All(list, vol.Length(max=512)),
     vol.Required("revision"): vol.All(str, vol.Length(min=64, max=64)),
     vol.Required("catalogue_revision"): vol.All(str, vol.Length(min=64, max=64)),
+    vol.Optional("approval_mode"): vol.In(("auto", "approve")),
 })
 @websocket_api.async_response
 async def ws_set_mcp_tools(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_set_mcp_tools(msg["name"], {
-                            key: msg[key] for key in ("enabled_tools", "revision", "catalogue_revision")
+                            key: msg[key] for key in ("enabled_tools", "revision", "catalogue_revision", "approval_mode")
+                            if key in msg
                         }))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): f"{DOMAIN}/lock_down_mcp_tools",
+    vol.Required("name"): vol.All(str, vol.Length(min=1, max=64)),
+    vol.Required("revision"): vol.Match(r"^[a-f0-9]{64}$"),
+})
+@websocket_api.async_response
+async def ws_lock_down_mcp_tools(hass, connection, msg) -> None:
+    await _async_handle(hass, connection, msg,
+                        lambda client: client.async_lock_down_mcp_tools(msg["name"], msg["revision"]))
 
 
 @websocket_api.websocket_command(

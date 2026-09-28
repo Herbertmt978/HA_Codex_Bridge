@@ -1,7 +1,7 @@
 const COPY = Object.freeze({
   not_connected: "The installed community HA-MCP App is available. Review the destination and authorise its connection below.",
   not_installed: "No community HA-MCP App is installed. Use the HA-MCP installation and connection guide below.",
-  configured: "Connection saved. Check its status and choose which tools Codex may use, then turn on MCP in each chat that needs them.",
+  configured: "Connection saved. Choose the tools Codex may use below.",
   paused: "This connection is paused. Your tool choices are saved. Resume it when you are ready.",
   unavailable: "Could not confirm the community HA-MCP App. Refresh connection options or use the existing HA-MCP setup guide.",
   ambiguous: "More than one community HA-MCP App matches. Use manual server setup to choose the intended server.",
@@ -42,16 +42,34 @@ export function renderCommunityMcp(doc, state, capabilities = []) {
   const node = (tag, label, className = "desktop-note") => { const element = doc.createElement(tag); element.textContent = label; element.className = className; return element; };
   const card = node("section", "", "schedule-card settings-card community-mcp-shortcut");
   card.setAttribute("aria-labelledby", "community-mcp-title");
-  const title = node("h3", "Installed community HA-MCP", "desktop-subheading"); title.id = "community-mcp-title";
+  const title = node("h3", "Community Home Assistant tools", "desktop-subheading"); title.id = "community-mcp-title";
   const status = normalizeCommunityMcp(state.data.community_mcp);
   const supported = supportsCommunityMcp(capabilities);
-  const notice = node("p", communityMcpMessage(!supported ? "enable_mcp" : status?.state)); notice.setAttribute("role", "status");
+  const message = supported && capabilities.includes("mcp_tool_approval_v1") && status?.state === "configured"
+    ? "Connection saved. Turn on the switch below to use its allowed tools in chats and scheduled tasks."
+    : communityMcpMessage(!supported ? "enable_mcp" : status?.state);
+  const notice = node("p", message); notice.setAttribute("role", "status");
   card.append(title, notice);
   if (status?.destination) card.append(node("p", `Home Assistant MCP Server${status.version ? ` ${status.version}` : ""} · ${status.destination}`));
   if (state.communityMcpError) { const error = node("p", communityMcpMessage(state.communityMcpError), "desktop-error"); error.setAttribute("role", "alert"); card.append(error); }
   const actions = node("div", "", "desktop-form-actions");
-  if (supported && status?.state === "not_connected" && status.destination && status.consent_revision) {
-    const detail = node("p", `Connect Codex to ${status.destination} using this App’s existing private connection path. Allowed tools use the community server’s Home Assistant permissions and may control devices or edit configuration. HTTP carries the credential without encryption; the private Bridge registry and its backups retain a copy. New connections allow no tools. This does not enable Assist or MCP for a chat.`);
+  const server = state.data.mcp_servers?.find((row) => row.name === status?.server_name);
+  const canToggle = supported && capabilities.includes("mcp_tool_approval_v1") && capabilities.includes("mcp_management_v1")
+    && (status?.server_name || (status?.state === "not_connected" && status.destination && status.consent_revision));
+  if (canToggle) {
+    const count = Number.isSafeInteger(server?.tool_count) && server.tool_count > 0
+      ? `${server.tool_count} tools are currently available. ` : "";
+    const detail = node("p", `${count}Turning this on lets the selected community tools run without another approval prompt. If none are selected, it selects the tools shown now. They can control devices or change Home Assistant settings. New tools stay off until you choose them. The App saves this connection in its private settings and backups; local traffic is unencrypted.`);
+    detail.id = "community-mcp-toggle-detail";
+    const label = node("label", "", "mcp-consent mcp-main-toggle");
+    const checkbox = doc.createElement("input"); checkbox.type = "checkbox"; checkbox.dataset.homeMcpToggle = "community";
+    checkbox.checked = server?.enabled === true && server?.tool_approval_mode === "approve" && server?.tool_count > 0;
+    checkbox.disabled = Boolean(state.communityMcpBusy || state.loading);
+    checkbox.setAttribute("aria-describedby", detail.id);
+    label.append(checkbox, node("span", "Use community Home Assistant tools", ""));
+    card.append(label, detail);
+  } else if (supported && status?.state === "not_connected" && status.destination && status.consent_revision) {
+    const detail = node("p", `Connect Codex to ${status.destination} using this App’s existing private connection path. Allowed tools may control devices or edit configuration. HTTP carries the credential without encryption; the App’s private registry and backups retain a copy.`);
     detail.id = "community-mcp-consent-detail";
     const label = node("label", "", "mcp-consent");
     const checkbox = doc.createElement("input"); checkbox.type = "checkbox"; checkbox.dataset.communityMcpAcknowledged = "";
@@ -65,7 +83,9 @@ export function renderCommunityMcp(doc, state, capabilities = []) {
   if (supported && status?.server_name) {
     const tools = node("button", "Choose allowed tools", "panel-button"); tools.type = "button"; tools.dataset.desktopAction = "edit-mcp-tools"; tools.dataset.id = status.server_name;
     tools.classList.add("settings-primary-action"); actions.append(tools);
-    card.append(node("p", "Your pause and tool choices are kept in the server list below. To use these tools in a chat, turn on MCP in that chat’s settings. Voice access through Assist is a separate choice."));
+    card.append(node("p", capabilities.includes("mcp_tool_approval_v1")
+      ? "You can choose fewer tools below. Your choices are saved when this connection is off. Assist voice is a separate setting."
+      : "Your pause and tool choices are kept in the server list below. Allowed tools can be used in regular chats. Voice access through Assist is a separate choice."));
   }
   if (state.communityMcpBusy) actions.querySelectorAll("button").forEach((button) => { button.disabled = true; });
   card.append(actions);

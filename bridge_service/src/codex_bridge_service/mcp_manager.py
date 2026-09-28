@@ -204,6 +204,7 @@ class McpServerDefinition:
     credential_configured: bool = False
     enabled: bool = True
     enabled_tools: tuple[str, ...] | None = None
+    approval_mode: str = "auto"
 
     def config_value(self) -> dict[str, object]:
         if self.local or self.relayed or self.stdio:
@@ -214,6 +215,8 @@ class McpServerDefinition:
             value["enabled"] = False
         if self.enabled_tools is not None:
             value["enabled_tools"] = list(self.enabled_tools)
+        if self.approval_mode != "auto":
+            value["default_tools_approval_mode"] = self.approval_mode
         if self.oauth_client_id is not None:
             value["oauth_client_id"] = self.oauth_client_id
         if self.oauth_resource is not None:
@@ -375,6 +378,7 @@ class McpManager:
                     + _bounded_collection_size(templates),
                     "enabled": definition.enabled,
                     "tool_policy": "selected" if definition.enabled_tools is not None else "all",
+                    "tool_approval_mode": definition.approval_mode,
                     "revision": self._revision(definition.name, version),
                 }
                 if not definition.enabled:
@@ -460,6 +464,7 @@ class McpManager:
                 "server": normalized,
                 "endpoint": _endpoint_display(definition.url, private_path=definition.relayed),
                 "mode": "selected" if allowed is not None else "all",
+                "tool_approval_mode": definition.approval_mode,
                 "enabled_tools": list(allowed or ()),
                 "tools": tools,
                 "stale_tools": sorted(set(allowed or ()) - discovered) if catalogue_available else [],
@@ -506,8 +511,9 @@ class McpManager:
                 raise McpRecoveryRequiredError() from None
             status = None
             try:
+                unfiltered = replace(previous, enabled_tools=None, approval_mode="auto")
                 self._write_config_value(key_path=f"mcp_servers.{name}",
-                    value=self._native_value(replace(previous, enabled_tools=None)), version=version)
+                    value=self._native_value(unfiltered), version=version)
                 self._reload()
                 try:
                     status = self._read_statuses().get(name)
@@ -516,7 +522,7 @@ class McpManager:
             finally:
                 try:
                     current, current_version = self._read_definitions()
-                    if current.get(name) not in (previous, replace(previous, enabled_tools=None)):
+                    if current.get(name) not in (previous, unfiltered):
                         raise McpConflictError()
                     self._write_config_value(key_path=f"mcp_servers.{name}",
                         value=self._native_value(previous), version=current_version)
@@ -556,7 +562,8 @@ class McpManager:
         return hmac.new(self._revision_key, f"{name}\0{serialized}".encode(), hashlib.sha256).hexdigest()
 
     def set_server_tools(self, name: object, *, enabled_tools: object,
-                         revision: object, catalogue_revision: object) -> dict[str, object]:
+                         revision: object, catalogue_revision: object,
+                         approval_mode: object = None) -> dict[str, object]:
         """Apply native filtering only between turns and against fresh discovery."""
         self._require_enabled()
         self._require_elicitation_handler()
@@ -577,7 +584,12 @@ class McpManager:
             known = snapshot[1] | set(previous.enabled_tools or ())
             if not set(selected) <= known:
                 raise McpValidationError()
-            updated = replace(previous, enabled_tools=selected)
+            mode = previous.approval_mode if approval_mode is None else approval_mode
+            if type(mode) is not str or mode not in {"auto", "prompt", "writes", "approve"}:
+                raise McpValidationError()
+            if mode == "approve" and not selected:
+                raise McpValidationError()
+            updated = replace(previous, enabled_tools=selected, approval_mode=mode)
             if updated != previous:
                 if previous.stdio and self._stdio_adapter is not None:
                     # The native filter is authoritative while a turn lease
@@ -605,7 +617,27 @@ class McpManager:
                         raise McpRecoveryRequiredError() from None
             self._catalogue_snapshots.pop(normalized, None)
             return {"name": normalized, "tool_policy": "selected", "enabled_tools": list(selected),
+                    "tool_approval_mode": mode,
                     "revision": self._revision(normalized, version)}
+
+    def lock_down_paused_server(self, name: object, *, revision: object) -> dict[str, object]:
+        """Replace an unrestricted paused policy with deny-all before it can resume."""
+        self._require_enabled()
+        self._require_elicitation_handler()
+        normalized = _validate_name(name)
+        with self._mutation_lease(), self._lock:
+            definitions, version = self._read_definitions()
+            previous = definitions.get(normalized)
+            if previous is None:
+                raise McpNotFoundError()
+            self._check_revision(normalized, version, revision)
+            if previous.enabled or previous.enabled_tools is not None:
+                raise McpConflictError()
+            updated = replace(previous, enabled_tools=())
+            version = self._apply_definition(previous, updated, version)
+            self._catalogue_snapshots.pop(normalized, None)
+            return {"name": normalized, "enabled": False, "tool_policy": "selected",
+                    "enabled_tools": [], "revision": self._revision(normalized, version)}
 
     def create_server(
         self,
@@ -1255,6 +1287,8 @@ class McpManager:
             if not definition.enabled:
                 value["enabled"] = False
             value["enabled_tools"] = list(definition.enabled_tools)
+            if definition.approval_mode != "auto":
+                value["default_tools_approval_mode"] = definition.approval_mode
             return value
         if definition.relayed:
             if self._relay is None:
@@ -1265,6 +1299,8 @@ class McpManager:
                     value["enabled"] = False
                 if definition.enabled_tools is not None:
                     value["enabled_tools"] = list(definition.enabled_tools)
+                if definition.approval_mode != "auto":
+                    value["default_tools_approval_mode"] = definition.approval_mode
                 return value
             except Exception:
                 raise McpUnavailableError() from None
@@ -1486,7 +1522,12 @@ def _definition_from_config(
         raise McpValidationError()
     enabled = value.get("enabled", True)
     enabled_tools = _validate_enabled_tools(value.get("enabled_tools"))
-    value = {key: item for key, item in value.items() if key not in {"enabled", "enabled_tools"}}
+    approval_mode = value.get("default_tools_approval_mode", "auto")
+    if (type(approval_mode) is not str or approval_mode not in {"auto", "prompt", "writes", "approve"}
+            or (approval_mode == "approve" and not enabled_tools)):
+        raise McpValidationError()
+    value = {key: item for key, item in value.items()
+             if key not in {"enabled", "enabled_tools", "default_tools_approval_mode"}}
     if stdio_adapter is not None and stdio_adapter.original_binding(normalized_name, value, effective=effective):
         if enabled_tools is None:
             raise McpValidationError()
@@ -1499,6 +1540,7 @@ def _definition_from_config(
             normalized_name, f"stdio://{package_id}/{revision}", stdio=True,
             package_id=str(package_id), package_revision=str(revision),
             enabled=enabled, enabled_tools=enabled_tools,
+            approval_mode=approval_mode,
         )
     if relay is not None:
         original = relay.original_url(normalized_name, value, effective=effective)
@@ -1506,7 +1548,7 @@ def _definition_from_config(
             metadata = relay.metadata(normalized_name)
             return McpServerDefinition(normalized_name, original, local=metadata["local"], relayed=True,
                                        auth_mode=metadata["auth"], credential_configured=metadata["credential_configured"],
-                                       enabled=enabled, enabled_tools=enabled_tools)
+                                       enabled=enabled, enabled_tools=enabled_tools, approval_mode=approval_mode)
     if effective and isinstance(value, Mapping):
         defaults = {"environment_id": "local", "tool_timeout_sec": None}
         for key, expected in defaults.items():
@@ -1526,6 +1568,7 @@ def _definition_from_config(
         oauth_resource=_validate_public_field(value.get("oauth_resource")),
         enabled=enabled,
         enabled_tools=enabled_tools,
+        approval_mode=approval_mode,
     )
 
 

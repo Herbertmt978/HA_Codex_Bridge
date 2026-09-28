@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 from pydantic import BaseModel, ConfigDict, StrictBool, Field
 
@@ -80,6 +82,12 @@ class McpToolsRequest(BaseModel):
     enabled_tools: list[str] = Field(max_length=512)
     revision: str = Field(min_length=64, max_length=64)
     catalogue_revision: str = Field(min_length=64, max_length=64)
+    approval_mode: Literal["auto", "approve"] | None = None
+
+
+class McpLockdownRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: str = Field(min_length=64, max_length=64)
 
 
 class McpEditRequest(BaseModel):
@@ -256,6 +264,17 @@ def set_mcp_tools(name: str, payload: McpToolsRequest, request: Request, respons
     response.headers["Cache-Control"] = "no-store"
     try:
         return _manager(request).set_server_tools(name, **payload.model_dump())
+    except McpManagerError as error:
+        raise _problem(error) from None
+
+
+@router.post("/mcp/servers/{name}/tools/lockdown")
+def lock_down_paused_mcp(name: str, payload: McpLockdownRequest, request: Request, response: Response,
+                         authorization: str | None = Header(default=None)) -> dict[str, object]:
+    _authorize(request, authorization)
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        return _manager(request).lock_down_paused_server(name, revision=payload.revision)
     except McpManagerError as error:
         raise _problem(error) from None
 

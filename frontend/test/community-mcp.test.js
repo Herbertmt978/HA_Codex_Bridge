@@ -57,7 +57,7 @@ describe("community HA-MCP quick connect", () => {
     const panel = setup(status({ state: "paused", server_name: "existing-home", reused: true }));
     expect(control(panel)).toBeNull();
     expect(panel.shadowRoot.querySelector('[data-desktop-action="edit-mcp-tools"][data-id="existing-home"]')).toBeTruthy();
-    expect(panel.shadowRoot.textContent).toContain("turn on MCP in that chat’s settings");
+    expect(panel.shadowRoot.textContent).toContain("Allowed tools can be used in regular chats");
   });
   it.each(capabilities.slice(0, 4))("never calls private discovery without %s", async (missing) => {
     const panel = setup(status(), capabilities.filter((key) => key !== missing)); panel._fetchHaApi = vi.fn();
