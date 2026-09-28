@@ -1,6 +1,15 @@
-# Planned releases
+# Historical release plans
 
-These are separate feature-release plans, based on the gaps reviewed on
+> **Status update — 28 September 2026:** This page preserves historical plans.
+> Completed enhancements were closed after delivery; the remaining enhancement
+> requests were closed as not planned at the owner's request. Statements below
+> about future or open work are historical, not current commitments. Use the
+> [current feature overview](../README.md) and [user guides](README.md) for what is
+> available. Partial implementations do not mean their full original proposal
+> was delivered. Stable ARM64, public snapshots and additional messaging
+> channels are not supported release features.
+
+These were separate feature-release plans, based on the gaps reviewed on
 21 September 2026. MCP-01 is implemented for App and Integration 1.2.0; check
 the [release page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases) for
 publication status. MCP-02 is implemented for App and Integration 1.3.0.

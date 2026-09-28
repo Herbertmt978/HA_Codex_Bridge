@@ -4,29 +4,51 @@
 
 # Home Assistant Codex Bridge
 
-Keep browser traffic on Home Assistant while a private HAOS App connects to
-Codex/OpenAI from your home network.
+**Codex, always available inside Home Assistant.**
 
-[![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=ha-codex-bridge&category=integration)
+Chat, work with files, manage projects and schedule tasks from your Home Assistant
+sidebar. Your Home Assistant runs the app, so your PC does not need to stay on.
+
+[![HACS custom repository](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=home-assistant&logoColor=white)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Herbertmt978&repository=HA_Codex_Bridge&category=integration)
 [![Integration release](https://img.shields.io/github/v/release/Herbertmt978/HA_Codex_Bridge?display_name=tag&label=Integration&color=0EA5E9)](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest)
 [![CI](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/ci.yml)
 [![App release](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml/badge.svg)](https://github.com/Herbertmt978/HA_Codex_Bridge/actions/workflows/release.yml)
 [![App status](https://img.shields.io/badge/App-Stable-22C55E?logo=home-assistant&logoColor=white)](codex_bridge_app/README.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0F766E.svg)](LICENSE)
 
-[Installation](docs/installation.md) | [Capabilities](#automations-and-codex-capabilities) | [Chat activity](docs/chat-activity.md) | [Planned releases](docs/roadmap.md) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
+[Installation](docs/installation.md) | [Capabilities](#automations-and-codex-capabilities) | [Chat activity](docs/chat-activity.md) | [All guides](docs/README.md) | [Updates](#updates-and-recovery) | [Remote access](docs/remote-access.md) | [Backup and recovery](docs/backup-restore.md) | [Security](SECURITY.md) | [Support](SUPPORT.md)
 
 </div>
 
 ## What it is
 
-Codex Bridge lets you use Codex from a panel in Home Assistant. You can chat,
-work with files in a private workspace, and schedule tasks using your ChatGPT
-account. No OpenAI API key is needed.
+Codex Bridge brings an always-on Codex workspace to Home Assistant. Pick up a
+chat from your laptop or phone, work on a project, or let a scheduled task run
+while your computer is switched off. Your chats, files and task history stay
+with the App.
 
-Home Assistant handles access to the panel. A separate App runs Codex and keeps
-its files and login state private. Your browser connects to Home Assistant;
-it does not connect directly to the App.
+Sign in with your ChatGPT account: no OpenAI API key is needed. The App runs
+inside Home Assistant OS; AI processing uses OpenAI's cloud. Home Assistant,
+the App, internet access and a valid ChatGPT session must remain available for
+tasks to run.
+
+Home Assistant handles access to the panel. Your browser connects to Home
+Assistant, which talks to the private App. Use your existing Home Assistant
+remote-access route when you are away from home.
+
+## Why Codex Bridge?
+
+- **Ready when you need it:** keep Codex available on your Home Assistant machine,
+  with no desktop app or always-on PC required.
+- **A workspace for real tasks:** organise chats into projects, upload files,
+  review changes and carry useful context from one conversation to another.
+- **Work on your schedule:** run recurring or one-off tasks through Home Assistant,
+  then read the results in your chats and run history.
+- **Connected to your home, when you choose:** enable built-in Home Assistant MCP
+  tools, a supported community HA-MCP connection, or both. Choose the tools Codex
+  can use and configure Assist separately.
+- **Familiar Home Assistant access:** open everything from the sidebar and keep
+  the App behind Home Assistant's sign-in and remote-access setup.
 
 ## Two components, two installation paths
 
@@ -76,56 +98,146 @@ ChatGPT sign-in and re-authentication require access to the ChatGPT website.
 
 ## Automations and Codex capabilities
 
-- **Chats and files:** use direct chats or organise work into projects. Model
-  and reasoning choices come from the installed Codex runtime and your account.
-  Astra appears when that runtime and account advertise it.
-- **Scheduled tasks:** describe the task and timing in one sentence, then review
-  the proposed schedule before creating it. You can also enter a title and instructions, choose a new or current
-  chat, then set the frequency and time. Daily, weekdays, weekly, monthly,
-  intervals and one-off tasks are supported. Times use Home Assistant's time
-  zone. Read the [Scheduled guide](docs/scheduled-tasks.md).
-- **Web search and images:** native tools are available when supported by the
-  runtime and signed-in account. Check run activity for actual web searches;
-  this does not give shell commands internet access.
+### Chats and projects
+
+Keep direct chats or organise related work into projects. Pin chats, mark them
+unread, organise sidebar sections, and archive or restore conversations. HA
+Assistant Chats sit in their own group at the bottom, collapsed by default.
+
+Read formatted answers with Markdown, tables, code blocks and maths. Copy code,
+copy messages or quote a selected passage. Search retained conversations or use
+Find within the current chat. Browser-local draft recovery helps you pick up an
+unfinished prompt. Model and reasoning choices come from your Codex runtime and
+signed-in account.
+
+[Chat controls](docs/chat-controls.md) · [Conversation features](docs/selected-enhancements.md)
+· [Maths](docs/assistant-maths.md)
+
+### Files, context and Git
+
+Upload and work with files in a private workspace, open supported previews and
+use the workspace terminal. Add a file, selected lines or previous-chat passages
+to a prompt, with a preview of exactly what will be sent. Changed source content
+requires a fresh review before submission.
+
+Review repository status, branches and Git diffs from the panel. These views
+inspect the selected workspace repository; they do not grant access to other
+folders. Share a chat link with someone who can sign in to Home Assistant, or
+copy the available conversation as text or Markdown.
+
+[Workspace context](docs/workspace-context.md) · [Previous-chat context](docs/previous-chat-context.md)
+· [Git status](docs/repository-status.md) · [Files and terminal](docs/chat-controls.md)
+
+### Control longer tasks
+
+Stop a turn, steer its current work, or queue a separate follow-up. Review a plan
+before choosing to implement it. Track context usage and find chats needing your
+attention in the inbox.
+
+Save a goal with success criteria and track progress across turns. Goals move
+forward when you send a prompt; they do not silently start background work.
+Inspect available child-agent activity and stop a verified running child where
+supported. Direct child follow-up is not supported by the bundled runtime.
+
+View reported token usage and set an optional elapsed-time limit for a turn.
+Usage history is partial runtime telemetry, not a bill or a guaranteed token cap;
+stopping a turn can take time.
+
+[Goals](docs/durable-goals.md) · [Attention inbox](docs/attention-inbox.md)
+· [Child agents](docs/individual-subagents.md) · [Usage and time limits](docs/task-usage-budgets.md)
+
+### Scheduled work and notifications
+
+Describe a task and its timing, review the proposed schedule, then save it. Or
+use the editor for daily, weekday, weekly, monthly, interval and one-off tasks.
+Schedules follow Home Assistant's time zone and run without your browser or PC.
+
+Read outcomes in chats and run history. Opt in to Home Assistant notifications
+or selected Companion App phones, with a separate choice for answer previews.
+Overlapping runs, missed windows and tasks needing approval can be skipped or
+stopped, with the outcome recorded.
+
+Optional question notifications let verified administrator Companion devices
+answer existing questions. A reply does not approve execution or grant access.
+Phone delivery depends on your device and notification setup.
+
+[Scheduled tasks](docs/scheduled-tasks.md) · [Question notifications](docs/question-notifications.md)
+
+### Home Assistant tools and Assist
+
+Use the switches in **Settings → MCP servers** to connect the installed built-in
+Home Assistant MCP integration or the supported community HA-MCP App. If both
+are installed, choose either or both. The setup explains the access being enabled.
+
+Choose **Select all tools** for the current catalogue, or **Select individual
+tools** to open the list and pick your own. Newly added or renamed tools still
+need approval. A saved connection and the permissions for using it are separate;
+the settings show what remains to be enabled.
+
+Configure Codex as an optional Assist conversation agent, with its own selected
+MCP servers. Assist's workspace is read-only, but authorised MCP tools can still
+control devices. Ordinary chat and Assist tool choices are separate.
+
+Home Assistant entities expose connection health, task state and available usage
+allowances. Saved ChatGPT accounts have their own allowance and reset entities;
+missing or stale usage is shown as unknown. Integration actions can start,
+continue, cancel and inspect tasks within their documented permission limits.
+
+[Home Assistant MCP](docs/home-assistant-mcp.md) · [Assist](docs/home-assistant-assist.md)
+· [Status entities](docs/status-entities.md) · [Account entities](docs/account-profile-allowances.md)
+· [Task actions and limits](docs/home-assistant-task-actions.md)
+
+### Accounts, tools and personal settings
+
+- **ChatGPT accounts:** save and switch App sign-ins while retaining local chats,
+  projects and files. The selected account applies across the App, not per task.
 - **Skills, plugins and instructions:** manage workspace skills, trusted
-  marketplaces and global or project instructions from the panel. Review
-  third-party content before using it.
-- **MCP servers:** optional and disabled by default. Enable **Enable MCP** in
-  the App configuration and restart it before adding a trusted HTTPS server.
-  Local HTTP/HTTPS servers need **Enable local MCP connections** as well, plus
-  acknowledgement of the endpoint's access and HTTP encryption warning.
-  On amd64 Home Assistant OS, **Enable isolated stdio MCP servers** separately to
-  review a verified, bundled Python package. New stdio connections start
-  paused with no permitted tools. The first package has no network or
-  workspace access. See [App documentation](codex_bridge_app/DOCS.md) for
-  restrictions.
-- **Settings:** save a light or dark appearance, chat text size, reduced motion
-  and defaults for new chats. See [Panel settings](docs/panel-settings.md).
-- **Chat controls:** stop or steer a running turn from the composer, check its
-  context usage, and open files or links from the sidebar. Share copies a chat
-  link that requires Home Assistant sign-in. The bottom panel includes an
-  interactive workspace terminal. See [Chat controls](docs/chat-controls.md).
-- **Assist conversation agent:** an administrator can opt in to direct Codex
-  answers from one selected project, with model, reasoning level and plain-text
-  instructions in the Integration's settings. The agent appears on the Bridge
-  device. Assist can use the administrator's selected MCP servers, including
-  an explicitly authorised connection to the installed HA MCP integration.
-  Assist requests are restricted to observe
-  mode and are separate from ordinary device control. See the
-  [Assist setup and access guide](docs/home-assistant-assist.md).
+  marketplaces and global or project instructions from the panel.
+- **Web search and images:** use native capabilities when your runtime and account
+  support them. Choose web-search behaviour for the next prompt.
+- **Browser tools:** optionally browse public websites and save screenshots or
+  PDFs. The isolated browser does not use your personal browser session or open
+  local Home Assistant pages.
+- **MCP connections:** manage public HTTPS servers, supported authentication and
+  interactive requests, or explicitly enable local connections. Pause, resume
+  and diagnose connections, and choose their allowed tools. Separately enabled
+  isolated stdio support is limited to verified bundled packages.
+- **Appearance and defaults:** choose Home Assistant, light or dark appearance,
+  text size, reduced motion and defaults for new chats.
+- **Optional host access:** a separate companion App supports explicitly granted
+  HAOS root work. It is not needed for normal chats or MCP home control.
 
-- **Question notifications:** opt-in generic notices and replies from verified
-  administrator Companion devices. Replies answer existing questions; they
-  cannot approve execution or access. [Setup and limits](docs/question-notifications.md).
+[Accounts](docs/account-profiles.md) · [Search choices](docs/per-turn-web-search.md)
+· [Browser tools](docs/browser-tools.md) · [Settings](docs/panel-settings.md)
+· [App options](codex_bridge_app/DOCS.md) · [Host access](codex_host_access_app/DOCS.md)
 
-Scheduled work runs through Home Assistant, so your PC and browser do not need
-to stay open. Home Assistant, the App and the ChatGPT session must remain
-available. Tasks that overlap, miss their window or need an approval may be
-skipped or stopped; check **Run history**. Results appear in chats and run
-history. Scheduled-task notifications are opt-in: choose a generic Home
-Assistant notification and/or specific Companion App phones in the task editor.
-Answer previews on selected phones require a separate opt-in. See the
-[Scheduled guide](docs/scheduled-tasks.md) for privacy and delivery limits.
+## Common questions
+
+**Does my PC need to stay on?** No. The App runs on your Home Assistant OS
+machine. Scheduled work needs Home Assistant, the App, internet access and a
+working ChatGPT session.
+
+**Is the AI running locally?** The App, workspaces and local history run on your
+machine. Codex sends requests to OpenAI for AI processing; this is not offline
+or local-model inference.
+
+**Can it control my home?** Yes, through the Home Assistant MCP tools you choose
+to enable. Installing Bridge alone does not grant access to devices, HA
+configuration or host files.
+
+**Does it need an API key?** No OpenAI API key is needed for Codex. Sign in with a
+ChatGPT account that has Codex access. Optional third-party tools may have their
+own authentication and costs.
+
+**Can I use a Raspberry Pi?** The published App currently supports amd64 Home
+Assistant OS. The core ARM64 build support is already coded and has passed build
+and emulation checks. It still needs testing on real ARM64 Home Assistant OS
+hardware before a stable release. Browser tools and the Host Access App are not
+included in that ARM64 support. See [ARM64 testing status](docs/arm64-development.md).
+
+**Does it sync with the desktop Codex app?** App accounts, chats and workspaces
+are separate. Chat links require Home Assistant sign-in; public snapshots are
+not available.
 
 ## Updates and recovery
 
@@ -141,8 +253,9 @@ and history are retained; continue their messages through Home Assistant Assist.
 
 This release pairs App **1.13.4**, Integration and panel **1.13.4**, with Bridge **0.20.0**
 and Codex **0.157.1**. Assistant Markdown, transcript search, explicit Queue/Steer, native Plan
-and scoped Git review are described in [the conversation controls guide](docs/selected-enhancements.md). It prepares ARM64 development builds; published images
-remain **amd64-only** until native hardware qualification. It retains write-only
+and scoped Git review are described in [the conversation controls guide](docs/selected-enhancements.md). Core ARM64 build support is implemented and awaits testing on real ARM64
+Home Assistant OS hardware; published images remain **amd64-only** until that
+testing passes. It retains write-only
 bearer tokens and API-key headers for MCP servers, public OAuth and opt-in local
 HA-MCP connections. [ARM64 development status](docs/arm64-development.md).
 Settings now use roomier controls and shorter, clearer guidance across every tab.
@@ -166,8 +279,9 @@ Supervisor can select an arbitrary earlier App image.
 
 Codex works only within the selected App workspace. This is not Home
 Assistant's configuration directory, and installing the App does not grant
-Codex general access to your home devices, host files or LAN. Observe mode is
-read-only; Edit and Full auto permit workspace changes. Full auto does not
+Codex general access to your home devices, host files or LAN. Observe mode keeps the workspace
+read-only; authorised MCP tools have their own permissions and may change devices
+or other services. Edit and Full auto permit workspace changes. Full auto does not
 remove the filesystem or network restrictions.
 
 Publish Home Assistant only. Nabu Casa, Cloudflare or another HTTPS reverse
