@@ -99,15 +99,29 @@ jobs:
             dependency_name="$dependency"
           done
 
-          if [[ "$dependency_count" -ne 1 || "$dependency_name" != "actions/setup-node" ]]; then
+          if [[ "$dependency_count" -ne 1 ]]; then
             echo "eligible=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          if [[ "$(gh pr diff "$PR_URL" --name-only)" != ".github/workflows/ci.yml" ]]; then
+          changed_files=$(gh pr diff "$PR_URL" --name-only)
+          if [[ -z "$changed_files" ]]; then
             echo "eligible=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          while IFS= read -r changed_file; do
+            case "$dependency_name:$changed_file" in
+              actions/setup-node:.github/workflows/ci.yml|\
+              astral-sh/setup-uv:.github/workflows/build-app.yml|\
+              astral-sh/setup-uv:.github/workflows/ci.yml|\
+              astral-sh/setup-uv:.github/workflows/codex-update.yml) ;;
+              *)
+                echo "eligible=false" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          done <<< "$changed_files"
 
           echo "eligible=true" >> "$GITHUB_OUTPUT"
 

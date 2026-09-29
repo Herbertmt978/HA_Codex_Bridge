@@ -737,8 +737,11 @@ def test_dependabot_automerge_stays_narrow_and_never_executes_pr_code() -> None:
         "version-update:semver-patch|version-update:semver-minor",
         '"$NEW_VERSION" == *-*',
         '"$dependency_count" -ne 1',
-        '"$dependency_name" != "actions/setup-node"',
-        '".github/workflows/ci.yml"',
+        'changed_files=$(gh pr diff "$PR_URL" --name-only)',
+        'actions/setup-node:.github/workflows/ci.yml',
+        'astral-sh/setup-uv:.github/workflows/build-app.yml',
+        'astral-sh/setup-uv:.github/workflows/ci.yml',
+        'astral-sh/setup-uv:.github/workflows/codex-update.yml',
         "--auto --squash --match-head-commit",
     ):
         assert required_policy in source
