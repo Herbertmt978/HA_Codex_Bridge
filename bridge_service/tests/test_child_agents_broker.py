@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from threading import Event
 
 import pytest
@@ -14,6 +15,28 @@ from test_runtime_broker import (
     ValidatorBackedAppServer, _active_ids, _broker, _complete, _requests,
     _home_assistant_operation_thread, _storage_and_thread, _wait_until,
 )
+
+
+def test_subagent_capability_requires_the_bundled_contract(tmp_path):
+    storage, _parent = _storage_and_thread(tmp_path)
+    runtime = ValidatorBackedAppServer()
+    contract = load_bundled_protocol_contract()
+    runtime.protocol_contract = contract
+    broker = _broker(storage, runtime)
+    try:
+        assert broker.supports_subagents
+        runtime.protocol_contract = replace(contract, codex_version="codex-cli 0.0.0")
+        assert not broker.supports_subagents
+        runtime.protocol_contract = replace(
+            contract, client_requests=contract.client_requests - {"turn/interrupt"}
+        )
+        assert not broker.supports_subagents
+        runtime.protocol_contract = replace(contract, v2_schema_sha256="0" * 64)
+        assert not broker.supports_subagents
+        runtime.protocol_contract = None
+        assert not broker.supports_subagents
+    finally:
+        broker.close()
 
 
 def test_correlated_parent_hook_and_single_child_control(tmp_path):
