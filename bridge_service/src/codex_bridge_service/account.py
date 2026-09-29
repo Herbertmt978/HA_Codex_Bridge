@@ -19,6 +19,7 @@ SAFE_CHATGPT_PLAN_TYPES = frozenset(
         "plus",
         "pro",
         "prolite",
+        "promax",
         "team",
         "self_serve_business_usage_based",
         "business",

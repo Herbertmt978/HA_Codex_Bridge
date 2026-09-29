@@ -22,6 +22,7 @@ from .codex_app_server import (
     AppServerNotification,
     AppServerRequest,
 )
+from .codex_app_server_contract import load_bundled_protocol_contract
 from .browser_broker import BrowserBroker, BrowserInvocationContext
 from .browser_contract import browser_dynamic_tool_spec
 from .host_access import HostAccessError, HostAccessManager, HostLease
@@ -389,6 +390,7 @@ class _RuntimeTotalDeadlineExceeded(RuntimeError):
 
 
 _TERMINAL_RUN_STATES = {"completed", "cancelled", "failed", "interrupted"}
+_BUNDLED_PROTOCOL_CONTRACT = load_bundled_protocol_contract()
 _MANAGED_WEB_SEARCH_DEFAULT = "cached"
 _LIVE_WEB_SEARCH_GUIDANCE = (
     "Application web-search policy: Live web search is available. "
@@ -950,7 +952,7 @@ class RuntimeBroker:
     def supports_subagents(self) -> bool:
         contract = getattr(self.app_server, "protocol_contract", None)
         return bool(self.child_agents.available and contract is not None
-                    and contract.codex_version == "codex-cli 0.157.1"
+                    and contract == _BUNDLED_PROTOCOL_CONTRACT
                     and all(contract.permits("clientRequests", method)
                             for method in ("thread/read", "turn/interrupt")))
 

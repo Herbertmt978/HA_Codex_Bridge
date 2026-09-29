@@ -11,6 +11,7 @@ const PLAN_NAMES = Object.freeze({
   plus: "Plus",
   pro: "Pro",
   prolite: "Pro",
+  promax: "Pro Max",
   team: "Team",
   self_serve_business_usage_based: "Business",
   business: "Business",

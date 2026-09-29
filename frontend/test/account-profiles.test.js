@@ -25,6 +25,7 @@ describe("saved Home Assistant accounts", () => {
 
   it("shows only safe labels and requires saving the current account before adding another", async () => {
     const panel = panelWithAccounts();
+    expect(panel._accountPlanLabel("promax")).toBe("ChatGPT Pro Max");
     panel._callWS = vi.fn(async () => []);
     panel.shadowRoot.getElementById("app-menu-toggle").click();
     await vi.waitFor(() => expect(panel._accountProfilesLoaded).toBe(true));

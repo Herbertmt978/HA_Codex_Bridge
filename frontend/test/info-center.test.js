@@ -52,6 +52,20 @@ describe("information center view model", () => {
     expect(model.system.summary).toBe("The private runtime is ready.");
   });
 
+  it("labels a verified Pro Max account without exposing raw plan text", () => {
+    const model = getInfoCenterViewModel({
+      status: {
+        auth: { state: "ok", auth_required: false },
+        account: { auth_mode: "chatgpt", plan_type: "promax" },
+      },
+    });
+
+    expect(model.usage.rows).toEqual(expect.arrayContaining([
+      { label: "ChatGPT", value: "Connected" },
+      { label: "Plan", value: "Pro Max" },
+    ]));
+  });
+
   it("projects bounded run activity, capabilities, and source counts without raw content", () => {
     const model = getInfoCenterViewModel({
       status: { provider_capabilities: { web_search: true } },

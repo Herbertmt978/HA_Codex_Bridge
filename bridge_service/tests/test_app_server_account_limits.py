@@ -321,8 +321,11 @@ def _rate_limits(
     return response
 
 
-def test_account_probe_reads_chatgpt_account_through_the_shared_client() -> None:
-    client = RecordingAppServerClient(_chatgpt_account(plan_type="pro"))
+@pytest.mark.parametrize("plan_type", ["pro", "promax"])
+def test_account_probe_reads_chatgpt_account_through_the_shared_client(
+    plan_type: str,
+) -> None:
+    client = RecordingAppServerClient(_chatgpt_account(plan_type=plan_type))
 
     account = _account_probe(client).probe()
 
@@ -333,7 +336,7 @@ def test_account_probe_reads_chatgpt_account_through_the_shared_client() -> None
     assert client.timeouts == [5.0]
     assert account.available is True
     assert account.auth_mode == "chatgpt"
-    assert account.plan_type == "pro"
+    assert account.plan_type == plan_type
 
 
 def test_account_probe_normalizes_signed_out_response() -> None:

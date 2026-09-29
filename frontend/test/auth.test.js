@@ -5,6 +5,7 @@ import { getAuthViewModel, normalizePlanType, renderAuth } from "../src/views/au
 describe("auth view", () => {
   it("normalizes only recognized ChatGPT plan names", () => {
     expect(normalizePlanType("PLUS")).toBe("Plus");
+    expect(normalizePlanType("promax")).toBe("Pro Max");
     expect(normalizePlanType('<img src=x onerror="alert(1)">')).toBe("Unknown");
   });
 
