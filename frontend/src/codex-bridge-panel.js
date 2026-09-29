@@ -7883,7 +7883,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _accountPlanLabel(plan) {
-    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
+    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", promax: "Pro Max", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
     return plan && names[plan] ? `ChatGPT ${names[plan]}` : "Subscription unavailable";
   }
 

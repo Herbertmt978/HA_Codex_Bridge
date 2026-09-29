@@ -27383,6 +27383,7 @@ var PLAN_NAMES = Object.freeze({
   plus: "Plus",
   pro: "Pro",
   prolite: "Pro",
+  promax: "Pro Max",
   team: "Team",
   self_serve_business_usage_based: "Business",
   business: "Business",
@@ -50505,6 +50506,7 @@ var PLAN_NAMES2 = /* @__PURE__ */ new Map([
   ["plus", "Plus"],
   ["pro", "Pro"],
   ["prolite", "Pro"],
+  ["promax", "Pro Max"],
   ["team", "Team"],
   ["self_serve_business_usage_based", "Business"],
   ["business", "Business"],
@@ -61624,7 +61626,7 @@ var CodexBridgePanel = class extends HTMLElement {
     list.replaceChildren(...rows);
   }
   _accountPlanLabel(plan) {
-    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
+    const names = { free: "Free", go: "Go", plus: "Plus", pro: "Pro", prolite: "Pro", promax: "Pro Max", team: "Team", business: "Business", self_serve_business_usage_based: "Business", enterprise: "Enterprise", enterprise_cbp_usage_based: "Enterprise", edu: "Edu" };
     return plan && names[plan] ? `ChatGPT ${names[plan]}` : "Subscription unavailable";
   }
   _accountMetrics(profile) {
