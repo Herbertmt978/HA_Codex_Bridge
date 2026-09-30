@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.13.7
+
+- Repairs App publication after an optional GitHub build-cache export prevented
+  the 1.13.6 image from being signed and made available to Home Assistant.
+- Keeps image signing, provenance, SBOM verification and immutable release tags.
+- Bundles the Sigstore-verified Codex runtime `0.159.2`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.0` without changing its Integration API compatibility.
+
 ## 1.13.6
 
 - Bundles the Sigstore-verified Codex runtime `0.159.2`.

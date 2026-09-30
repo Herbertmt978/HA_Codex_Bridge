@@ -181,6 +181,24 @@ def test_arm64_build_verification_does_not_enable_unqualified_publication() -> N
     assert publisher["with"]["architectures"] == '["amd64"]'
 
 
+def test_release_build_disables_optional_actions_cache_without_weakening_signing() -> None:
+    document, _ = _workflow("build-app")
+    publish = document["jobs"]["publish"]
+    builder = next(
+        step for step in publish["steps"] if "build-image@" in step.get("uses", "")
+    )
+    inputs = builder["with"]
+    assert inputs["cache-gha"] == "false", (
+        "a failed optional cache export must not strand an unsigned release image"
+    )
+    assert inputs["push"] == "true"
+    assert inputs["cosign"] == "true"
+    assert "Refuse to overwrite an existing App version" in {
+        step["name"] for step in publish["steps"]
+    }
+    assert document["jobs"]["manifest"]["needs"] == "publish"
+
+
 def test_app_publish_signs_attests_sbom_and_verifies_published_digest() -> None:
     _, source = _workflow("build-app")
     normalized = source.lower()

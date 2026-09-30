@@ -195,6 +195,8 @@ jobs:
         uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           arch: amd64
+          # Release signing must not depend on an optional Actions cache export.
+          cache-gha: "false"
           container-registry-password: ${{ github.token }}
           context: ./.build/app-context
           cosign: "true"
