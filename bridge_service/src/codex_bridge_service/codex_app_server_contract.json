@@ -108,7 +108,7 @@
     "windowsSandbox/readiness",
     "windowsSandbox/setupStart"
   ],
-  "codexVersion": "codex-cli 0.159.2",
+  "codexVersion": "codex-cli 0.159.3",
   "contractVersion": 1,
   "schemaBundleSha256": "a0e64d0728b5170887fc7d9f6a8e90bd4b7a47c77db7f0608af071dddf23dd1b",
   "serverNotifications": [
