@@ -1,13 +1,10 @@
 version: 2
-# Routine application updates share one review and notification thread each week.
-# GitHub Actions stay separate so the guarded workflow can evaluate one action.
+# Routine root npm tooling updates stay individual so the guarded workflow can
+# evaluate one development dependency at a time. Production npm updates are
+# grouped for manual review; GitHub Actions stay separate for their own gate.
 # Docker stays separate because a base-image refresh must be reviewed together
 # with the exact Alpine Chromium package pinned by the App image.
 # Security alerts remain governed by GitHub's separate security-update settings.
-multi-ecosystem-groups:
-  weekly-maintenance:
-    schedule:
-      interval: weekly
 
 updates:
   - package-ecosystem: github-actions
@@ -18,9 +15,16 @@ updates:
 
   - package-ecosystem: npm
     directory: "/"
-    patterns:
-      - "*"
-    multi-ecosystem-group: weekly-maintenance
+    schedule:
+      interval: weekly
+    groups:
+      production-patch-minor:
+        dependency-type: production
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       # Review jsdom majors separately before changing the supported Node floor.
       - dependency-name: "jsdom"
@@ -29,15 +33,27 @@ updates:
 
   - package-ecosystem: pip
     directory: "/"
-    patterns:
-      - "*"
-    multi-ecosystem-group: weekly-maintenance
+    schedule:
+      interval: weekly
+    groups:
+      root-pip-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: pip
     directory: "/bridge_service"
-    patterns:
-      - "*"
-    multi-ecosystem-group: weekly-maintenance
+    schedule:
+      interval: weekly
+    groups:
+      bridge-service-pip-patch-minor:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     ignore:
       # Pydantic is pinned transitively by the Home Assistant test fixture and
       # must move with the repository's Home Assistant compatibility version.

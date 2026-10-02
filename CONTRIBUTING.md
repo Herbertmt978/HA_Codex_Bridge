@@ -68,6 +68,20 @@ target-system checks were performed and what remains. Never weaken the sandbox,
 mount broader filesystems, expose a Bridge port, or add API-key login merely to
 make a test pass.
 
+## Dependency updates
+
+Dependabot can queue individual stable patch/minor updates for the development
+tools allowlisted in `scripts/dependabot_automerge_policy.mjs`. The trusted-base
+workflow checks the manifest, lockfile graph and current reviews; GitHub's
+required checks and pull-request protections still control the merge.
+Run `npm run test:dependabot-policy` when changing this policy.
+
+Runtime packages, `esbuild`, `pdfjs-dist`, Python and Docker updates remain
+manual, as do major, prerelease, grouped or maintainer-edited updates. A tool
+update that also changes a dependency used by runtime or bundle generation is
+not eligible. Weekly manual groups reduce notification noise without relaxing
+these checks. This policy does not publish a release or update an installation.
+
 ## Documentation style
 
 Use the terms in [CONTEXT.md](CONTEXT.md). Write the exact UI labels **Sign in
