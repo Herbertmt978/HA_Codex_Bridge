@@ -599,13 +599,18 @@ def test_deployed_runtime_satisfies_all_bridge_dependencies() -> None:
 
 def test_dependabot_and_codeowners_cover_ci_policy() -> None:
     dependabot = _load(ROOT / ".github" / "dependabot.yml")
-    maintenance_groups = dependabot.get("multi-ecosystem-groups")
-    assert maintenance_groups == {
-        "weekly-maintenance": {"schedule": {"interval": "weekly"}}
-    }, "routine version updates should arrive as one weekly maintenance PR"
+    assert "multi-ecosystem-groups" not in dependabot
 
     updates = dependabot.get("updates")
-    assert isinstance(updates, list) and updates
+    assert isinstance(updates, list) and len(updates) == 5
+    ecosystem_directories = [
+        (item.get("package-ecosystem"), item.get("directory"))
+        for item in updates
+        if isinstance(item, dict)
+    ]
+    assert len(ecosystem_directories) == len(set(ecosystem_directories)), (
+        "each Dependabot ecosystem/directory pair must have exactly one owner"
+    )
     github_actions = [
         item
         for item in updates
@@ -626,13 +631,13 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         if isinstance(item, dict)
         and item.get("package-ecosystem") not in {"github-actions", "docker"}
     ]
-    assert grouped_updates and all(
-        isinstance(item, dict)
-        and item.get("multi-ecosystem-group") == "weekly-maintenance"
-        and item.get("patterns") == ["*"]
-        and "schedule" not in item
+    assert len(grouped_updates) == 3
+    assert all(
+        "multi-ecosystem-group" not in item
+        and "patterns" not in item
+        and item.get("schedule") == {"interval": "weekly"}
         for item in grouped_updates
-    ), "application ecosystems must participate in the weekly maintenance group"
+    ), "npm and pip update entries must own separate weekly configuration"
 
     root_npm = next(
         item
@@ -641,6 +646,13 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         and item.get("package-ecosystem") == "npm"
         and item.get("directory") == "/"
     )
+    assert root_npm.get("groups") == {
+        "production-patch-minor": {
+            "dependency-type": "production",
+            "patterns": ["*"],
+            "update-types": ["minor", "patch"],
+        }
+    }, "production npm patch/minor updates should remain grouped for manual review"
     assert root_npm.get("ignore") == [
         {
             "dependency-name": "jsdom",
@@ -659,6 +671,12 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         "dependency-name": "pytest",
         "versions": [">=9.1.0"],
     }
+    assert root_pip.get("groups") == {
+        "root-pip-patch-minor": {
+            "patterns": ["*"],
+            "update-types": ["minor", "patch"],
+        }
+    }, "root pip patch/minor updates should be grouped for manual review"
     assert not root_pip.get("ignore"), (
         "the root test fixture owns its dependency pins and must remain updatable"
     )
@@ -677,6 +695,12 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
         and item.get("package-ecosystem") == "pip"
         and item.get("directory") == "/bridge_service"
     )
+    assert bridge_pip.get("groups") == {
+        "bridge-service-pip-patch-minor": {
+            "patterns": ["*"],
+            "update-types": ["minor", "patch"],
+        }
+    }, "Bridge pip patch/minor updates should be grouped for manual review"
     assert bridge_pip.get("ignore") == [
         {"dependency-name": "pydantic", "versions": [">=2.13.5"]},
         expected_pytest_ignore,
@@ -740,26 +764,83 @@ def test_dependabot_automerge_stays_narrow_and_never_executes_pr_code() -> None:
         "github.event.pull_request.base.ref == github.event.repository.default_branch",
         "github.event.pull_request.head.repo.full_name == github.repository",
         "dependabot/github_actions/",
+        "dependabot/npm_and_yarn/",
     ):
         assert required_guard in condition
 
     external_actions = [action for action in _walk_uses(document) if not action.startswith("./")]
     assert external_actions == [
-        "dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98",
     ]
-    assert "actions/checkout" not in source
+    steps = manage["steps"]
+    run_step_names = [step.get("name") for step in steps if "run" in step]
+    assert run_step_names == [
+        "Clear stale automatic merge request",
+        "Check automatic merge policy",
+        "Queue eligible update for automatic merge",
+    ], "privileged execution steps must stay within the reviewed trusted-base policy"
+    clear_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Clear stale automatic merge request"
+    )
+    checkout_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Check out trusted base policy only"
+    )
+    metadata_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Read Dependabot metadata"
+    )
+    policy_index = next(
+        index
+        for index, step in enumerate(steps)
+        if step.get("name") == "Check automatic merge policy"
+    )
+    assert clear_index < checkout_index < metadata_index < policy_index
+
+    checkout = steps[checkout_index]
+    assert checkout["uses"] == external_actions[0]
+    assert checkout["with"] == {
+        "ref": "${{ github.event.pull_request.base.sha }}",
+        "fetch-depth": 1,
+        "persist-credentials": False,
+        "submodules": False,
+    }, "privileged workflow policy must come only from the trusted base commit"
+    assert "ref: ${{ github.event.pull_request.base.sha }}" in source
+    assert "ref: ${{ github.event.pull_request.head.sha }}" not in source
+    assert '"$PR_HEAD_SHA"' not in str(checkout.get("with", {}))
+    assert source.count('gh api "repos/${GITHUB_REPOSITORY}/contents/') == 4, (
+        "candidate package files may only be fetched as data at the two explicit paths"
+    )
+    for forbidden_route in (
+        "gh pr checkout",
+        "gh pr diff",
+        "git checkout",
+        "git fetch",
+        "gh run download",
+        "npm run",
+        "npm install",
+        "npm ci",
+        "npx ",
+    ):
+        assert forbidden_route not in source
     for required_policy in (
-        '"$DEPENDENCY_GROUP"',
-        '"$MAINTAINER_CHANGES" == "true"',
-        '"$PACKAGE_ECOSYSTEM" != "github_actions"',
+        '"$MAINTAINER_CHANGES" != "false"',
+        '"$PACKAGE_ECOSYSTEM" != "npm_and_yarn"',
         "version-update:semver-patch|version-update:semver-minor",
-        '"$NEW_VERSION" == *-*',
+        'if [[ ! "$NEW_VERSION" =~ ^v?(0|[1-9][0-9]*)',
         '"$dependency_count" -ne 1',
-        'changed_files=$(gh pr diff "$PR_URL" --name-only)',
-        'actions/setup-node:.github/workflows/ci.yml',
-        'astral-sh/setup-uv:.github/workflows/build-app.yml',
-        'astral-sh/setup-uv:.github/workflows/ci.yml',
-        'astral-sh/setup-uv:.github/workflows/codex-update.yml',
-        "--auto --squash --match-head-commit",
+        'gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --slurp',
+        'contents/package.json?ref=${PR_BASE_SHA}',
+        'contents/package.json?ref=${PR_HEAD_SHA}',
+        'PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}',
+        'PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}',
+        '--actions-files "$dependency_name" "$changed_files"',
+        'node scripts/dependabot_automerge_policy.mjs \\',
+        'gh pr merge --auto --squash --match-head-commit "$PR_HEAD_SHA" "$PR_URL"',
     ):
         assert required_policy in source

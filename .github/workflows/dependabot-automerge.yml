@@ -1,8 +1,8 @@
 name: Dependabot auto-merge
 
 on:
-  # The job is restricted to same-repository Dependabot branches and never
-  # checks out or executes pull-request code.
+  # The job is restricted to same-repository Dependabot branches. It checks
+  # out only the event's trusted base SHA, never the pull-request head.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
     types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
 
@@ -20,7 +20,8 @@ jobs:
       github.event.pull_request.user.login == 'dependabot[bot]' &&
       github.event.pull_request.base.ref == github.event.repository.default_branch &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/')
+      (startsWith(github.event.pull_request.head.ref, 'dependabot/github_actions/') ||
+      startsWith(github.event.pull_request.head.ref, 'dependabot/npm_and_yarn/'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -42,6 +43,15 @@ jobs:
             gh pr merge --disable-auto "$PR_URL"
           fi
 
+      - name: Check out trusted base policy only
+        if: github.event.action != 'converted_to_draft' && github.event.pull_request.draft == false
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+
       - name: Read Dependabot metadata
         if: github.event.pull_request.user.login == 'dependabot[bot]' && github.event.pull_request.draft == false
         id: metadata
@@ -61,69 +71,86 @@ jobs:
           MAINTAINER_CHANGES: ${{ steps.metadata.outputs.maintainer-changes }}
           NEW_VERSION: ${{ steps.metadata.outputs.new-version }}
           PACKAGE_ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
         run: |
           set -euo pipefail
-
-          if [[ -n "$DEPENDENCY_GROUP" || "$MAINTAINER_CHANGES" == "true" ]]; then
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          review_data="${temp_dir}/review-data.json"
+          changed_files="${temp_dir}/changed-files.json"
+          gh pr view "$PR_URL" --json reviews,reviewDecision > "$review_data"
+          if ! node scripts/dependabot_automerge_policy.mjs --review-only "$review_data"; then
             echo "eligible=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --slurp > "$changed_files"
 
-          if [[ "$PACKAGE_ECOSYSTEM" != "github_actions" || "$DIRECTORY" != "/" ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          case "$UPDATE_TYPE" in
-            version-update:semver-patch|version-update:semver-minor) ;;
-            *)
+          if [[ "$PACKAGE_ECOSYSTEM" == "github_actions" ]]; then
+            if [[ "$DIRECTORY" != "/" || -n "$DEPENDENCY_GROUP" || "$MAINTAINER_CHANGES" != "false" ]]; then
               echo "eligible=false" >> "$GITHUB_OUTPUT"
               exit 0
-              ;;
-          esac
-
-          if [[ "$NEW_VERSION" == *-* ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          dependency_count=0
-          dependency_name=""
-          IFS=',' read -r -a dependencies <<< "$DEPENDENCY_NAMES"
-          for dependency in "${dependencies[@]}"; do
-            dependency="${dependency//[[:space:]]/}"
-            [[ -z "$dependency" ]] && continue
-            dependency_count=$((dependency_count + 1))
-            dependency_name="$dependency"
-          done
-
-          if [[ "$dependency_count" -ne 1 ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files=$(gh pr diff "$PR_URL" --name-only)
-          if [[ -z "$changed_files" ]]; then
-            echo "eligible=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          while IFS= read -r changed_file; do
-            case "$dependency_name:$changed_file" in
-              actions/setup-node:.github/workflows/ci.yml|\
-              astral-sh/setup-uv:.github/workflows/build-app.yml|\
-              astral-sh/setup-uv:.github/workflows/ci.yml|\
-              astral-sh/setup-uv:.github/workflows/codex-update.yml) ;;
-              *)
-                echo "eligible=false" >> "$GITHUB_OUTPUT"
-                exit 0
-                ;;
+            fi
+            case "$UPDATE_TYPE" in
+              version-update:semver-patch|version-update:semver-minor) ;;
+              *) echo "eligible=false" >> "$GITHUB_OUTPUT"; exit 0 ;;
             esac
-          done <<< "$changed_files"
+            if [[ ! "$NEW_VERSION" =~ ^v?(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            dependency_count=0
+            dependency_name=""
+            IFS=',' read -r -a dependencies <<< "$DEPENDENCY_NAMES"
+            for dependency in "${dependencies[@]}"; do
+              dependency="${dependency//[[:space:]]/}"
+              [[ -z "$dependency" ]] && continue
+              dependency_count=$((dependency_count + 1))
+              dependency_name="$dependency"
+            done
+            if [[ "$dependency_count" -ne 1 ]]; then
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if ! node scripts/dependabot_automerge_policy.mjs --actions-files "$dependency_name" "$changed_files"; then
+              echo "eligible=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
-          echo "eligible=true" >> "$GITHUB_OUTPUT"
+          if [[ "$PACKAGE_ECOSYSTEM" != "npm_and_yarn" || "$DIRECTORY" != "/" || -n "$DEPENDENCY_GROUP" || "$MAINTAINER_CHANGES" != "false" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_manifest="${temp_dir}/base-package.json"
+          head_manifest="${temp_dir}/head-package.json"
+          base_lock="${temp_dir}/base-package-lock.json"
+          head_lock="${temp_dir}/head-package-lock.json"
+
+          if [[ "$PACKAGE_ECOSYSTEM" == "npm_and_yarn" && "$DIRECTORY" == "/" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/contents/package.json?ref=${PR_BASE_SHA}" \
+              -H 'Accept: application/vnd.github.raw+json' > "$base_manifest"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/package.json?ref=${PR_HEAD_SHA}" \
+              -H 'Accept: application/vnd.github.raw+json' > "$head_manifest"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/package-lock.json?ref=${PR_BASE_SHA}" \
+              -H 'Accept: application/vnd.github.raw+json' > "$base_lock"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/package-lock.json?ref=${PR_HEAD_SHA}" \
+              -H 'Accept: application/vnd.github.raw+json' > "$head_lock"
+          fi
+
+          if [[ ! -s "$base_manifest" || ! -s "$head_manifest" || ! -s "$base_lock" || ! -s "$head_lock" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          node scripts/dependabot_automerge_policy.mjs \
+            "$base_manifest" "$head_manifest" "$base_lock" "$head_lock" \
+            "$changed_files" "$review_data" "$GITHUB_OUTPUT"
 
       - name: Queue eligible update for automatic merge
         if: steps.policy.outputs.eligible == 'true'

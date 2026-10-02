@@ -75,4 +75,20 @@ export default [
       "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
     },
   },
+  {
+    files: ["scripts/dependabot_automerge_policy.mjs", "tests/dependabot_automerge_policy.test.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      globals: globals.node,
+      sourceType: "module",
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      ...securityRules,
+      "no-dupe-keys": "error",
+      "no-fallthrough": "error",
+      "no-unreachable": "error",
+      "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    },
+  },
 ];
