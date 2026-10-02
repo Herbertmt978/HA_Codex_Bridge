@@ -63,6 +63,15 @@ python -m compileall -q bridge_service\src custom_components
 node --check custom_components\codex_bridge\frontend\codex-bridge-panel.js
 ```
 
+Run the full Bridge suite from a native Linux checkout as an unprivileged user;
+only `bridge_service/tests/test_app_restore_repair.py::test_cold_restore_repairs_only_app_owned_state_and_preserves_bytes`
+requires root. Before the full suite, check that the selected Python 3.14 build
+exposes `fcntl.F_ADD_SEALS`, `F_SEAL_SEAL`, `F_SEAL_SHRINK`, `F_SEAL_GROW`, and
+`F_SEAL_WRITE`. This is a capability check for the runtime in use, not an
+assumption about every Python 3.14 or uv-provided build. Also confirm that a
+child Python process starts with `LD_LIBRARY_PATH` and `PYTHONHOME` absent, as
+the Bridge deliberately removes those variables from supervised processes.
+
 For an App, Supervisor, sandbox, proxy, or image change, state exactly which
 target-system checks were performed and what remains. Never weaken the sandbox,
 mount broader filesystems, expose a Bridge port, or add API-key login merely to
