@@ -523,6 +523,23 @@ def test_ci_repository_validators_use_digest_pinned_images() -> None:
     assert "home-assistant/actions/hassfest@" not in source
 
 
+def test_fastapi_requirement_excludes_broken_automatic_telemetry_releases() -> None:
+    project = tomllib.loads(
+        (ROOT / "bridge_service" / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    requirements = [
+        Requirement(value)
+        for value in project["project"]["dependencies"]
+        if value.startswith("fastapi")
+    ]
+    assert len(requirements) == 1
+    for broken_version in ("0.142.0", "0.142.1"):
+        assert not requirements[0].specifier.contains(broken_version), (
+            "external Bridge installs must exclude FastAPI's broken automatic "
+            "OpenTelemetry startup releases"
+        )
+
+
 def test_deployed_runtime_covers_the_bridge_fastapi_floor() -> None:
     project = tomllib.loads(
         (ROOT / "bridge_service" / "pyproject.toml").read_text(encoding="utf-8")
