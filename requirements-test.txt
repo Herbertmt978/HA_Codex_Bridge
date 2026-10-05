@@ -1,6 +1,6 @@
 # The fixture pins its matching Home Assistant and pytest dependencies exactly.
 # Keep it as the single version authority so Dependabot updates the pair together.
-pytest-homeassistant-custom-component==0.13.367
+pytest-homeassistant-custom-component==0.13.368
 
 # The opt-in conversation platform imports Home Assistant's conversation
 # component during test collection, before HA can install its requirements.
