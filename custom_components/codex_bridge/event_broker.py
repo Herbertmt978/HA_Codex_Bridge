@@ -27,6 +27,10 @@ MAX_SUBSCRIBERS = 32
 MAX_HISTORY_BYTES = 8 * 1024 * 1024
 MAX_SUBSCRIBER_BYTES = 8 * 1024 * 1024
 _SAFE_PAYLOAD_NODES = 1024
+MAX_MESSAGE_TEXT_BYTES = 1024 * 1024
+_MESSAGE_TEXT_EVENTS = frozenset(
+    {"message.created", "message.completed", "message.delta", "message.updated"}
+)
 _CLOSE = object()
 
 
@@ -65,6 +69,7 @@ def _safe_payload(
     *,
     depth: int = 0,
     budget: list[int] | None = None,
+    message_text: bool = False,
 ) -> Any:
     """Keep event data useful while bounding data supplied by the private App."""
 
@@ -80,10 +85,19 @@ def _safe_payload(
     if type(value) is float:
         return value if math.isfinite(value) else None
     if isinstance(value, str):
+        if message_text:
+            if len(value.encode("utf-8")) > MAX_MESSAGE_TEXT_BYTES:
+                raise EndpointError("event_invalid")
+            return value
         return value[:4096]
     if isinstance(value, Mapping):
         return {
-            key[:128]: _safe_payload(item, depth=depth + 1, budget=budget)
+            key[:128]: _safe_payload(
+                item,
+                depth=depth + 1,
+                budget=budget,
+                message_text=message_text and depth == 0 and key in {"text", "delta"},
+            )
             for key, item in list(value.items())[:64]
             if isinstance(key, str)
         }
@@ -141,7 +155,10 @@ class EventRecord:
                 raise EndpointError("event_invalid")
         except EndpointError:
             raise EndpointError("event_invalid") from None
-        payload = _safe_payload(value.get("payload", {}))
+        payload = _safe_payload(
+            value.get("payload", {}),
+            message_text=scope == "thread" and event_type in _MESSAGE_TEXT_EVENTS,
+        )
         if not isinstance(payload, Mapping):
             payload = {}
         estimated_bytes = (

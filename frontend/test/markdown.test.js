@@ -135,6 +135,30 @@ describe("assistant Markdown rendering", () => {
     expect(elapsed).toBeLessThan(1_500);
   });
 
+  it.each(["```", "~~~"])("keeps a large %s code fence intact for exact copying", (fence) => {
+    const code = `${"Status.Value = \"Triaged\"\r\n".repeat(12_000)}// final line 😃\r\n`;
+    const source = `Here is the complete formula.\n\n${fence}powerfx\n${code}${fence}\n\nAfter the code.`;
+    const createCodeBlock = vi.fn((_document, value) => {
+      const pre = document.createElement("pre");
+      pre.textContent = value;
+      return pre;
+    });
+    const fragment = render(source, { createCodeBlock });
+
+    expect(code.length).toBeGreaterThan(assistantMarkdownMaxLength);
+    expect(createCodeBlock).toHaveBeenCalledExactlyOnceWith(document, code, "powerfx");
+    expect(host.querySelector("pre")?.textContent).toBe(code);
+    expect(fragment.plainText).toContain(code);
+    expect(host.querySelector(".assistant-markdown-overflow")?.textContent).toContain("After the code.");
+  });
+
+  it("preserves the full source of a large unfinished code fence", () => {
+    const code = `${"print(\"long reply\")\n".repeat(15_000)}final_line`;
+    render(`\`\`\`python\n${code}`);
+    expect(host.querySelector("pre code")?.textContent).toBe(code);
+    expect(host.querySelector(".assistant-markdown-overflow")).toBeNull();
+  });
+
   it("treats escaped Markdown delimiters as literal text", () => {
     const fragment = render("\\*not emphasis\\* and \\`not code\\`");
     expect(host.querySelector("strong, em, code")).toBeNull();

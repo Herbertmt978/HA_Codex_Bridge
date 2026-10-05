@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { assistantMarkdownMaxLength, fencedCodeParts, renderAssistantMarkdown } from "../src/markdown.js";
+import { fencedCodeParts, renderAssistantMarkdown } from "../src/markdown.js";
+import { MAX_STREAMING_MESSAGE_CHARS } from "../src/protocol.js";
 import { acceptEvents, createEventStreamState } from "../src/event-stream.js";
 import "../src/codex-bridge-panel.js";
 
@@ -86,22 +87,38 @@ describe("response source and presentation parity", () => {
 
   it("labels an omitted streaming prefix and shows the bounded tail as inert plaintext", () => {
     const element = panel();
-    const source = `\`\`\`text\n${"x".repeat(assistantMarkdownMaxLength)}\n# still code`;
+    const source = `\`\`\`text\n${"x".repeat(MAX_STREAMING_MESSAGE_CHARS)}\n# still code`;
     element._events = [event(1, "message.delta", { run_id: "run-one", text: source })];
     const host = document.createElement("div");
     element._syncStreamingMessage(host, { assistantState: "partial", runId: "run-one", busy: false });
     expect(host.querySelector(".assistant-markdown-overflow-notice").textContent).toContain("Only the latest part");
-    expect(host.querySelector(".assistant-markdown-overflow").textContent).toBe(source.slice(-assistantMarkdownMaxLength));
+    expect(host.querySelector(".assistant-markdown-overflow").textContent).toBe(source.slice(-MAX_STREAMING_MESSAGE_CHARS));
     expect(host.querySelector("h1, .code-block")).toBeNull();
     const completed = element._renderMessage("assistant", source, 2);
-    expect(completed.querySelector(".assistant-markdown-overflow").textContent).toBe(source.slice(assistantMarkdownMaxLength));
+    expect(completed.querySelector(".code-text").textContent).toBe(source.slice("```text\n".length));
   });
 
   it("does not start a retained streaming tail with half a Unicode character", () => {
     const element = panel();
-    element._events = [event(1, "message.delta", { run_id: "run-one", text: `x😀${"a".repeat(assistantMarkdownMaxLength - 1)}` })];
+    element._events = [event(1, "message.delta", { run_id: "run-one", text: `x😀${"a".repeat(MAX_STREAMING_MESSAGE_CHARS - 1)}` })];
     const projection = element._streamingAssistantProjection({ assistantState: "streaming", runId: "run-one" }, "");
     expect(projection.truncated).toBe(true);
-    expect(projection.text).toBe("a".repeat(assistantMarkdownMaxLength - 1));
+    expect(projection.text).toBe("a".repeat(MAX_STREAMING_MESSAGE_CHARS - 1));
+  });
+
+  it("copies the complete large code block during streaming, completion and reload", () => {
+    const element = panel();
+    const code = `${"Status.Value = \"Triaged\"\r\n".repeat(12_000)}// final line 😃\r\n`;
+    const source = `\`\`\`powerfx\r\n${code}\`\`\``;
+    element._events = source.match(/[\s\S]{1,3000}/gu).map((text, index) =>
+      event(index + 1, "message.delta", { run_id: "run-one", text }));
+    const projection = element._streamingAssistantProjection({ assistantState: "streaming", runId: "run-one" }, "");
+    expect(projection).toEqual({ text: source, truncated: false });
+    for (const text of [projection.text, source, JSON.parse(JSON.stringify({ text: source })).text]) {
+      const article = element._renderMessage("assistant", text, 1);
+      expect(article.querySelector(".code-text").textContent).toBe(code);
+      article.querySelector(".copy-button").click();
+      expect(element._writeClipboardText).toHaveBeenLastCalledWith(code);
+    }
   });
 });

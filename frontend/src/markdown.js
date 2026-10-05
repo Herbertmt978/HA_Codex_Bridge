@@ -271,6 +271,11 @@ export function renderAssistantMarkdown(document, source, { createCodeBlock, onM
   if (!document?.createDocumentFragment) throw new TypeError("A document is required");
   const original = String(source ?? "");
   let formattedLength = Math.min(original.length, MAX_MARKDOWN_LENGTH);
+  if (formattedLength < original.length) {
+    const crossingFence = fencedCodeParts(original).find((fence) =>
+      fence.start < formattedLength && fence.end > formattedLength);
+    if (crossingFence) formattedLength = crossingFence.end;
+  }
   if (formattedLength < original.length
     && original.charCodeAt(formattedLength - 1) >= 0xd800 && original.charCodeAt(formattedLength - 1) <= 0xdbff
     && original.charCodeAt(formattedLength) >= 0xdc00 && original.charCodeAt(formattedLength) <= 0xdfff) {

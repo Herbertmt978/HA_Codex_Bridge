@@ -55,6 +55,7 @@ export function parseEvents(value, options) {
 
 /** Sort by the trusted cursor and remove duplicate sequence/event IDs. */
 export const MAX_RETAINED_EVENTS = 25_000;
+export const MAX_STREAMING_MESSAGE_CHARS = 1024 * 1024;
 
 export function normalizeEvents(events, { maxEvents = MAX_RETAINED_EVENTS } = {}) {
   const seenSequences = new Set();

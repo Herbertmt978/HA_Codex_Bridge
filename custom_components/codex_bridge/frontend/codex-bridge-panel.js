@@ -16080,6 +16080,10 @@ function renderAssistantMarkdown(document2, source, { createCodeBlock, onMathSou
   if (!document2?.createDocumentFragment) throw new TypeError("A document is required");
   const original = String(source ?? "");
   let formattedLength = Math.min(original.length, MAX_MARKDOWN_LENGTH);
+  if (formattedLength < original.length) {
+    const crossingFence = fencedCodeParts(original).find((fence) => fence.start < formattedLength && fence.end > formattedLength);
+    if (crossingFence) formattedLength = crossingFence.end;
+  }
   if (formattedLength < original.length && original.charCodeAt(formattedLength - 1) >= 55296 && original.charCodeAt(formattedLength - 1) <= 56319 && original.charCodeAt(formattedLength) >= 56320 && original.charCodeAt(formattedLength) <= 57343) {
     formattedLength += 1;
   }
@@ -27280,6 +27284,7 @@ function parseEvents(value, options) {
   return normalizeEvents(value.map((item) => parseEvent(item, options)).filter(Boolean));
 }
 var MAX_RETAINED_EVENTS = 25e3;
+var MAX_STREAMING_MESSAGE_CHARS = 1024 * 1024;
 function normalizeEvents(events, { maxEvents = MAX_RETAINED_EVENTS } = {}) {
   const seenSequences = /* @__PURE__ */ new Set();
   const seenIds = /* @__PURE__ */ new Set();
@@ -53877,7 +53882,8 @@ var ChildAgentsView = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.13.4";
+var PANEL_VERSION = "1.13.11";
+var STREAMING_RENDER_INTERVAL_MS = 200;
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -60110,6 +60116,7 @@ var CodexBridgePanel = class extends HTMLElement {
     this._eventSubscriptionActive = false;
     this._eventSubscriptionGeneration = 0;
     this._eventRefreshTimer = null;
+    this._streamingRenderTimer = null;
     this._eventReconnectTimer = null;
     this._eventReconnectAttempt = 0;
     this._eventStream = createEventStreamState();
@@ -65252,6 +65259,7 @@ var CodexBridgePanel = class extends HTMLElement {
     return parts.join(". ");
   }
   _renderMessages() {
+    this._cancelStreamingEventRender();
     this._inlineImageController?.setThread(this._selectedThreadId || "");
     const messageList = this.shadowRoot.getElementById("message-list");
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || messageList;
@@ -65631,9 +65639,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const chunk = typeof payload.text === "string" ? payload.text : typeof payload.delta === "string" ? payload.delta : "";
       if (!chunk) continue;
       text5 += chunk;
-      if (text5.length > assistantMarkdownMaxLength) {
+      if (text5.length > MAX_STREAMING_MESSAGE_CHARS) {
         truncated = true;
-        let start = text5.length - assistantMarkdownMaxLength;
+        let start = text5.length - MAX_STREAMING_MESSAGE_CHARS;
         if (text5.charCodeAt(start) >= 56320 && text5.charCodeAt(start) <= 57343 && text5.charCodeAt(start - 1) >= 55296 && text5.charCodeAt(start - 1) <= 56319) start += 1;
         text5 = text5.slice(start);
       }
@@ -69991,6 +69999,7 @@ var CodexBridgePanel = class extends HTMLElement {
     return this._eventSubscriptionPending;
   }
   _stopEventSubscription({ preserveReconnectAttempt = false } = {}) {
+    this._cancelStreamingEventRender();
     this._childAgentsView.invalidate();
     this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
@@ -70012,6 +70021,7 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _retireEventSubscription({ reconnect = true } = {}) {
+    this._cancelStreamingEventRender();
     const threadId = this._selectedThreadId;
     this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
@@ -70106,11 +70116,11 @@ var CodexBridgePanel = class extends HTMLElement {
     if (acceptedEvent.event_type === "message.created" && typeof acceptedEvent.payload?.client_request_id === "string") {
       this._settlePromptMutation(acceptedEvent.payload.client_request_id);
     }
-    this._renderMessages();
-    this._renderRunActivity();
-    this._renderActivityCenter();
-    this._renderThreadRunState();
-    this._renderComposerState(this._activeThread);
+    if (acceptedEvent.event_type === "message.delta") {
+      this._scheduleStreamingEventRender();
+      return;
+    }
+    this._renderSubscribedEventViews();
     if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued", "run.queue_cleared", "run.queue_item_updated"].includes(acceptedEvent.event_type)) {
       void this._loadPromptQueue(this._selectedThreadId);
       this._renderNavigationSections();
@@ -70132,9 +70142,33 @@ var CodexBridgePanel = class extends HTMLElement {
     }
   }
   _resetEventState(cursor = 0) {
+    this._cancelStreamingEventRender();
     this._eventStream = createEventStreamState({ cursor });
     this._events = [];
     this._sequence = this._eventStream.cursor;
+  }
+  _cancelStreamingEventRender() {
+    if (this._streamingRenderTimer !== null) {
+      window.clearTimeout(this._streamingRenderTimer);
+      this._streamingRenderTimer = null;
+    }
+  }
+  _scheduleStreamingEventRender() {
+    if (this._streamingRenderTimer !== null) return;
+    const threadId = this._selectedThreadId;
+    const generation = this._eventSubscriptionGeneration;
+    this._streamingRenderTimer = window.setTimeout(() => {
+      this._streamingRenderTimer = null;
+      if (!this.isConnected || threadId !== this._selectedThreadId || generation !== this._eventSubscriptionGeneration) return;
+      this._renderSubscribedEventViews();
+    }, STREAMING_RENDER_INTERVAL_MS);
+  }
+  _renderSubscribedEventViews() {
+    this._renderMessages();
+    this._renderRunActivity();
+    this._renderActivityCenter();
+    this._renderThreadRunState();
+    this._renderComposerState(this._activeThread);
   }
   _scheduleLiveRefresh(threadId) {
     if (this._eventRefreshTimer) {

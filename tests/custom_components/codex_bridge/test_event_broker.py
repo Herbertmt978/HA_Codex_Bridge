@@ -16,9 +16,11 @@ from custom_components.codex_bridge.bridge_api import (
 )
 from custom_components.codex_bridge.event_broker import (
     EventBroker,
+    EventRecord,
+    MAX_MESSAGE_TEXT_BYTES,
     default_reconnect_delay,
 )
-from custom_components.codex_bridge.protocol import ProblemRecord
+from custom_components.codex_bridge.protocol import EndpointError, ProblemRecord
 
 
 def _batch(
@@ -81,6 +83,58 @@ class _ScriptedClient:
     async def async_wait_events(self, *, after: int):
         self.wait_after.append(after)
         return await self._next(self.wait, after=after)
+
+
+@pytest.mark.parametrize(
+    "event_type", ["message.created", "message.completed", "message.delta", "message.updated"]
+)
+@pytest.mark.parametrize("field", ["text", "delta"])
+def test_long_message_source_survives_event_validation(event_type: str, field: str) -> None:
+    text = (
+        "```powerfx\r\n" + 'Status.Value = "Triaged"\r\n' * 12_000 + "// end 😃\r\n```"
+    )
+    raw = _event(1, event_type=event_type)
+    raw["payload"] = {field: text, "metadata": "m" * 5000, "nested": {"text": text}}
+    event = EventRecord.from_payload(raw)
+
+    assert len(text) > 200_000
+    assert event.payload[field] == text
+    assert event.as_dict()["payload"][field] == text
+    assert event.payload["metadata"] == "m" * 4096
+    assert event.payload["nested"]["text"] == text[:4096]
+    assert event.estimated_bytes >= len(text.encode("utf-8"))
+
+
+def test_message_text_budget_counts_utf8_bytes_and_rejects_without_clipping() -> None:
+    raw = _event(1, event_type="message.completed")
+    exact = "😃" * (MAX_MESSAGE_TEXT_BYTES // 4)
+    raw["payload"] = {"text": exact}
+    assert EventRecord.from_payload(raw).payload["text"] == exact
+    raw["payload"] = {"text": exact + "x"}
+    with pytest.raises(EndpointError) as error:
+        EventRecord.from_payload(raw)
+    assert error.value.code == "event_invalid"
+
+
+def test_other_event_text_keeps_the_metadata_limit() -> None:
+    raw = _event(1, event_type="runtime.updated", scope="runtime", thread_id=None)
+    raw["payload"] = {"text": "x" * 5000}
+    assert EventRecord.from_payload(raw).payload["text"] == "x" * 4096
+
+
+async def test_long_code_replays_identically_to_live_delivery() -> None:
+    text = "```python\n" + "print('large source')\n" * 12_000 + "# complete\n```"
+    raw = _event(1, event_type="message.completed")
+    raw["payload"] = {"text": text}
+    broker = EventBroker(AsyncMock(), initial_cursor=0)
+    live = broker.subscribe(after=0, scopes={"thread"}, thread_ids={"thr_1"})
+    try:
+        await broker._consume(_batch(raw))
+        replay = broker.subscribe(after=0, scopes={"thread"}, thread_ids={"thr_1"})
+        assert (await live.get())["event"].payload["text"] == text
+        assert (await replay.get())["event"].payload["text"] == text
+    finally:
+        await broker.async_close()
 
 
 async def test_two_subscribers_share_one_upstream_and_receive_scoped_exactly_once_events() -> None:
