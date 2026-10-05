@@ -251,8 +251,9 @@ from ordinary projects. Assist-only projects keep their project actions inside
 this group, including restore and delete actions when archived. Their workspace
 and history are retained; continue their messages through Home Assistant Assist.
 
-This release pairs App **1.13.5**, Integration and panel **1.13.4**, with Bridge **0.20.0**
-and Codex **0.158.0**. Assistant Markdown, transcript search, explicit Queue/Steer, native Plan
+This release pairs App **1.13.11**, Integration and panel **1.13.11**, with Bridge **0.20.0**
+and Codex **0.160.0**. Long chat replies and fenced code retain their complete
+source within the Bridge's existing limits. Assistant Markdown, transcript search, explicit Queue/Steer, native Plan
 and scoped Git review are described in [the conversation controls guide](docs/selected-enhancements.md). Core ARM64 build support is implemented and awaits testing on real ARM64
 Home Assistant OS hardware; published images remain **amd64-only** until that
 testing passes. It retains write-only

@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.13.11
+
+- Pairs with Integration and panel 1.13.11 to preserve long chat replies instead of cutting message text at 4,096 characters.
+- Keeps large fenced code blocks whole for display and exact copying, including after reload; bounded streaming retains much longer replies.
+- Replays the complete retained reply when older Integration versions had shortened its display.
+- Bundles the Sigstore-verified Codex runtime `0.160.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.0` without changing its Integration API compatibility.
+
 ## 1.13.10
 
 - Updates the hash-locked FastAPI runtime to 0.142.2.

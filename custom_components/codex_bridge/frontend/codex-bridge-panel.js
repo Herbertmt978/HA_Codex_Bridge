@@ -16080,6 +16080,10 @@ function renderAssistantMarkdown(document2, source, { createCodeBlock, onMathSou
   if (!document2?.createDocumentFragment) throw new TypeError("A document is required");
   const original = String(source ?? "");
   let formattedLength = Math.min(original.length, MAX_MARKDOWN_LENGTH);
+  if (formattedLength < original.length) {
+    const crossingFence = fencedCodeParts(original).find((fence) => fence.start < formattedLength && fence.end > formattedLength);
+    if (crossingFence) formattedLength = crossingFence.end;
+  }
   if (formattedLength < original.length && original.charCodeAt(formattedLength - 1) >= 55296 && original.charCodeAt(formattedLength - 1) <= 56319 && original.charCodeAt(formattedLength) >= 56320 && original.charCodeAt(formattedLength) <= 57343) {
     formattedLength += 1;
   }
@@ -27280,6 +27284,7 @@ function parseEvents(value, options) {
   return normalizeEvents(value.map((item) => parseEvent(item, options)).filter(Boolean));
 }
 var MAX_RETAINED_EVENTS = 25e3;
+var MAX_STREAMING_MESSAGE_CHARS = 1024 * 1024;
 function normalizeEvents(events, { maxEvents = MAX_RETAINED_EVENTS } = {}) {
   const seenSequences = /* @__PURE__ */ new Set();
   const seenIds = /* @__PURE__ */ new Set();
@@ -53877,7 +53882,7 @@ var ChildAgentsView = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.13.4";
+var PANEL_VERSION = "1.13.11";
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
 var PREPARED_DOWNLOAD_TTL_MS = 6e4;
@@ -65631,9 +65636,9 @@ var CodexBridgePanel = class extends HTMLElement {
       const chunk = typeof payload.text === "string" ? payload.text : typeof payload.delta === "string" ? payload.delta : "";
       if (!chunk) continue;
       text5 += chunk;
-      if (text5.length > assistantMarkdownMaxLength) {
+      if (text5.length > MAX_STREAMING_MESSAGE_CHARS) {
         truncated = true;
-        let start = text5.length - assistantMarkdownMaxLength;
+        let start = text5.length - MAX_STREAMING_MESSAGE_CHARS;
         if (text5.charCodeAt(start) >= 56320 && text5.charCodeAt(start) <= 57343 && text5.charCodeAt(start - 1) >= 55296 && text5.charCodeAt(start - 1) <= 56319) start += 1;
         text5 = text5.slice(start);
       }

@@ -1858,6 +1858,44 @@ test("gives desktop chats wider space and one working control with message and c
   }
 });
 
+for (const width of [390, 1280]) {
+  test(`preserves and copies a long code reply at ${width}px`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await selectHarnessThread(page);
+    const code = `${"Status.Value = \"Triaged\"\r\n".repeat(12_000)}// complete formula 😃\r\n`;
+    await page.evaluate((value) => {
+      const node = document.querySelector("codex-bridge-panel");
+      node._stopPolling();
+      node._events = [{ event_id: "long-code", thread_id: node._selectedThreadId,
+        sequence: 21000, event_type: "message.completed",
+        payload: { text: `\`\`\`powerfx\r\n${value}\`\`\`` } }];
+      node._writeClipboardText = async (text) => { window.longCodeCopied = text; };
+      node._forceMessageRebuild = true;
+      node._render(true);
+    }, code);
+    const panel = page.locator("codex-bridge-panel");
+    const block = panel.locator(".message.assistant .code-block");
+    await expect(block).toHaveCount(1);
+    expect(await block.locator(".code-text").textContent()).toBe(code);
+    const copy = block.getByRole("button", { name: "Copy original code", exact: true });
+    await copy.focus();
+    await page.keyboard.press("Enter");
+    expect(await page.evaluate(() => window.longCodeCopied)).toBe(code);
+    await block.getByRole("button", { name: "Wrap lines", exact: true }).click();
+    await expect(block.locator(".code-text")).toHaveClass(/is-wrapped/);
+    for (const theme of ["light", "dark"]) {
+      await panel.evaluate((node, value) => node.setAttribute("data-panel-theme", value), theme);
+      expect(await panel.locator("#conversation-scroll").evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      expect(await block.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      await block.locator(".code-text").evaluate((node) => { node.scrollTop = node.scrollHeight; });
+      await expect(block.locator(".code-text")).toContainText("// complete formula 😃");
+      await page.screenshot({ path: testInfo.outputPath(`long-code-${theme}-${width}.png`) });
+    }
+  });
+}
+
 test("shows exhausted usage and completes a simulated reset credit", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/frontend/e2e/panel-harness.html`);

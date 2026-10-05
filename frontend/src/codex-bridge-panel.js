@@ -4,7 +4,7 @@ import { BottomPaneResize, bottomPaneResizeStyles } from "./bottom-pane-resize.j
 import { CompactComposer, compactComposerStyles } from "./compact-composer.js";
 import { contextUsage } from "./context-usage.js";
 import { durationLimit, renderUsageHistory } from "./task-usage.js";
-import { renderAssistantMarkdown, assistantMarkdownStyles, fencedCodeParts, assistantMarkdownMaxLength } from "./markdown.js";
+import { renderAssistantMarkdown, assistantMarkdownStyles, fencedCodeParts } from "./markdown.js";
 import { mathSourceActions } from "./assistant-math.js";
 import { renderCodeBlock } from "./code-blocks.js";
 import { selectedMessagePassageResult, attributedMessageQuote } from "./message-actions.js";
@@ -20,7 +20,7 @@ import { HOST_MODE, HOST_LABEL, renderHostAccessDialog } from "./host-access.js"
 import { DEFAULT_PREFERENCES, normalisePreferences, readPreferences, savePreferences } from "./panel-preferences.js";
 import { acceptEvent, acceptEvents, createEventStreamState } from "./event-stream.js";
 import { INFO_TABS, getInfoCenterViewModel } from "./info-center.js";
-import { MAX_RETAINED_EVENTS, parseEvents } from "./protocol.js";
+import { MAX_RETAINED_EVENTS, MAX_STREAMING_MESSAGE_CHARS, parseEvents } from "./protocol.js";
 import {
   PDF_PREVIEW_MAX_SCALE,
   PDF_PREVIEW_MIN_SCALE,
@@ -57,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.4";
+const PANEL_VERSION = "1.13.11";
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -12069,9 +12069,9 @@ class CodexBridgePanel extends HTMLElement {
       if (!chunk) continue;
       // Bridge message.delta carries incremental text, including repeated prefixes.
       text += chunk;
-      if (text.length > assistantMarkdownMaxLength) {
+      if (text.length > MAX_STREAMING_MESSAGE_CHARS) {
         truncated = true;
-        let start = text.length - assistantMarkdownMaxLength;
+        let start = text.length - MAX_STREAMING_MESSAGE_CHARS;
         if (text.charCodeAt(start) >= 0xdc00 && text.charCodeAt(start) <= 0xdfff
           && text.charCodeAt(start - 1) >= 0xd800 && text.charCodeAt(start - 1) <= 0xdbff) start += 1;
         text = text.slice(start);

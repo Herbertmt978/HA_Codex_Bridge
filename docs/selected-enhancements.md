@@ -32,11 +32,13 @@ remaining text in a labelled, scrollable plain-text section. Markdown image synt
 does not load arbitrary images; the existing decoded, bounded and authenticated
 attachment/artifact image views remain responsible for image presentation.
 
-The live/partial preview retains at most the latest 200,000 UTF-16 code units.
+The live/partial preview retains at most the latest 1,048,576 UTF-16 code units.
 If earlier text falls outside that window, the preview labels the omission and
 shows the retained tail as plain text so a missing opening code fence cannot
-change its meaning. Completed responses use the normal formatting limit and
-labelled remainder; completion does not promise recovery of text removed by
+change its meaning. Prose formatting normally stops after 200,000 code units,
+but a fenced code block crossing that boundary remains intact for display and
+copying. Any remaining prose uses the labelled plain-text section. Completion
+does not promise recovery of text removed by
 Bridge ingress or history retention limits. Bridge agent-item text has its own
 byte limit (half the configured event payload budget, normally 512 KiB).
 

@@ -80,6 +80,23 @@ def _event(
     )
 
 
+def _long_assistant_event(cursor: int = 1) -> tuple[EventRecord, str]:
+    code = 'Set(varStatus, "Status.Value"); // λ🧪\n' * 7_000
+    text = f"```powerfx\n{code}Run completed ✅\n```\nEND_OF_LONG_REPLY"
+    event = EventRecord.from_payload(
+        {
+            "cursor": cursor,
+            "event_id": f"evt_{cursor}",
+            "scope": "thread",
+            "thread_id": "thr_1",
+            "event_type": "message.completed",
+            "payload": {"run_id": "run_long", "role": "assistant", "text": text},
+            "timestamp": "2026-10-05T12:00:00Z",
+        }
+    )
+    return event, text
+
+
 class _Connection:
     def __init__(self) -> None:
         self.subscriptions = {}
@@ -987,6 +1004,51 @@ async def test_disabled_mcp_reports_the_app_option_instead_of_an_outdated_app() 
     ]
 
 
+async def test_long_assistant_message_survives_v1_and_current_panel_live_websockets() -> None:
+    runtime, broker = _runtime()
+    hass = _Hass(runtime)
+    connection = _Connection()
+    event, expected_text = _long_assistant_event()
+
+    ws_subscribe_events(
+        hass,
+        connection,
+        {
+            "id": 30,
+            "type": f"{DOMAIN}/subscribe_events",
+            "after": 0,
+            "scopes": ["thread"],
+            "thread_ids": ["thr_1"],
+        },
+    )
+    ws_subscribe_events(
+        hass,
+        connection,
+        {
+            "id": 31,
+            "type": f"{DOMAIN}/subscribe_events",
+            "after": 0,
+            "thread_id": "thr_1",
+        },
+    )
+    await asyncio.sleep(0)
+    broker._publish_event(event)
+    await asyncio.sleep(0)
+    connection.subscriptions[30]()
+    connection.subscriptions[31]()
+    await hass.finish()
+
+    assert len(expected_text) > 200_000
+    assert expected_text.endswith("Run completed ✅\n```\nEND_OF_LONG_REPLY")
+    events_by_subscription = {
+        message_id: value for message_id, value in connection.events
+    }
+    v1_event = events_by_subscription[30]["event"]
+    legacy_event = events_by_subscription[31]
+    assert v1_event["payload"]["text"] == expected_text
+    assert legacy_event["payload"]["text"] == expected_text
+
+
 async def test_singular_thread_filter_preserves_the_retiring_panel_contract() -> None:
     runtime, broker = _runtime()
     hass = _Hass(runtime)
@@ -1198,6 +1260,49 @@ async def test_singular_get_events_returns_legacy_list_for_current_panel() -> No
             "timestamp": "2026-07-13T12:00:00Z",
         }
     ]
+
+
+async def test_long_assistant_message_survives_v1_and_current_panel_event_replay() -> None:
+    runtime, _broker = _runtime()
+    event, expected_text = _long_assistant_event()
+    batch = {
+        "events": [event.as_dict()],
+        "next_cursor": event.cursor,
+        "minimum_cursor": 0,
+        "has_more": False,
+        "heartbeat": False,
+    }
+    runtime.client.async_replay_events = AsyncMock(return_value=batch)
+    hass = _Hass(runtime)
+    connection = _Connection()
+
+    ws_get_events(
+        hass,
+        connection,
+        {
+            "id": 32,
+            "type": f"{DOMAIN}/get_events",
+            "after": 0,
+            "scopes": ["thread"],
+            "thread_ids": ["thr_1"],
+        },
+    )
+    ws_get_events(
+        hass,
+        connection,
+        {
+            "id": 33,
+            "type": f"{DOMAIN}/get_events",
+            "after": 0,
+            "thread_id": "thr_1",
+        },
+    )
+    await hass.finish()
+
+    assert len(expected_text) > 200_000
+    results = dict(connection.results)
+    assert results[32]["events"][0]["payload"]["text"] == expected_text
+    assert results[33][0]["payload"]["text"] == expected_text
 
 
 async def test_event_status_and_config_never_expose_private_origin_or_errors() -> None:

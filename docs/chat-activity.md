@@ -4,7 +4,20 @@ User messages use black bubbles with white text. Assistant prose stays on the
 page background and supports safe Markdown headings, lists, quotations and tables.
 Raw HTML and filesystem download links stay inert; indexed file cards retain
 authenticated downloads. Copy is available on fenced code blocks and copies their
-contents, preserving indentation and line breaks.
+contents, preserving indentation and line breaks. Long code fences stay in one
+code block even when they exceed the 200,000-character prose formatting budget;
+large blocks use plain text instead of expensive syntax highlighting. Message
+copy and code copy retain the complete original source.
+
+Integration 1.13.11 removes the earlier 4,096-character chat-event cutoff.
+The Integration accepts message text up to 1 MiB of UTF-8 within the existing
+Bridge event contract, and the panel retains up to 1 MiB of streamed characters.
+The Bridge's existing default completed-message limit remains 512 KiB of UTF-8;
+this is not an unlimited provider-output guarantee. Replies longer than the
+prose formatting budget remain readable as plain text. Reloading a chat also
+recovers complete replies still retained by the Bridge when an older Integration
+had shortened their display; text already omitted by the provider or Bridge
+cannot be recovered by the panel.
 
 The desktop side columns are 15% narrower and the central reading column can
 grow to 960 pixels. Mobile drawers keep their existing dimensions.

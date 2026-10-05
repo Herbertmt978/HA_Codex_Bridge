@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.13.11
+
+- Bundles the Sigstore-verified Codex runtime `0.160.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.0` without changing its Integration API compatibility.
+
 ## 1.13.10
 
 - Keeps the companion release aligned with the Bridge App; Host Access behaviour is unchanged.
