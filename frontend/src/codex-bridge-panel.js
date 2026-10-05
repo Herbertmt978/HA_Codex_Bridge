@@ -58,6 +58,7 @@ import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
 const PANEL_VERSION = "1.13.11";
+const STREAMING_RENDER_INTERVAL_MS = 200;
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
 const PREPARED_DOWNLOAD_TTL_MS = 60_000;
@@ -6327,6 +6328,7 @@ class CodexBridgePanel extends HTMLElement {
     this._eventSubscriptionActive = false;
     this._eventSubscriptionGeneration = 0;
     this._eventRefreshTimer = null;
+    this._streamingRenderTimer = null;
     this._eventReconnectTimer = null;
     this._eventReconnectAttempt = 0;
     this._eventStream = createEventStreamState();
@@ -11665,6 +11667,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _renderMessages() {
+    this._cancelStreamingEventRender();
     this._inlineImageController?.setThread(this._selectedThreadId || "");
     const messageList = this.shadowRoot.getElementById("message-list");
     const scrollContainer = this.shadowRoot.getElementById("conversation-scroll") || messageList;
@@ -16829,6 +16832,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _stopEventSubscription({ preserveReconnectAttempt = false } = {}) {
+    this._cancelStreamingEventRender();
     this._childAgentsView.invalidate();
     this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
@@ -16851,6 +16855,7 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _retireEventSubscription({ reconnect = true } = {}) {
+    this._cancelStreamingEventRender();
     const threadId = this._selectedThreadId;
     this._eventSubscriptionGeneration += 1;
     if (this._eventUnsubscribe) {
@@ -16958,11 +16963,11 @@ class CodexBridgePanel extends HTMLElement {
     ) {
       this._settlePromptMutation(acceptedEvent.payload.client_request_id);
     }
-    this._renderMessages();
-    this._renderRunActivity();
-    this._renderActivityCenter();
-    this._renderThreadRunState();
-    this._renderComposerState(this._activeThread);
+    if (acceptedEvent.event_type === "message.delta") {
+      this._scheduleStreamingEventRender();
+      return;
+    }
+    this._renderSubscribedEventViews();
     if (["run.started", "run.completed", "run.failed", "run.interrupted", "run.cancelled", "run.queued", "run.dequeued", "run.queue_cleared", "run.queue_item_updated"].includes(acceptedEvent.event_type)) {
       void this._loadPromptQueue(this._selectedThreadId);
       this._renderNavigationSections();
@@ -16988,9 +16993,37 @@ class CodexBridgePanel extends HTMLElement {
   }
 
   _resetEventState(cursor = 0) {
+    this._cancelStreamingEventRender();
     this._eventStream = createEventStreamState({ cursor });
     this._events = [];
     this._sequence = this._eventStream.cursor;
+  }
+
+  _cancelStreamingEventRender() {
+    if (this._streamingRenderTimer !== null) {
+      window.clearTimeout(this._streamingRenderTimer);
+      this._streamingRenderTimer = null;
+    }
+  }
+
+  _scheduleStreamingEventRender() {
+    if (this._streamingRenderTimer !== null) return;
+    const threadId = this._selectedThreadId;
+    const generation = this._eventSubscriptionGeneration;
+    this._streamingRenderTimer = window.setTimeout(() => {
+      this._streamingRenderTimer = null;
+      if (!this.isConnected || threadId !== this._selectedThreadId
+        || generation !== this._eventSubscriptionGeneration) return;
+      this._renderSubscribedEventViews();
+    }, STREAMING_RENDER_INTERVAL_MS);
+  }
+
+  _renderSubscribedEventViews() {
+    this._renderMessages();
+    this._renderRunActivity();
+    this._renderActivityCenter();
+    this._renderThreadRunState();
+    this._renderComposerState(this._activeThread);
   }
 
   _scheduleLiveRefresh(threadId) {

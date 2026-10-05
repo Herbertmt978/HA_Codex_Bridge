@@ -6,6 +6,7 @@ All notable App changes are recorded here.
 
 - Pairs with Integration and panel 1.13.11 to preserve long chat replies instead of cutting message text at 4,096 characters.
 - Keeps large fenced code blocks whole for display and exact copying, including after reload; bounded streaming retains much longer replies.
+- Batches small live text chunks for responsive long-code display, with immediate completion updates.
 - Replays the complete retained reply when older Integration versions had shortened its display.
 - Bundles the Sigstore-verified Codex runtime `0.160.0`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.

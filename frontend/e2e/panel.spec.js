@@ -1868,14 +1868,36 @@ for (const width of [390, 1280]) {
     await page.evaluate((value) => {
       const node = document.querySelector("codex-bridge-panel");
       node._stopPolling();
-      node._events = [{ event_id: "long-code", thread_id: node._selectedThreadId,
-        sequence: 21000, event_type: "message.completed",
-        payload: { text: `\`\`\`powerfx\r\n${value}\`\`\`` } }];
-      node._writeClipboardText = async (text) => { window.longCodeCopied = text; };
+      node._stopEventSubscription();
+      node._resetEventState();
+      node._activeThread = { ...node._activeThread, status: "running", active_run_id: "long-code-run" };
       node._forceMessageRebuild = true;
-      node._render(true);
+      node._scheduleLiveRefresh = () => {};
+      node._loadPromptQueue = async () => [];
+      node._writeClipboardText = async (text) => { window.longCodeCopied = text; };
+      const render = node._renderMessages.bind(node);
+      window.longCodeRenders = 0;
+      node._renderMessages = () => { window.longCodeRenders += 1; render(); };
+      const send = (sequence, event_type, payload = {}) => node._handleSubscribedEvent(
+        node._selectedThreadId, { event_id: `long-code-${sequence}`, thread_id: node._selectedThreadId,
+          sequence, event_type, payload: { run_id: "long-code-run", ...payload } });
+      send(1, "run.started");
+      window.longCodeRenders = 0;
+      const source = `\`\`\`powerfx\r\n${value}\`\`\``;
+      const chunks = source.match(/[\s\S]{1,256}/gu);
+      chunks.forEach((text, index) => send(index + 2, "message.delta", { text }));
+      window.completeLongCode = () => send(chunks.length + 2, "message.completed", { text: source });
     }, code);
     const panel = page.locator("codex-bridge-panel");
+    const streaming = panel.locator(".message.streaming .code-block");
+    await expect(streaming).toHaveCount(1);
+    expect(await streaming.locator(".code-text").textContent()).toBe(code);
+    expect(await page.evaluate(() => window.longCodeRenders)).toBe(1);
+    await streaming.getByRole("button", { name: "Copy original code", exact: true }).click();
+    expect(await page.evaluate(() => window.longCodeCopied)).toBe(code);
+    await page.evaluate(() => window.completeLongCode());
+    expect(await page.evaluate(() => window.longCodeRenders)).toBe(2);
+    await expect(panel.locator(".message.streaming")).toHaveCount(0);
     const block = panel.locator(".message.assistant .code-block");
     await expect(block).toHaveCount(1);
     expect(await block.locator(".code-text").textContent()).toBe(code);

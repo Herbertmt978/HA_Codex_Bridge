@@ -33,6 +33,8 @@ does not load arbitrary images; the existing decoded, bounded and authenticated
 attachment/artifact image views remain responsible for image presentation.
 
 The live/partial preview retains at most the latest 1,048,576 UTF-16 code units.
+Small live text chunks share a render every 200 ms; completion and other
+non-text events render immediately, keeping long replies responsive as they arrive.
 If earlier text falls outside that window, the preview labels the omission and
 shows the retained tail as plain text so a missing opening code fence cannot
 change its meaning. Prose formatting normally stops after 200,000 code units,
