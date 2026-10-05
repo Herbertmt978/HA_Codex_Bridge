@@ -544,6 +544,7 @@ def test_ha_lifecycle_uses_one_shared_client_for_catalogue_account_limits_and_tu
     # does not specify an override.
     assert thread_request["config"] == {
         "features.goals": False,
+        "features.default_mode_request_user_input": True,
         "default_permissions": "ha_bridge",
         "web_search": "cached",
     }

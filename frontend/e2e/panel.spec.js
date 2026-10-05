@@ -2854,6 +2854,64 @@ test("shows inline command approvals and user questions through the HA websocket
   expect(answers[0].payload.client_request_id).toMatch(/^[A-Za-z0-9_.:-]{1,256}$/);
 });
 
+for (const width of [390, 1280]) for (const theme of ["light", "dark"]) {
+  test(`optional free-text questions remain available without taking focus at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto(`${origin}/frontend/e2e/panel-harness.html`);
+    await prepareStaticHarnessThread(page);
+    await page.evaluate(async () => {
+      const panel = document.querySelector("codex-bridge-panel");
+      panel._stopEventSubscription();
+      window.__codexHarness.resolveInteraction("int_command_harness");
+      window.__codexHarness.resolveInteraction("int_question_harness");
+      const optionalQuestion = (interactionId, eventId) => ({
+        interaction_id: interactionId,
+        kind: "user_input",
+        thread_id: "thr_vba_1",
+        event_id: eventId,
+        status: "pending",
+        is_blocking: false,
+        expires_at: "2099-07-14T12:00:00Z",
+        allowed_actions: ["answer"],
+        display: {
+          title: "Add a note",
+          summary: "This answer blocks continuation.",
+          questions: [{ question_id: "note", header: "Note", prompt: "Anything to add?", options: [], allow_free_text: true }],
+        },
+      });
+      window.__codexHarness.addPendingInteraction(optionalQuestion("int_optional_harness", 804));
+      window.__codexHarness.addPendingInteraction(optionalQuestion("int_optional_second_harness", 805));
+      panel.shadowRoot.getElementById("prompt-input").focus();
+      await panel._refreshInteractions("thr_vba_1");
+    });
+
+    const panel = page.locator("codex-bridge-panel");
+    const question = panel.locator('[data-interaction-id="int_optional_harness"]');
+    const answer = question.getByLabel("Note: your answer");
+    await expect(question).toContainText("Answer this optional question while it is available.");
+    await expect(panel.locator(".interaction-summary")).toContainText("Codex has optional questions");
+    await expect(answer).toBeVisible();
+    await expect(answer).not.toBeFocused();
+    await expect(panel.locator("#prompt-input")).toBeFocused();
+    const bounds = await question.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect((await new AxeBuilder({ page }).include("codex-bridge-panel").withTags(["wcag2a", "wcag2aa"]).analyze()).violations).toEqual([]);
+    await question.screenshot({ path: testInfo.outputPath("optional-question.png") });
+
+    await answer.fill("No further changes");
+    await question.getByRole("button", { name: "Submit answer", exact: true }).click();
+    await expect(question).toHaveCount(0);
+    await expect.poll(() => websocketCalls(page, "codex_bridge/answer_interaction")).toHaveLength(1);
+    expect((await websocketCalls(page, "codex_bridge/answer_interaction"))[0].payload).toMatchObject({
+      interaction_id: "int_optional_harness",
+      thread_id: "thr_vba_1",
+      answers: [{ question_id: "note", values: ["No further changes"] }],
+    });
+  });
+}
+
 test("opens an authenticated question link on its pending card without submitting anything", async ({ page }) => {
   await page.goto(`${origin}/frontend/e2e/panel-harness.html?thread=thr_vba_1&interaction=int_question_harness`);
 

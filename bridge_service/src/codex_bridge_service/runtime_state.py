@@ -169,6 +169,7 @@ class RuntimeInteractionState(BaseModel):
     generation: int = Field(ge=1)
     app_request_id: str | int = Field(repr=False)
     status: InteractionStatus = "pending"
+    is_blocking: bool = True
     display: InteractionDisplayRecord | None = None
     allowed_actions: list[Literal["accept", "decline", "cancel", "answer"]] = Field(
         max_length=4

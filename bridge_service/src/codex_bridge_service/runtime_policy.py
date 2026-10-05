@@ -237,7 +237,11 @@ def question_display(params: dict[str, Any]) -> InteractionDisplayRecord | None:
         )
     return InteractionDisplayRecord(
         title="Codex has a question",
-        summary="Answer to continue this Codex turn.",
+        summary=(
+            "Answer this optional question while it is available."
+            if params.get("isBlocking") is False
+            else "Answer to continue this Codex turn."
+        ),
         questions=questions,
     )
 

@@ -1256,8 +1256,12 @@ def test_scheduled_mcp_runs_cannot_override_native_tool_selection(
         # The saved MCP selection lives in native config. A scheduled run must
         # not replace it in either the thread request or the turn request.
         thread_request = _requests(client, method)[-1]
-        assert set(thread_request["config"]) == {"default_permissions", "web_search", "features.goals"}
+        assert set(thread_request["config"]) == {
+            "default_permissions", "web_search", "features.goals",
+            "features.default_mode_request_user_input",
+        }
         assert thread_request["config"]["features.goals"] is False
+        assert thread_request["config"]["features.default_mode_request_user_input"] is False
         assert "config" not in _requests(client, "turn/start")[-1]
         _run_id, remote_thread_id, turn_id = _active_ids(
             storage, scheduled_thread.thread_id
@@ -2315,6 +2319,7 @@ def test_new_thread_uses_managed_profile_and_turn_applies_accepted_sandbox(
                 "approvalsReviewer": "user",
                 "config": {
                     "features.goals": False,
+                    "features.default_mode_request_user_input": True,
                     "default_permissions": permission_profile,
                     "web_search": "cached",
                 },
@@ -2364,6 +2369,7 @@ def test_web_search_override_is_scoped_to_thread_start_config(tmp_path: Path) ->
         start = _requests(client, "thread/start")[0]
         assert start["config"] == {
             "features.goals": False,
+            "features.default_mode_request_user_input": True,
             "default_permissions": "ha_bridge",
             "web_search": "live",
         }
@@ -2940,6 +2946,7 @@ def test_existing_thread_resumes_then_starts_a_fresh_turn_with_safe_overrides(
                 "approvalsReviewer": "user",
                 "config": {
                     "features.goals": False,
+                    "features.default_mode_request_user_input": True,
                     "default_permissions": "ha_bridge",
                     "web_search": "cached",
                 },
@@ -7275,7 +7282,7 @@ def test_pending_interaction_refreshes_idle_deadline_for_user_response(
         broker.close()
 
 
-def test_optional_question_is_declined_without_suspending_idle_timeout(
+def test_optional_question_is_presented_without_suspending_idle_timeout(
     tmp_path: Path,
 ) -> None:
     storage, thread = _storage_and_thread(tmp_path)
@@ -7318,9 +7325,12 @@ def test_optional_question_is_declined_without_suspending_idle_timeout(
                 ],
             },
             request_id="provider-optional-question",
-        ) == {"answers": {"scope": {"answers": []}}}
-        assert broker.pending_interactions(thread_id=thread.thread_id) == ()
-        assert not any(
+        ) is DEFERRED_RESPONSE
+        pending = broker.pending_interactions(thread_id=thread.thread_id)
+        assert len(pending) == 1
+        assert pending[0].is_blocking is False
+        assert pending[0].display.questions[0].allow_free_text is True
+        assert any(
             event.event_type == "interaction.created"
             for event in storage.list_thread_events(thread.thread_id)
         )

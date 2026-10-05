@@ -448,6 +448,7 @@ class PendingInteractionRecord(BaseModel):
     thread_id: str = Field(min_length=1, max_length=128)
     event_id: int = Field(ge=0)
     status: Literal["pending"] = "pending"
+    is_blocking: bool = True
     expires_at: str = Field(min_length=1, max_length=64)
     display: InteractionDisplayRecord
     authorization_url: str | None = Field(default=None, max_length=8192)

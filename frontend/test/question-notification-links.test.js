@@ -69,11 +69,50 @@ describe("authenticated question notification links", () => {
     const pending = await panel._listPendingInteractions("thread-one");
     expect(pending).toHaveLength(1);
     expect(pending[0].status).toBe("pending");
+    expect(pending[0].is_blocking).toBe(true);
     panel._selectedThreadId = "thread-one";
     panel._replacePendingInteractions(pending);
     panel._renderInteractions();
     expect(panel.shadowRoot.querySelector(".user-input-card")?.textContent).toContain("Which files should Codex update?");
     expect(panel._callWS).toHaveBeenCalledWith("list_pending_interactions", { thread_id: "thread-one" });
+  });
+
+  it("preserves an optional question and allows an answer while its Codex turn is active", async () => {
+    const panel = makePanel("/");
+    const optionalQuestion = {
+      ...question,
+      is_blocking: false,
+      display: {
+        ...question.display,
+        summary: "This answer blocks continuation.",
+        questions: [{ question_id: "note", header: "Note", prompt: "Anything to add?", options: [], allow_free_text: true }],
+      },
+    };
+    panel._callWS = vi.fn(async (operation) => {
+      if (operation === "list_pending_interactions") return { items: [{ ...optionalQuestion, event_id: 43 }] };
+      return [];
+    });
+    const [pending] = await panel._listPendingInteractions("thread-one");
+    panel._selectedThreadId = "thread-one";
+    panel._activeThread = { thread_id: "thread-one", status: "running" };
+    panel._replacePendingInteractions([pending]);
+    panel._renderInteractions();
+
+    const card = panel.shadowRoot.querySelector(".user-input-card");
+    const answer = card.querySelector("textarea");
+    expect(pending.is_blocking).toBe(false);
+    expect(card.textContent).toContain("Answer this optional question while it is available.");
+    expect(panel.shadowRoot.querySelector(".interaction-summary")?.textContent).toContain("optional question");
+    expect(panel.shadowRoot.activeElement).not.toBe(card);
+    answer.value = "No further changes";
+    answer.dispatchEvent(new Event("input", { bubbles: true }));
+    card.querySelector('[data-action="answer-interaction"]').click();
+
+    await vi.waitFor(() => expect(panel._callWS).toHaveBeenCalledWith("answer_interaction", expect.objectContaining({
+      interaction_id: optionalQuestion.interaction_id,
+      thread_id: "thread-one",
+      answers: [{ question_id: "note", values: ["No further changes"] }],
+    })));
   });
 
   it.each([null, "answered", "expired", "cancelled"])("rejects an explicitly non-pending status %s", async (status) => {
@@ -135,6 +174,16 @@ describe("authenticated question notification links", () => {
 
     expect(panel._callWS.mock.calls.map(([operation]) => operation)).toEqual(["list_threads"]);
     expect(panel.shadowRoot.querySelector(".question-link-status")).toBeNull();
+  });
+
+  it("focuses an optional question when its notification link explicitly opens it", async () => {
+    const panel = makePanel("/?thread=thread-one&interaction=interaction-question-1", [{ ...question, is_blocking: false }]);
+
+    await panel._loadThreads();
+
+    const card = panel.shadowRoot.querySelector(".user-input-card");
+    expect(card).not.toBeNull();
+    expect(panel.shadowRoot.activeElement).toBe(card);
   });
 
   it("scrolls a linked question inside the conversation without moving the recovery pane", async () => {

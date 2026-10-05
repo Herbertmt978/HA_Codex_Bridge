@@ -2946,6 +2946,9 @@ class RuntimeBroker:
             # Stable native goals default on and can launch idle turns outside
             # Bridge admission. Bridge goals guide deliberate bounded turns only.
             "features.goals": False,
+            "features.default_mode_request_user_input": not (
+                run.unattended or thread.assist_origin
+            ),
             "default_permissions": policy.permission_profile,
             # Codex keeps thread configuration when resuming. Always send the
             # managed default so a prior live/disabled override cannot leak
@@ -3286,6 +3289,7 @@ class RuntimeBroker:
                 cancelling = run.status == "cancelling"
                 waiting_for_user = any(
                     interaction.run_id == run_id
+                    and interaction.is_blocking
                     and interaction.status in _PENDING_INTERACTION_STATES
                     for interaction in self._state.interactions.values()
                 )
@@ -4119,10 +4123,12 @@ class RuntimeBroker:
             if request.method == "item/permissions/requestApproval":
                 return {"permissions": {}, "scope": "turn"}
             if request.method == "item/tool/requestUserInput":
-                # The compatible panel only presents blocking questions. Decline
-                # optional input without creating a waiting interaction or
-                # suppressing the run's idle watchdog.
-                if params.get("isBlocking") is False:
+                if sum(
+                    item.run_id == run.run_id
+                    and item.kind == "user_input"
+                    and item.status in _PENDING_INTERACTION_STATES
+                    for item in self._state.interactions.values()
+                ) >= 4:
                     return _empty_answers(params)
                 display = question_display(params)
                 if display is None:
@@ -4175,11 +4181,18 @@ class RuntimeBroker:
                 item_id=item_id,
                 generation=request.generation,
                 app_request_id=request.request_id,
+                is_blocking=not (
+                    kind == "user_input" and params.get("isBlocking") is False
+                ),
                 display=display,
                 allowed_actions=allowed_actions,
                 created_at=now.isoformat(),
                 expires_at=(
-                    now + timedelta(seconds=self.interaction_timeout_seconds)
+                    now + timedelta(seconds=(
+                        min(60.0, self.interaction_timeout_seconds)
+                        if kind == "user_input" and params.get("isBlocking") is False
+                        else self.interaction_timeout_seconds
+                    ))
                 ).isoformat(),
             )
             self._state.interactions[interaction.interaction_id] = interaction
@@ -5554,18 +5567,34 @@ class RuntimeBroker:
                 continue
             request = self._server_requests.pop(interaction.interaction_id, None)
             if request is not None:
-                self.app_server.discard_server_request(
-                    request.request_id,
-                    request.generation,
-                )
+                if (
+                    not interaction.is_blocking
+                    and interaction.kind == "user_input"
+                    and interaction.status == "pending"
+                ):
+                    # Optional input expires without aborting this or another
+                    # turn. Empty answers let the native tool continue; they
+                    # are not an inferred selection or approval.
+                    try:
+                        self.app_server.respond(request, result=_empty_answers(request.params))
+                    except Exception:
+                        self.app_server.discard_server_request(
+                            request.request_id, request.generation,
+                        )
+                else:
+                    self.app_server.discard_server_request(
+                        request.request_id,
+                        request.generation,
+                    )
             interaction.status = (
                 "outcome_unknown" if interaction.status == "responding" else "expired"
             )
             interaction.display = None
-            affected_runs.add(interaction.run_id)
-            if interaction.kind in {"mcp_form", "mcp_url"}:
-                affected_mcp_runs.add(interaction.run_id)
-            affected_generations.add(interaction.generation)
+            if interaction.is_blocking:
+                affected_runs.add(interaction.run_id)
+                if interaction.kind in {"mcp_form", "mcp_url"}:
+                    affected_mcp_runs.add(interaction.run_id)
+                affected_generations.add(interaction.generation)
             events.append(
                 EventDraft(
                     scope="thread",
@@ -5584,7 +5613,8 @@ class RuntimeBroker:
             self._persist_locked(events=tuple(events))
             for generation in affected_generations:
                 self.app_server.abort_generation(generation)
-            self._clear_queued_locked("interaction timeout aborted the app-server")
+            if affected_generations:
+                self._clear_queued_locked("interaction timeout aborted the app-server")
             for run_id in affected_runs:
                 run = self._state.runs.get(run_id)
                 if run is not None and run.status not in _TERMINAL_RUN_STATES:
@@ -5938,6 +5968,7 @@ def _public_interaction(
         kind=interaction.kind,
         thread_id=interaction.thread_id,
         event_id=interaction.event_id,
+        is_blocking=interaction.is_blocking,
         expires_at=interaction.expires_at,
         display=interaction.display,
         authorization_url=authorization_url,

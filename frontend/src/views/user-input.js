@@ -38,6 +38,7 @@ function selectedValues(value, options, allowFreeText) {
 /** Build a bounded, render-safe form model from a user-input interaction. */
 export function getUserInputViewModel(interaction = {}, { now = Date.now(), pending = false, stale = false, answers = {} } = {}) {
   const display = interaction && typeof interaction.display === "object" ? interaction.display : {};
+  const optional = interaction?.is_blocking === false;
   const expiry = expiryState(interaction?.expires_at, now);
   const interactionPending = interaction?.status === "pending";
   const unavailable = Boolean(pending || stale || expiry.expired || !interactionPending);
@@ -63,6 +64,7 @@ export function getUserInputViewModel(interaction = {}, { now = Date.now(), pend
       options,
       multiple: Boolean(question.multiple),
       allowFreeText,
+      freeTextOnly: allowFreeText && options.length === 0,
       selected,
       complete: selected.length > 0,
     };
@@ -72,7 +74,9 @@ export function getUserInputViewModel(interaction = {}, { now = Date.now(), pend
   return {
     interactionId: typeof interaction?.interaction_id === "string" ? interaction.interaction_id : "",
     title: plainText(display.title, 160) || "Codex has a question",
-    summary: plainText(display.summary, 512) || "Answer to continue this Codex turn.",
+    summary: optional
+      ? "Answer this optional question while it is available."
+      : plainText(display.summary, 512) || "Answer to continue this Codex turn.",
     expiry: expiry.label,
     state,
     disabled: unavailable,
@@ -140,7 +144,7 @@ export function renderUserInput(container, model) {
       const freeTextId = `question-${accessibleId}-${question.domId}-free-text`;
       const freeTextLabel = document.createElement("label");
       freeTextLabel.htmlFor = freeTextId;
-      freeTextLabel.textContent = "Other answer";
+      freeTextLabel.textContent = question.freeTextOnly ? "Your answer" : "Other answer";
       const textarea = document.createElement("textarea");
       textarea.id = freeTextId;
       textarea.name = `question-${accessibleId}-${question.domId}-free-text`;
@@ -148,7 +152,7 @@ export function renderUserInput(container, model) {
       textarea.disabled = model.disabled;
       textarea.dataset.questionId = question.id;
       textarea.dataset.questionFreeText = "true";
-      textarea.setAttribute("aria-label", `${question.header}: other answer`);
+      textarea.setAttribute("aria-label", `${question.header}: ${question.freeTextOnly ? "your answer" : "other answer"}`);
       const freeText = question.selected.find((value) => !question.options.some((option) => option.label === value));
       textarea.value = freeText || "";
       fieldset.append(freeTextLabel, textarea);

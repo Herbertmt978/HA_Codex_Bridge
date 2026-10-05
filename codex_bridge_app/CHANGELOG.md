@@ -2,6 +2,15 @@
 
 All notable App changes are recorded here.
 
+## 1.13.12
+
+- Pairs with Integration and panel 1.13.12 to display Codex question forms in normal attended chats, with choices and a custom written answer.
+- Shows optional questions without stealing composer focus; unanswered optional requests expire after at most one minute so Codex can continue without a fabricated answer.
+- Keeps Plan questions blocking and unattended/Assist interactions disabled; answers remain bound to the live native turn and expire on completion, cancellation or restart.
+- Bundles the Sigstore-verified Codex runtime `0.160.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.11
 
 - Pairs with Integration and panel 1.13.11 to preserve long chat replies instead of cutting message text at 4,096 characters.
