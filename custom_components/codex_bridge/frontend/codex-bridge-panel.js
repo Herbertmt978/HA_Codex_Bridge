@@ -51060,6 +51060,7 @@ function selectedValues(value, options, allowFreeText) {
 }
 function getUserInputViewModel(interaction = {}, { now = Date.now(), pending = false, stale = false, answers = {} } = {}) {
   const display = interaction && typeof interaction.display === "object" ? interaction.display : {};
+  const optional = interaction?.is_blocking === false;
   const expiry = expiryState2(interaction?.expires_at, now);
   const interactionPending = interaction?.status === "pending";
   const unavailable = Boolean(pending || stale || expiry.expired || !interactionPending);
@@ -51082,6 +51083,7 @@ function getUserInputViewModel(interaction = {}, { now = Date.now(), pending = f
       options,
       multiple: Boolean(question.multiple),
       allowFreeText,
+      freeTextOnly: allowFreeText && options.length === 0,
       selected,
       complete: selected.length > 0
     };
@@ -51091,7 +51093,7 @@ function getUserInputViewModel(interaction = {}, { now = Date.now(), pending = f
   return {
     interactionId: typeof interaction?.interaction_id === "string" ? interaction.interaction_id : "",
     title: plainText2(display.title, 160) || "Codex has a question",
-    summary: plainText2(display.summary, 512) || "Answer to continue this Codex turn.",
+    summary: optional ? "Answer this optional question while it is available." : plainText2(display.summary, 512) || "Answer to continue this Codex turn.",
     expiry: expiry.label,
     state,
     disabled: unavailable,
@@ -51154,7 +51156,7 @@ function renderUserInput(container, model) {
       const freeTextId = `question-${accessibleId}-${question.domId}-free-text`;
       const freeTextLabel = document.createElement("label");
       freeTextLabel.htmlFor = freeTextId;
-      freeTextLabel.textContent = "Other answer";
+      freeTextLabel.textContent = question.freeTextOnly ? "Your answer" : "Other answer";
       const textarea = document.createElement("textarea");
       textarea.id = freeTextId;
       textarea.name = `question-${accessibleId}-${question.domId}-free-text`;
@@ -51162,7 +51164,7 @@ function renderUserInput(container, model) {
       textarea.disabled = model.disabled;
       textarea.dataset.questionId = question.id;
       textarea.dataset.questionFreeText = "true";
-      textarea.setAttribute("aria-label", `${question.header}: other answer`);
+      textarea.setAttribute("aria-label", `${question.header}: ${question.freeTextOnly ? "your answer" : "other answer"}`);
       const freeText = question.selected.find((value) => !question.options.some((option) => option.label === value));
       textarea.value = freeText || "";
       fieldset.append(freeTextLabel, textarea);
@@ -53882,7 +53884,7 @@ var ChildAgentsView = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.13.11";
+var PANEL_VERSION = "1.13.12";
 var STREAMING_RENDER_INTERVAL_MS = 200;
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
@@ -63515,13 +63517,18 @@ var CodexBridgePanel = class extends HTMLElement {
       (interaction) => interaction.thread_id === this._selectedThreadId
     );
     if (visibleInteractions.length) {
+      const optionalCount = visibleInteractions.filter((interaction) => interaction.is_blocking === false).length;
+      const blockingCount = visibleInteractions.length - optionalCount;
       const summary = document.createElement("div");
       summary.className = "interaction-summary";
       const heading = document.createElement("strong");
-      heading.textContent = "Codex needs your input";
+      heading.textContent = optionalCount && !blockingCount ? optionalCount === 1 ? "Codex has an optional question" : "Codex has optional questions" : optionalCount ? "Codex has questions and decisions" : "Codex needs your input";
       const count = document.createElement("span");
       count.className = "interaction-summary-count";
-      count.textContent = `${visibleInteractions.length} pending ${visibleInteractions.length === 1 ? "decision" : "decisions"}`;
+      count.textContent = optionalCount ? [
+        blockingCount ? `${blockingCount} blocking ${blockingCount === 1 ? "decision" : "decisions"}` : "",
+        optionalCount ? `${optionalCount} optional ${optionalCount === 1 ? "question" : "questions"}` : ""
+      ].filter(Boolean).join(" · ") : `${visibleInteractions.length} pending ${visibleInteractions.length === 1 ? "decision" : "decisions"}`;
       const cue = document.createElement("span");
       cue.className = "interaction-summary-cue";
       cue.textContent = "Tab through each action or scroll to review all.";
@@ -63628,10 +63635,14 @@ var CodexBridgePanel = class extends HTMLElement {
         }
       }
     }
-    if (newCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
+    const newBlockingCards = newCards.filter((card) => {
+      const interaction = this._pendingInteractions.find((item) => item.interaction_id === card.dataset.interactionId);
+      return interaction?.is_blocking !== false;
+    });
+    if (newBlockingCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
       const active = this.shadowRoot.activeElement;
       if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
-        newCards[0].querySelector("[role='alertdialog']")?.focus({ preventScroll: true });
+        newBlockingCards[0].querySelector("[role='alertdialog']")?.focus({ preventScroll: true });
       }
     }
   }
@@ -63872,7 +63883,7 @@ var CodexBridgePanel = class extends HTMLElement {
     let resolved = false;
     for (const interaction of this._pendingInteractions) {
       if (!nextIds.has(interaction.interaction_id)) {
-        resolved = resolved || this._interactionMutations.has(interaction.interaction_id);
+        resolved = resolved || interaction.is_blocking !== false && this._interactionMutations.has(interaction.interaction_id);
         this._interactionMutations.delete(interaction.interaction_id);
         this._interactionAnswers.delete(interaction.interaction_id);
       }
@@ -63910,6 +63921,7 @@ var CodexBridgePanel = class extends HTMLElement {
       thread_id: actualThreadId,
       event_id: value.event_id,
       status: "pending",
+      is_blocking: typeof value.is_blocking === "boolean" ? value.is_blocking : true,
       expires_at: expiresAt,
       display: { ...value.display },
       authorization_url: kind === "mcp_url" ? value.authorization_url : null,

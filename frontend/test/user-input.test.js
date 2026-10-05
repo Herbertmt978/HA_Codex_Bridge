@@ -82,6 +82,24 @@ describe("user input view", () => {
     }]);
   });
 
+  it("renders an optional free-text-only question with a clear answer label and availability summary", () => {
+    const container = document.createElement("div");
+    const model = getUserInputViewModel(question({
+      is_blocking: false,
+      display: {
+        title: "Add a note",
+        summary: "This response blocks continuation.",
+        questions: [{ question_id: "note", header: "Note", prompt: "Anything to add?", options: [], allow_free_text: true }],
+      },
+    }), { now: NOW });
+    renderUserInput(container, model);
+
+    expect(model.summary).toBe("Answer this optional question while it is available.");
+    expect(container.querySelector("label")?.textContent).toBe("Your answer");
+    expect(container.querySelector("textarea")?.getAttribute("aria-label")).toBe("Note: your answer");
+    expect(container.querySelector("textarea")).not.toBe(document.activeElement);
+  });
+
   it("names repeated provider question IDs uniquely across interactions", () => {
     const first = document.createElement("div");
     const second = document.createElement("div");

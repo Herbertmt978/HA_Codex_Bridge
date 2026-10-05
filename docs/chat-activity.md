@@ -19,6 +19,22 @@ recovers complete replies still retained by the Bridge when an older Integration
 had shortened their display; text already omitted by the provider or Bridge
 cannot be recovered by the panel.
 
+App, Integration and panel 1.13.12 support native Codex question forms in normal
+attended chats, as well as Plan mode. Native Codex questions offer choices and a
+labelled custom written answer. The panel also accepts question requests that
+provide only a free-text field. Optional questions appear without moving keyboard focus away
+from the composer. Submit the answer on its card while the request is available;
+the expiry is shown on the card. Normal-mode questions expire after at most one
+minute (or the configured shorter interaction timeout), then Codex receives an
+empty answer and can continue. This never selects an option or grants approval.
+Plan questions retain their existing blocking timeout.
+
+Native questions belong to their active turn. Completion, cancellation, provider
+resolution, account/runtime changes or restart makes an old card unavailable.
+The panel cannot turn an ordinary sentence into a form or recover a question
+that an older Bridge already dismissed. Unattended tasks and isolated Assist
+sessions keep questions disabled or decline them safely.
+
 The desktop side columns are 15% narrower and the central reading column can
 grow to 960 pixels. Mobile drawers keep their existing dimensions.
 

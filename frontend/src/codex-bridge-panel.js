@@ -57,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.11";
+const PANEL_VERSION = "1.13.12";
 const STREAMING_RENDER_INTERVAL_MS = 200;
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;
@@ -9721,13 +9721,24 @@ class CodexBridgePanel extends HTMLElement {
       (interaction) => interaction.thread_id === this._selectedThreadId
     );
     if (visibleInteractions.length) {
+      const optionalCount = visibleInteractions.filter((interaction) => interaction.is_blocking === false).length;
+      const blockingCount = visibleInteractions.length - optionalCount;
       const summary = document.createElement("div");
       summary.className = "interaction-summary";
       const heading = document.createElement("strong");
-      heading.textContent = "Codex needs your input";
+      heading.textContent = optionalCount && !blockingCount
+        ? optionalCount === 1 ? "Codex has an optional question" : "Codex has optional questions"
+        : optionalCount
+          ? "Codex has questions and decisions"
+          : "Codex needs your input";
       const count = document.createElement("span");
       count.className = "interaction-summary-count";
-      count.textContent = `${visibleInteractions.length} pending ${visibleInteractions.length === 1 ? "decision" : "decisions"}`;
+      count.textContent = optionalCount
+        ? [
+          blockingCount ? `${blockingCount} blocking ${blockingCount === 1 ? "decision" : "decisions"}` : "",
+          optionalCount ? `${optionalCount} optional ${optionalCount === 1 ? "question" : "questions"}` : "",
+        ].filter(Boolean).join(" · ")
+        : `${visibleInteractions.length} pending ${visibleInteractions.length === 1 ? "decision" : "decisions"}`;
       const cue = document.createElement("span");
       cue.className = "interaction-summary-cue";
       cue.textContent = "Tab through each action or scroll to review all.";
@@ -9840,10 +9851,14 @@ class CodexBridgePanel extends HTMLElement {
         }
       }
     }
-    if (newCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
+    const newBlockingCards = newCards.filter((card) => {
+      const interaction = this._pendingInteractions.find((item) => item.interaction_id === card.dataset.interactionId);
+      return interaction?.is_blocking !== false;
+    });
+    if (newBlockingCards.length && !focusedQuestionLink && !restoredQuestionFocus) {
       const active = this.shadowRoot.activeElement;
       if (!active || !["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(active.tagName)) {
-        newCards[0].querySelector("[role='alertdialog']")?.focus({ preventScroll: true });
+        newBlockingCards[0].querySelector("[role='alertdialog']")?.focus({ preventScroll: true });
       }
     }
   }
@@ -10116,7 +10131,7 @@ class CodexBridgePanel extends HTMLElement {
     let resolved = false;
     for (const interaction of this._pendingInteractions) {
       if (!nextIds.has(interaction.interaction_id)) {
-        resolved = resolved || this._interactionMutations.has(interaction.interaction_id);
+        resolved = resolved || (interaction.is_blocking !== false && this._interactionMutations.has(interaction.interaction_id));
         this._interactionMutations.delete(interaction.interaction_id);
         this._interactionAnswers.delete(interaction.interaction_id);
       }
@@ -10183,6 +10198,7 @@ class CodexBridgePanel extends HTMLElement {
       thread_id: actualThreadId,
       event_id: value.event_id,
       status: "pending",
+      is_blocking: typeof value.is_blocking === "boolean" ? value.is_blocking : true,
       expires_at: expiresAt,
       display: { ...value.display },
       authorization_url: kind === "mcp_url" ? value.authorization_url : null,
