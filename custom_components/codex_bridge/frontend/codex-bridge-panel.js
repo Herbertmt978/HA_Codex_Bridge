@@ -1753,54 +1753,6 @@ var Settings = class {
     }
   }
   /**
-   * Report nonstrict (non-LaTeX-compatible) input.
-   * Can safely not be called if `this.strict` is false in JavaScript.
-   */
-  reportNonstrict(errorCode, errorMsg, token) {
-    var strict = this.strict;
-    if (typeof strict === "function") {
-      strict = strict(errorCode, errorMsg, token);
-    }
-    if (!strict || strict === "ignore") {
-      return;
-    } else if (strict === true || strict === "error") {
-      throw new ParseError("LaTeX-incompatible input and strict mode is set to 'error': " + (errorMsg + " [" + errorCode + "]"), token);
-    } else if (strict === "warn") {
-      typeof console !== "undefined" && console.warn("LaTeX-incompatible input and strict mode is set to 'warn': " + (errorMsg + " [" + errorCode + "]"));
-    } else {
-      typeof console !== "undefined" && console.warn("LaTeX-incompatible input and strict mode is set to " + ("unrecognized '" + strict + "': " + errorMsg + " [" + errorCode + "]"));
-    }
-  }
-  /**
-   * Check whether to apply strict (LaTeX-adhering) behavior for unusual
-   * input (like `\\`).  Unlike `nonstrict`, will not throw an error;
-   * instead, "error" translates to a return value of `true`, while "ignore"
-   * translates to a return value of `false`.  May still print a warning:
-   * "warn" prints a warning and returns `false`.
-   * This is for the second category of `errorCode`s listed in the README.
-   */
-  useStrictBehavior(errorCode, errorMsg, token) {
-    var strict = this.strict;
-    if (typeof strict === "function") {
-      try {
-        strict = strict(errorCode, errorMsg, token);
-      } catch (error) {
-        strict = "error";
-      }
-    }
-    if (!strict || strict === "ignore") {
-      return false;
-    } else if (strict === true || strict === "error") {
-      return true;
-    } else if (strict === "warn") {
-      typeof console !== "undefined" && console.warn("LaTeX-incompatible input and strict mode is set to 'warn': " + (errorMsg + " [" + errorCode + "]"));
-      return false;
-    } else {
-      typeof console !== "undefined" && console.warn("LaTeX-incompatible input and strict mode is set to " + ("unrecognized '" + strict + "': " + errorMsg + " [" + errorCode + "]"));
-      return false;
-    }
-  }
-  /**
    * Check whether to test potentially dangerous input, and return
    * `true` (trusted) or `false` (untrusted).  The sole argument `context`
    * should be an object with `command` field specifying the relevant LaTeX
@@ -5778,6 +5730,43 @@ var wideCharacterFont = (wideChar2) => {
     throw new ParseError("Unsupported character: " + wideChar2);
   }
 };
+function handleStrict(params) {
+  var strict = params.strict, errorCode = params.errorCode, errorMsg = params.errorMsg, token = params.token, report = params.report;
+  var behavior = strict;
+  if (typeof strict === "function") {
+    if (report) {
+      behavior = strict(errorCode, errorMsg, token);
+    } else {
+      try {
+        behavior = strict(errorCode, errorMsg, token);
+      } catch (error) {
+        behavior = "error";
+      }
+    }
+  }
+  switch (behavior) {
+    case true:
+    case "error":
+      if (report) {
+        throw new ParseError("LaTeX-incompatible input and strict mode is set to 'error': " + (errorMsg + " [" + errorCode + "]"), token);
+      } else {
+        return true;
+      }
+    case false:
+    case "ignore":
+      if (!report) {
+        return false;
+      }
+      break;
+    case "warn":
+    default:
+      typeof console !== "undefined" && console.warn("LaTeX-incompatible input and strict mode is set to 'warn': " + (errorMsg + " [" + errorCode + "]"));
+      if (!report) {
+        return false;
+      }
+      break;
+  }
+}
 var lookupSymbol = function lookupSymbol2(value, fontName, mode) {
   if (symbols[mode][value]) {
     var replacement = symbols[mode][value].replace;
@@ -5802,18 +5791,21 @@ var makeSymbol = function makeSymbol2(value, fontName, mode, options, classes) {
     }
     symbolNode = new SymbolNode(value, metrics.height, metrics.depth, italic2, metrics.skew, metrics.width, classes);
   } else {
-    typeof console !== "undefined" && console.warn("No character metrics " + ("for '" + value + "' in style '" + fontName + "' and mode '" + mode + "'"));
+    handleStrict({
+      strict: options.strict,
+      errorCode: "symbolNotInFont",
+      errorMsg: "No character metrics for '" + value + "' in style '" + fontName + "' and mode '" + mode + "'",
+      report: true
+    });
     symbolNode = new SymbolNode(value, 0, 0, 0, 0, 0, classes);
   }
-  if (options) {
-    symbolNode.maxFontSize = options.sizeMultiplier;
-    if (options.style.isTight()) {
-      symbolNode.classes.push("mtight");
-    }
-    var color = options.getColor();
-    if (color) {
-      symbolNode.style.color = color;
-    }
+  symbolNode.maxFontSize = options.sizeMultiplier;
+  if (options.style.isTight()) {
+    symbolNode.classes.push("mtight");
+  }
+  var color = options.getColor();
+  if (color) {
+    symbolNode.style.color = color;
   }
   return symbolNode;
 };
@@ -6954,6 +6946,7 @@ var Options = class _Options {
     this.maxSize = void 0;
     this.minRuleThickness = void 0;
     this._fontMetrics = void 0;
+    this.strict = void 0;
     this.style = data.style;
     this.color = data.color;
     this.size = data.size || _Options.BASESIZE;
@@ -6966,6 +6959,7 @@ var Options = class _Options {
     this.sizeMultiplier = sizeMultipliers[this.size - 1];
     this.maxSize = data.maxSize;
     this.minRuleThickness = data.minRuleThickness;
+    this.strict = data.strict;
     this._fontMetrics = void 0;
   }
   /**
@@ -6984,7 +6978,8 @@ var Options = class _Options {
       fontWeight: this.fontWeight,
       fontShape: this.fontShape,
       maxSize: this.maxSize,
-      minRuleThickness: this.minRuleThickness
+      minRuleThickness: this.minRuleThickness,
+      strict: this.strict
     };
     Object.assign(data, extension);
     return new _Options(data);
@@ -7160,13 +7155,12 @@ var Options = class _Options {
   }
 };
 Options.BASESIZE = 6;
-var optionsFromSettings = function optionsFromSettings2(settings) {
-  return new Options({
-    style: settings.displayMode ? Style$1.DISPLAY : Style$1.TEXT,
-    maxSize: settings.maxSize,
-    minRuleThickness: settings.minRuleThickness
-  });
-};
+var optionsFromSettings = (settings) => new Options({
+  style: settings.displayMode ? Style$1.DISPLAY : Style$1.TEXT,
+  maxSize: settings.maxSize,
+  minRuleThickness: settings.minRuleThickness,
+  strict: settings.strict
+});
 var displayWrap = function displayWrap2(node2, settings) {
   if (settings.displayMode) {
     var classes = ["katex-display"];
@@ -7195,7 +7189,7 @@ var buildTree = function buildTree2(tree, expression, settings) {
   }
   return displayWrap(katexNode, settings);
 };
-var buildHTMLTree = function buildHTMLTree2(tree, expression, settings) {
+var buildHTMLTree = function buildHTMLTree2(tree, settings) {
   var options = optionsFromSettings(settings);
   var htmlNode = buildHTML(tree, options);
   var katexNode = makeSpan(["katex"], [htmlNode]);
@@ -7638,7 +7632,12 @@ defineFunction({
     var base = args[0];
     var mode = context.parser.mode;
     if (mode === "math") {
-      context.parser.settings.reportNonstrict("mathVsTextAccents", "LaTeX's accent " + context.funcName + " works only in text mode");
+      handleStrict({
+        strict: context.parser.settings.strict,
+        errorCode: "mathVsTextAccents",
+        errorMsg: "LaTeX's accent " + context.funcName + " works only in text mode",
+        report: true
+      });
       mode = "text";
     }
     return {
@@ -8284,10 +8283,15 @@ defineFunction({
   numArgs: 0,
   numOptionalArgs: 0,
   allowedInText: true,
-  handler(_ref, args, optArgs) {
+  handler(_ref) {
     var parser = _ref.parser;
     var size = parser.gullet.future().text === "[" ? parser.parseSizeGroup(true) : null;
-    var newLine = !parser.settings.displayMode || !parser.settings.useStrictBehavior("newLineInDisplayMode", "In LaTeX, \\\\ or \\newline does nothing in display mode");
+    var newLine = !parser.settings.displayMode || !handleStrict({
+      strict: parser.settings.strict,
+      errorCode: "newLineInDisplayMode",
+      errorMsg: "In LaTeX, \\\\ or \\newline does nothing in display mode",
+      report: false
+    });
     return {
       type: "cr",
       mode: parser.mode,
@@ -8530,14 +8534,14 @@ var makeLargeDelim = function makeLargeDelim2(delim, size, center, options, mode
   }
   return span;
 };
-var makeGlyphSpan = function makeGlyphSpan2(symbol, font, mode) {
+var makeGlyphSpan = function makeGlyphSpan2(symbol, font, mode, options) {
   var sizeClass;
   if (font === "Size1-Regular") {
     sizeClass = "delim-size1";
   } else {
     sizeClass = "delim-size4";
   }
-  var corner = makeSpan(["delimsizinginner", sizeClass], [makeSpan([], [makeSymbol(symbol, font, mode)])]);
+  var corner = makeSpan(["delimsizinginner", sizeClass], [makeSpan([], [makeSymbol(symbol, font, mode, options)])]);
   return {
     type: "elem",
     elem: corner
@@ -8732,7 +8736,7 @@ var makeStackedDelim = function makeStackedDelim2(delim, heightTotal, center, op
       elem: wrapper
     });
   } else {
-    stack.push(makeGlyphSpan(bottom, font, mode));
+    stack.push(makeGlyphSpan(bottom, font, mode, options));
     stack.push(lap);
     if (middle === null) {
       var innerHeight = realHeightTotal - topHeightTotal - bottomHeightTotal + 2 * lapInEms;
@@ -8741,12 +8745,12 @@ var makeStackedDelim = function makeStackedDelim2(delim, heightTotal, center, op
       var _innerHeight = (realHeightTotal - topHeightTotal - bottomHeightTotal - middleHeightTotal) / 2 + 2 * lapInEms;
       stack.push(makeInner(repeat, _innerHeight, options));
       stack.push(lap);
-      stack.push(makeGlyphSpan(middle, font, mode));
+      stack.push(makeGlyphSpan(middle, font, mode, options));
       stack.push(lap);
       stack.push(makeInner(repeat, _innerHeight, options));
     }
     stack.push(lap);
-    stack.push(makeGlyphSpan(top, font, mode));
+    stack.push(makeGlyphSpan(top, font, mode, options));
   }
   var newOptions = options.havingBaseStyle(Style$1.TEXT);
   var inner2 = makeVList({
@@ -9490,7 +9494,12 @@ defineFunction({
   handler(_ref5, args) {
     var parser = _ref5.parser, funcName = _ref5.funcName;
     if (parser.mode === "math") {
-      parser.settings.reportNonstrict("mathVsSout", "LaTeX's \\sout works only in text mode");
+      handleStrict({
+        strict: parser.settings.strict,
+        errorCode: "mathVsSout",
+        errorMsg: "LaTeX's \\sout works only in text mode",
+        report: true
+      });
     }
     var body = args[0];
     return {
@@ -9681,7 +9690,12 @@ function parseArray(parser, _ref, style) {
         if (singleRow || colSeparationType) {
           throw new ParseError("Too many tab characters: &", parser.nextToken);
         } else {
-          parser.settings.reportNonstrict("textEnv", "Too few columns specified in the {array} column argument.");
+          handleStrict({
+            strict: parser.settings.strict,
+            errorCode: "textEnv",
+            errorMsg: "Too few columns specified in the {array} column argument.",
+            report: true
+          });
         }
       }
       parser.consume();
@@ -11150,7 +11164,12 @@ defineFunction({
     var value = assertNodeType(args[0], "raw").string;
     var body = args[1];
     if (parser.settings.strict) {
-      parser.settings.reportNonstrict("htmlExtension", "HTML extension is disabled on strict mode");
+      handleStrict({
+        strict: parser.settings.strict,
+        errorCode: "htmlExtension",
+        errorMsg: "HTML extension is disabled on strict mode",
+        report: true
+      });
     }
     var trustContext;
     var attributes = {};
@@ -11413,14 +11432,29 @@ defineFunction({
       var muUnit = size.value.unit === "mu";
       if (mathFunction) {
         if (!muUnit) {
-          parser.settings.reportNonstrict("mathVsTextUnits", "LaTeX's " + funcName + " supports only mu units, " + ("not " + size.value.unit + " units"));
+          handleStrict({
+            strict: parser.settings.strict,
+            errorCode: "mathVsTextUnits",
+            errorMsg: "LaTeX's " + funcName + " supports only mu units, " + ("not " + size.value.unit + " units"),
+            report: true
+          });
         }
         if (parser.mode !== "math") {
-          parser.settings.reportNonstrict("mathVsTextUnits", "LaTeX's " + funcName + " works only in math mode");
+          handleStrict({
+            strict: parser.settings.strict,
+            errorCode: "mathVsTextUnits",
+            errorMsg: "LaTeX's " + funcName + " works only in math mode",
+            report: true
+          });
         }
       } else {
         if (muUnit) {
-          parser.settings.reportNonstrict("mathVsTextUnits", "LaTeX's " + funcName + " doesn't support mu units");
+          handleStrict({
+            strict: parser.settings.strict,
+            errorCode: "mathVsTextUnits",
+            errorMsg: "LaTeX's " + funcName + " doesn't support mu units",
+            report: true
+          });
         }
       }
     }
@@ -13007,7 +13041,12 @@ var Lexer = class {
       var nlIndex = input2.indexOf("\n", this.tokenRegex.lastIndex);
       if (nlIndex === -1) {
         this.tokenRegex.lastIndex = input2.length;
-        this.settings.reportNonstrict("commentAtEnd", "% comment has no terminating newline; LaTeX would fail because of commenting the end of math mode (e.g. $)");
+        handleStrict({
+          strict: this.settings.strict,
+          errorCode: "commentAtEnd",
+          errorMsg: "% comment has no terminating newline; LaTeX would fail because of commenting the end of math mode (e.g. $)",
+          report: true
+        });
       } else {
         this.tokenRegex.lastIndex = nlIndex + 1;
       }
@@ -15422,7 +15461,13 @@ var Parser = class _Parser {
     }
     if (Object.prototype.hasOwnProperty.call(unicodeSymbols, text5[0]) && !symbols[this.mode][text5[0]]) {
       if (this.settings.strict && this.mode === "math") {
-        this.settings.reportNonstrict("unicodeTextInMathMode", 'Accented Unicode text character "' + text5[0] + '" used in math mode', nucleus);
+        handleStrict({
+          strict: this.settings.strict,
+          errorCode: "unicodeTextInMathMode",
+          errorMsg: 'Accented Unicode text character "' + text5[0] + '" used in math mode',
+          report: true,
+          token: nucleus
+        });
       }
       text5 = unicodeSymbols[text5[0]] + text5.slice(1);
     }
@@ -15438,7 +15483,13 @@ var Parser = class _Parser {
     var symbol;
     if (symbols[this.mode][text5]) {
       if (this.settings.strict && this.mode === "math" && extraLatin.includes(text5)) {
-        this.settings.reportNonstrict("unicodeTextInMathMode", 'Latin-1/Unicode text character "' + text5[0] + '" used in math mode', nucleus);
+        handleStrict({
+          strict: this.settings.strict,
+          errorCode: "unicodeTextInMathMode",
+          errorMsg: 'Latin-1/Unicode text character "' + text5[0] + '" used in math mode',
+          report: true,
+          token: nucleus
+        });
       }
       var group = symbols[this.mode][text5].group;
       var loc = SourceLocation.range(nucleus);
@@ -15463,9 +15514,21 @@ var Parser = class _Parser {
     } else if (text5.charCodeAt(0) >= 128) {
       if (this.settings.strict) {
         if (!supportedCodepoint(text5.charCodeAt(0))) {
-          this.settings.reportNonstrict("unknownSymbol", 'Unrecognized Unicode character "' + text5[0] + '"' + (" (" + text5.charCodeAt(0) + ")"), nucleus);
+          handleStrict({
+            strict: this.settings.strict,
+            errorCode: "unknownSymbol",
+            errorMsg: 'Unrecognized Unicode character "' + text5[0] + '"' + (" (" + text5.charCodeAt(0) + ")"),
+            report: true,
+            token: nucleus
+          });
         } else if (this.mode === "math") {
-          this.settings.reportNonstrict("unicodeTextInMathMode", 'Unicode text character "' + text5[0] + '" used in math mode', nucleus);
+          handleStrict({
+            strict: this.settings.strict,
+            errorCode: "unicodeTextInMathMode",
+            errorMsg: 'Unicode text character "' + text5[0] + '" used in math mode',
+            report: true,
+            token: nucleus
+          });
         }
       }
       symbol = {
@@ -15568,12 +15631,12 @@ var renderToHTMLTree = function renderToHTMLTree2(expression, options) {
   var settings = new Settings(options);
   try {
     var tree = parseTree(expression, settings);
-    return buildHTMLTree(tree, expression, settings);
+    return buildHTMLTree(tree, settings);
   } catch (error) {
     return renderError(error, expression, settings);
   }
 };
-var version = "0.18.9";
+var version = "0.19.0";
 var __domTree = {
   Span,
   Anchor,
