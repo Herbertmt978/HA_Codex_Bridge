@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="brand/logo.svg" alt="Codex Bridge symbol and wordmark" width="720">
+<img src="brand/header.svg" alt="Codex Bridge for Home Assistant: a terminal joined to a home by a suspension bridge" width="880">
 
 # Home Assistant Codex Bridge
 
