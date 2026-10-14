@@ -22,7 +22,7 @@ test = [
   "pytest>=9.0.3",
   "pytest-asyncio>=1.4.0",
   "PyYAML>=6.0.3,<7",
-  "types-jsonschema>=4.26.0.20260518",
+  "types-jsonschema>=4.26.0.20261006",
 ]
 
 [build-system]
