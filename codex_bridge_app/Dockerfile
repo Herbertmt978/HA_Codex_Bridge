@@ -6,7 +6,7 @@ ARG BUILD_ARCH=amd64
 LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
-    io.hass.version="1.13.17"
+    io.hass.version="1.13.18"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
@@ -32,8 +32,11 @@ RUN set -eux; \
     wget -q -O /tmp/chromium-common-152.0.7977.82-r0.apk \
       https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-common-152.0.7977.82-r0.apk; \
     echo "96cab47f77a18f037f435c20f4a665a495395a57d42909bdefe9a561c5df5d8b  /tmp/chromium-common-152.0.7977.82-r0.apk" | sha256sum -c -; \
-    apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk; \
-    rm /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk; \
+    wget -q -O /tmp/chromium-angle-152.0.7977.82-r0.apk \
+      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-angle-152.0.7977.82-r0.apk; \
+    echo "671ced915d84627e63d539af339d77c724396450c93bfc2f2912f620e3d87502  /tmp/chromium-angle-152.0.7977.82-r0.apk" | sha256sum -c -; \
+    apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk /tmp/chromium-angle-152.0.7977.82-r0.apk; \
+    rm /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk /tmp/chromium-angle-152.0.7977.82-r0.apk; \
     test "$(/usr/bin/chromium-browser --product-version)" = "152.0.7977.82"; \
     fi; \
     addgroup -S codexbridge; \
@@ -71,7 +74,7 @@ EXPOSE 8766
 
 ENTRYPOINT ["/usr/local/bin/codex-app-entrypoint"]
 
-ENV CODEX_BRIDGE_APP_VERSION="1.13.17" \
+ENV CODEX_BRIDGE_APP_VERSION="1.13.18" \
     CODEX_BRIDGE_VERSION="0.20.1" \
     CODEX_BRIDGE_CODEX_VERSION="0.163.0" \
     CODEX_BRIDGE_ARCH="${BUILD_ARCH}" \

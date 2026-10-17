@@ -86,6 +86,11 @@ def test_dockerfile_pins_the_alpine_chromium_package_and_verifies_its_version() 
     assert "96cab47f77a18f037f435c20f4a665a495395a57d42909bdefe9a561c5df5d8b" in dockerfile
     assert "/tmp/chromium-152.0.7977.82-r0.apk\" | sha256sum -c -" in dockerfile
     assert "apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk" in dockerfile
+    assert "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-angle-152.0.7977.82-r0.apk" in dockerfile
+    assert "671ced915d84627e63d539af339d77c724396450c93bfc2f2912f620e3d87502" in dockerfile
+    assert "/tmp/chromium-angle-152.0.7977.82-r0.apk\" | sha256sum -c -" in dockerfile
+    install = next(line for line in dockerfile.splitlines() if "apk add --no-cache /tmp/chromium-" in line)
+    assert "/tmp/chromium-angle-152.0.7977.82-r0.apk" in install
     assert 'test "$(/usr/bin/chromium-browser --product-version)" = "152.0.7977.82"' in dockerfile
 
 
