@@ -69,6 +69,22 @@ def _discovery_script() -> Path:
     return script
 
 
+def test_s6_services_use_native_user_bundle_without_legacy_etc_writes() -> None:
+    overlay = ROOTFS / "etc" / "s6-overlay"
+    assert not (overlay / "s6-rc.d" / "user").exists()
+    members = overlay / "user-bundles.d" / "user" / "contents.d"
+    expected = {"codex-bridge-init", "codex-bridge", "codex-bridge-discovery"}
+    assert {path.name for path in members.iterdir()} == expected
+    for service in expected:
+        assert (members / service).read_bytes().strip() == b""
+        assert (overlay / "s6-rc.d" / service / "type").is_file()
+    for service, dependency in (
+        ("codex-bridge", "codex-bridge-init"),
+        ("codex-bridge-discovery", "codex-bridge"),
+    ):
+        assert (overlay / "s6-rc.d" / service / "dependencies.d" / dependency).is_file()
+
+
 def test_bootstrap_generates_token_cryptographically_and_replaces_atomically() -> None:
     text = _text()
     assert re.search(r"openssl\s+rand|/dev/urandom|secrets\.token_urlsafe", text)

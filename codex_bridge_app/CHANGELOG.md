@@ -2,6 +2,13 @@
 
 All notable App changes are recorded here.
 
+## 1.13.18
+
+- Restores confined startup on the current Home Assistant base image by using the native S6 user-bundle layout.
+- Preserves service ordering and AppArmor restrictions, existing chats, workspaces and sign-in.
+- Pins the matching Chromium ANGLE package so rebuilds retain the existing verified browser version.
+- Keeps Bridge `0.20.1` and verified Codex `0.163.0`.
+
 ## 1.13.17
 
 - Bundles the Sigstore-verified Codex runtime `0.163.0`.
