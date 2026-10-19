@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -119,7 +120,7 @@ def test_optional_expiry_answers_empty_without_aborting_or_clearing_queued_run(
         client,
         queue_wait_timeout_seconds=5.0,
         turn_timeout_seconds=10.0,
-        interaction_timeout_seconds=0.2,
+        interaction_timeout_seconds=30.0,
     )
     try:
         first = broker.submit_prompt(
@@ -137,6 +138,14 @@ def test_optional_expiry_answers_empty_without_aborting_or_clearing_queued_run(
             client_request_id="optional-expiry-queued",
             follow_up_mode="queue",
         ).status == "queued"
+
+        # Expiry is the behaviour under test, not a 200 ms setup budget. Let the
+        # real watchdog expire this exact pending question only after the queued
+        # run exists; slow persistence must not expire it before the test is ready.
+        with broker._lock:
+            interaction = broker._state.interactions[pending["interaction_id"]]
+            assert interaction.status == "pending"
+            interaction.expires_at = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
 
         _wait_until(lambda: len(client.responses) == 1, timeout=2.0)
         assert client.responses[0][1] == {"answers": {"preference": {"answers": []}}}

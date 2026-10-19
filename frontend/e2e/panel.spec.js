@@ -1845,7 +1845,7 @@ test("gives desktop chats wider space and one working control with message and c
   await page.keyboard.press("Escape");
   await expect(assistant.getByRole("button", { name: "Line numbers", exact: true })).toHaveCount(1);
   await expect(assistant.getByRole("button", { name: "Wrap lines", exact: true })).toHaveCount(1);
-  const copy = assistant.getByRole("button", { name: "Copy original code", exact: true });
+  const copy = assistant.getByRole("button", { name: "Copy code (original source)", exact: true });
   await copy.focus();
   await expect(copy).toBeFocused();
   await expect(panel.locator(".code-text")).toHaveText("const answer = 'hello';\n");
@@ -1893,7 +1893,7 @@ for (const width of [390, 1280]) {
     await expect(streaming).toHaveCount(1);
     expect(await streaming.locator(".code-text").textContent()).toBe(code);
     expect(await page.evaluate(() => window.longCodeRenders)).toBe(1);
-    await streaming.getByRole("button", { name: "Copy original code", exact: true }).click();
+    await streaming.getByRole("button", { name: "Copy code (original source)", exact: true }).click();
     expect(await page.evaluate(() => window.longCodeCopied)).toBe(code);
     await page.evaluate(() => window.completeLongCode());
     expect(await page.evaluate(() => window.longCodeRenders)).toBe(2);
@@ -1901,7 +1901,7 @@ for (const width of [390, 1280]) {
     const block = panel.locator(".message.assistant .code-block");
     await expect(block).toHaveCount(1);
     expect(await block.locator(".code-text").textContent()).toBe(code);
-    const copy = block.getByRole("button", { name: "Copy original code", exact: true });
+    const copy = block.getByRole("button", { name: "Copy code (original source)", exact: true });
     await copy.focus();
     await page.keyboard.press("Enter");
     expect(await page.evaluate(() => window.longCodeCopied)).toBe(code);
@@ -2711,7 +2711,8 @@ test("exposes run stages through one accessible tooltip in both colour schemes",
     const chip = panel.locator("#run-step-chip");
     const tooltip = panel.locator("#run-step-tooltip");
     const genericTooltip = panel.locator("#tooltip-layer");
-    await expect(chip).toHaveAccessibleName(/Step 2 of 3/);
+    await expect(chip).toHaveAccessibleName(/Searching the web/);
+    await expect(chip).toHaveAccessibleDescription(/Step 2 of 3/);
     await expect(chip).toHaveAttribute("aria-haspopup", "dialog");
     await expect(chip).toHaveAttribute("aria-expanded", "false");
     await expect(chip).toHaveAttribute("aria-controls", "run-step-tooltip");

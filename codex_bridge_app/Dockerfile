@@ -26,18 +26,18 @@ RUN set -eux; \
     # Chromium package. ARM64 browser isolation is not yet qualified, so its
     # development image omits Chromium and cannot advertise browser tools.
     if [ "${BUILD_ARCH}" = "amd64" ]; then \
-    wget -q -O /tmp/chromium-152.0.7977.82-r0.apk \
-      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-152.0.7977.82-r0.apk; \
-    echo "01af27a66507b9762ecb86ad0fb74ec08b2613817cb0e9a2e6848221dcde53b0  /tmp/chromium-152.0.7977.82-r0.apk" | sha256sum -c -; \
-    wget -q -O /tmp/chromium-common-152.0.7977.82-r0.apk \
-      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-common-152.0.7977.82-r0.apk; \
-    echo "96cab47f77a18f037f435c20f4a665a495395a57d42909bdefe9a561c5df5d8b  /tmp/chromium-common-152.0.7977.82-r0.apk" | sha256sum -c -; \
-    wget -q -O /tmp/chromium-angle-152.0.7977.82-r0.apk \
-      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-angle-152.0.7977.82-r0.apk; \
-    echo "671ced915d84627e63d539af339d77c724396450c93bfc2f2912f620e3d87502  /tmp/chromium-angle-152.0.7977.82-r0.apk" | sha256sum -c -; \
-    apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk /tmp/chromium-angle-152.0.7977.82-r0.apk; \
-    rm /tmp/chromium-152.0.7977.82-r0.apk /tmp/chromium-common-152.0.7977.82-r0.apk /tmp/chromium-angle-152.0.7977.82-r0.apk; \
-    test "$(/usr/bin/chromium-browser --product-version)" = "152.0.7977.82"; \
+    wget -q -O /tmp/chromium-155.0.8059.39-r0.apk \
+      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-155.0.8059.39-r0.apk; \
+    echo "a622712c2b3a5e2f4ae8e1c377c42bd430ff43cb8127f7455257285c1c9d5f05  /tmp/chromium-155.0.8059.39-r0.apk" | sha256sum -c -; \
+    wget -q -O /tmp/chromium-common-155.0.8059.39-r0.apk \
+      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-common-155.0.8059.39-r0.apk; \
+    echo "3b6e0bfbc6859e26fc92cddde8a2e31c9fbfd089d06678ac700ff6ba8566f66c  /tmp/chromium-common-155.0.8059.39-r0.apk" | sha256sum -c -; \
+    wget -q -O /tmp/chromium-angle-155.0.8059.39-r0.apk \
+      https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-angle-155.0.8059.39-r0.apk; \
+    echo "9af9251ea10286a5b63d0b8b24f069db175047777b05c90b45293c7f478a0824  /tmp/chromium-angle-155.0.8059.39-r0.apk" | sha256sum -c -; \
+    apk add --no-cache /tmp/chromium-155.0.8059.39-r0.apk /tmp/chromium-common-155.0.8059.39-r0.apk /tmp/chromium-angle-155.0.8059.39-r0.apk; \
+    rm /tmp/chromium-155.0.8059.39-r0.apk /tmp/chromium-common-155.0.8059.39-r0.apk /tmp/chromium-angle-155.0.8059.39-r0.apk; \
+    test "$(/usr/bin/chromium-browser --product-version)" = "155.0.8059.39"; \
     fi; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \

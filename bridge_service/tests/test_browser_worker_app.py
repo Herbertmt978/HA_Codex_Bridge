@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from codex_bridge_service.browser_worker_client import CHROMIUM_VERSION
+
 
 ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = ROOT / "codex_bridge_app"
@@ -81,17 +83,21 @@ def test_app_startup_requires_separate_browser_proof_after_explicit_opt_in() -> 
 def test_dockerfile_pins_the_alpine_chromium_package_and_verifies_its_version() -> None:
     dockerfile = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
 
-    assert "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-152.0.7977.82-r0.apk" in dockerfile
-    assert "01af27a66507b9762ecb86ad0fb74ec08b2613817cb0e9a2e6848221dcde53b0" in dockerfile
-    assert "96cab47f77a18f037f435c20f4a665a495395a57d42909bdefe9a561c5df5d8b" in dockerfile
-    assert "/tmp/chromium-152.0.7977.82-r0.apk\" | sha256sum -c -" in dockerfile
-    assert "apk add --no-cache /tmp/chromium-152.0.7977.82-r0.apk" in dockerfile
-    assert "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-angle-152.0.7977.82-r0.apk" in dockerfile
-    assert "671ced915d84627e63d539af339d77c724396450c93bfc2f2912f620e3d87502" in dockerfile
-    assert "/tmp/chromium-angle-152.0.7977.82-r0.apk\" | sha256sum -c -" in dockerfile
+    assert CHROMIUM_VERSION == "155.0.8059.39"
+    assert "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-155.0.8059.39-r0.apk" in dockerfile
+    assert "a622712c2b3a5e2f4ae8e1c377c42bd430ff43cb8127f7455257285c1c9d5f05" in dockerfile
+    assert "3b6e0bfbc6859e26fc92cddde8a2e31c9fbfd089d06678ac700ff6ba8566f66c" in dockerfile
+    assert "/tmp/chromium-155.0.8059.39-r0.apk\" | sha256sum -c -" in dockerfile
+    assert "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-common-155.0.8059.39-r0.apk" in dockerfile
+    assert "/tmp/chromium-common-155.0.8059.39-r0.apk\" | sha256sum -c -" in dockerfile
+    assert "apk add --no-cache /tmp/chromium-155.0.8059.39-r0.apk" in dockerfile
+    assert "https://dl-cdn.alpinelinux.org/alpine/v3.24/community/x86_64/chromium-angle-155.0.8059.39-r0.apk" in dockerfile
+    assert "9af9251ea10286a5b63d0b8b24f069db175047777b05c90b45293c7f478a0824" in dockerfile
+    assert "/tmp/chromium-angle-155.0.8059.39-r0.apk\" | sha256sum -c -" in dockerfile
     install = next(line for line in dockerfile.splitlines() if "apk add --no-cache /tmp/chromium-" in line)
-    assert "/tmp/chromium-angle-152.0.7977.82-r0.apk" in install
-    assert 'test "$(/usr/bin/chromium-browser --product-version)" = "152.0.7977.82"' in dockerfile
+    assert "/tmp/chromium-common-155.0.8059.39-r0.apk" in install
+    assert "/tmp/chromium-angle-155.0.8059.39-r0.apk" in install
+    assert 'test "$(/usr/bin/chromium-browser --product-version)" = "155.0.8059.39"' in dockerfile
 
 
 def test_browser_has_a_distinct_child_profile_without_workspace_or_private_state() -> None:

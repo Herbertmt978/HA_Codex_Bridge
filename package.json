@@ -21,7 +21,7 @@
     "brand:render": "node scripts/render-brand-assets.mjs"
   },
   "devDependencies": {
-    "@axe-core/playwright": "4.13.0",
+    "@axe-core/playwright": "4.14.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.1",
     "esbuild": "0.28.2",

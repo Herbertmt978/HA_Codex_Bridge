@@ -247,7 +247,7 @@ for (const width of [390, 1280]) {
       await expect(codeBlock.getByRole("button", { name: "Wrap lines", exact: true })).toHaveAttribute("aria-pressed", "true");
       expect(await code.textContent()).toBe(exactBefore);
       expect(await code.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
-      const copyCode = codeBlock.getByRole("button", { name: "Copy original code", exact: true });
+      const copyCode = codeBlock.getByRole("button", { name: "Copy code (original source)", exact: true });
       await page.keyboard.press("Tab");
       await copyCode.focus();
       await expect(copyCode).toBeFocused();

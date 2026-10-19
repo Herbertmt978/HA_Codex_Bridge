@@ -207,7 +207,7 @@ export function renderCodeBlock(documentRef, source, language = "", {
   copy.type = "button";
   copy.className = "copy-button";
   copy.textContent = "Copy code";
-  copy.setAttribute("aria-label", "Copy original code");
+  copy.setAttribute("aria-label", "Copy code (original source)");
   copy.disabled = typeof onCopy !== "function";
   if (typeof onCopy === "function") {
     copy.addEventListener("click", () => { void onCopy(code); });

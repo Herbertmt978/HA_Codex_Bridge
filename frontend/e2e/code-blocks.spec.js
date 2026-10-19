@@ -144,7 +144,7 @@ for (const width of [390, 1280]) {
       await writeFile(resolve(evidenceDirectory, `geometry-${width}-${theme}.json`), JSON.stringify(bounds, null, 2));
       expect(bounds.at(-1).bottom).toBeLessThanOrEqual(bounds.at(-1).preBottom);
       expect(bounds.at(-1).numberBottom).toBeLessThanOrEqual(bounds.at(-1).preBottom);
-      const copy = block.getByRole("button", { name: "Copy original code" });
+      const copy = block.getByRole("button", { name: "Copy code (original source)" });
       await page.keyboard.press("Shift+Tab");
       await page.keyboard.press("Shift+Tab");
       await expect(copy).toBeFocused();
@@ -176,7 +176,7 @@ test("streamed and retained code use equivalent safe rendering and captured copy
   expect(result.streamed).toBe(result.history);
   expect(result.code).toBe(source);
   expect(result.inert).toBe(true);
-  await panel.getByRole("button", { name: "Copy original code" }).click();
+  await panel.getByRole("button", { name: "Copy code (original source)" }).click();
   await expect.poll(() => page.evaluate(() => window.__cb064Writes.at(-1))).toBe(source);
   await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.readText()).replace(/\r\n/gu, "\n"))).toBe(source);
 });

@@ -169,7 +169,7 @@ describe("selected-chat find controller", () => {
     await panel._findConversationMatches("needle");
     const article = panel.shadowRoot.querySelector('[data-sequence="7"]');
     expect(article.querySelectorAll(".code-text mark").length).toBeGreaterThan(0);
-    article.querySelector('[aria-label="Copy original code"]').click();
+    article.querySelector('[aria-label="Copy code (original source)"]').click();
     await vi.waitFor(() => expect(copy).toHaveBeenCalledWith("needle = 'needle'\n  print(needle)\n"));
     [...article.querySelectorAll(".message-actions button")].find((button) => button.getAttribute("aria-label") === "Copy message").click();
     await vi.waitFor(() => expect(copy).toHaveBeenCalledWith(text));

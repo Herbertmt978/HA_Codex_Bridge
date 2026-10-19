@@ -94,7 +94,8 @@ describe("panel run activity integration", () => {
     expect(chip?.hasAttribute("data-tooltip")).toBe(false);
     expect(chip?.hasAttribute("title")).toBe(false);
     expect(chip?.textContent).toContain("Waiting for sub-agents");
-    expect(chip?.getAttribute("aria-label")).toContain("Step 2 of 3");
+    expect(chip?.getAttribute("aria-label")).toBe(chip?.textContent);
+    expect(chip?.getAttribute("aria-description")).toContain("Step 2 of 3");
     expect(chip?.textContent).toMatch(/1 file/i);
     expect(chip?.textContent).toContain("+1");
     expect(chip?.textContent).toContain("-1");
@@ -111,6 +112,43 @@ describe("panel run activity integration", () => {
     expect(activity?.querySelectorAll(".run-stage-item")).toHaveLength(3);
     expect(activity?.querySelector('.run-stage-item[aria-current="step"]')?.textContent).toContain("Implement the change");
     expect(activity?.querySelector(".run-step-agent-summary")?.textContent).toMatch(/Subagents.*2 active.*1 complete/i);
+  });
+
+  it("updates the accessible description while reusing the live activity chip", () => {
+    const plan = [
+      { step: "Inspect repository", status: "inProgress" },
+      { step: "Run checks", status: "pending" },
+    ];
+    const panel = createPanel({ events: [
+      event(1, "run.started", { run_id: "run-activity" }),
+      event(2, "plan.updated", { run_id: "run-activity", plan }),
+    ] });
+    panel._render(true);
+    const chip = panel.shadowRoot.getElementById("run-step-chip");
+    expect(chip.getAttribute("aria-description")).toContain("Step 1 of 2");
+
+    panel._events.push(event(3, "plan.updated", {
+      run_id: "run-activity",
+      plan: [
+        { step: "Inspect repository", status: "completed" },
+        { step: "Run checks", status: "inProgress" },
+      ],
+    }));
+    panel._render(true);
+    expect(panel.shadowRoot.getElementById("run-step-chip")).toBe(chip);
+    expect(chip.getAttribute("aria-description")).toContain("Step 2 of 2");
+    expect(chip.getAttribute("aria-description")).toContain("Run checks");
+    expect(chip.getAttribute("aria-label")).toBe(chip.textContent);
+
+    panel._events.push(event(4, "run.failed", { run_id: "run-activity" }));
+    panel._activeThread.status = "error";
+    panel._activeThread.active_run_id = null;
+    panel._render(true);
+    expect(panel.shadowRoot.getElementById("run-step-chip")).toBe(chip);
+    expect(chip.getAttribute("aria-description")).toMatch(/^Run failed\./);
+    chip.click();
+    expect(chip.getAttribute("aria-expanded")).toBe("true");
+    expect(chip.getAttribute("aria-description")).toContain("Hide activity details");
   });
 
   it("sets transcript busy state while streaming and replaces the delta with completion", () => {
@@ -177,8 +215,9 @@ describe("panel run activity integration", () => {
     ] });
     panel._render(true);
     const chip = panel.shadowRoot.getElementById("run-step-chip");
-    expect(chip.getAttribute("aria-label")).toMatch(new RegExp(`^Run ${state}\\. Step 1 of 1`));
-    expect(chip.getAttribute("aria-label")).toContain("Check files");
+    expect(chip.getAttribute("aria-label")).toBe(`Run ${state}`);
+    expect(chip.getAttribute("aria-description")).toMatch(new RegExp(`^Run ${state}\\. Step 1 of 1`));
+    expect(chip.getAttribute("aria-description")).toContain("Check files");
   });
 
   it("keeps roles accessible and copies only the selected code block exactly", async () => {
@@ -197,8 +236,8 @@ describe("panel run activity integration", () => {
     expect(response.querySelector('.message-actions > button').getAttribute('aria-label')).toBe('Message actions');
     expect([...response.querySelectorAll('.message-actions [role="menuitem"]')].map((button) => button.textContent))
       .toEqual(["Copy message", "Copy passage", "Quote message", "Quote passage"]);
-    expect(response.querySelectorAll('.copy-button[aria-label="Copy original code"]')).toHaveLength(2);
-    response.querySelector('.copy-button[aria-label="Copy original code"]').click();
+    expect(response.querySelectorAll('.copy-button[aria-label="Copy code (original source)"]')).toHaveLength(2);
+    response.querySelector('.copy-button[aria-label="Copy code (original source)"]').click();
     await Promise.resolve();
     expect(copy).toHaveBeenCalledWith(code);
     response.querySelector(".message-actions button").click();
