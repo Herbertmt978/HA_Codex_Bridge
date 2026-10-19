@@ -228,7 +228,7 @@ test("compact options, inspected file context and captured acknowledgement prese
   await expect(files.locator("pre")).toHaveText("const example = 42;\n".repeat(200));
   expect(await files.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
   await page.keyboard.press("Escape");
-  await expect(panel.getByRole("button",{name:/Inspect selected context: 1 items/})).toBeVisible();
+  await expect(panel.getByRole("button",{name:"1 context: inspect selected items",exact:true})).toBeVisible();
   await panel.getByRole("button",{name:/^Turn options/}).click();
   const options=panel.getByRole("dialog",{name:"Turn options",exact:true});
   await options.getByRole("combobox",{name:"Collaboration",exact:true}).selectOption("plan");
@@ -255,7 +255,7 @@ test("compact options, inspected file context and captured acknowledgement prese
   expect(await panel.evaluate(p=>p._workspaceContext.current()[0].path)).toBe("newer.js");
   await expect.poll(()=>panel.evaluate(p=>p._promptMutations.size)).toBe(0);
   await panel.evaluate(p=>{ p._activeThread={...p._activeThread,status:"idle",active_run_id:null}; p._renderComposerState(p._activeThread); });
-  await panel.getByRole("button",{name:/Inspect selected context/}).click();
+  await panel.getByRole("button",{name:"1 context: inspect selected items",exact:true}).click();
   await panel.getByRole("button",{name:"Files and workspace context",exact:true}).click();
   await expect(files.locator("pre")).toHaveText("newer");
   await files.getByRole("button",{name:"Remove context",exact:true}).click();

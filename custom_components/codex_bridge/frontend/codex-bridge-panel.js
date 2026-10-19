@@ -1263,7 +1263,7 @@ var CompactComposer = class {
     this.context.hidden = !count;
     const stale = [...workspace, ...chats].some((item) => item.stale);
     this.context.textContent = `${stale ? "Review " : ""}${count} context`;
-    this.context.setAttribute("aria-label", `Inspect selected context: ${count} items${stale ? ", changed context requires review" : ""}`);
+    this.context.setAttribute("aria-label", `${this.context.textContent}: inspect selected items${stale ? ", changed context requires review" : ""}`);
     const model = this.root.getElementById("thread-model-select"), thinking = this.root.getElementById("thread-thinking-select");
     const clean = (select) => (select?.selectedOptions[0]?.textContent || "").replace(/^Inherit \((.*)\)$/, "$1");
     const text5 = [clean(model), clean(thinking)].filter(Boolean).join(" · ") || "Model and thinking";
@@ -16495,7 +16495,7 @@ function renderCodeBlock(documentRef, source, language = "", {
   copy.type = "button";
   copy.className = "copy-button";
   copy.textContent = "Copy code";
-  copy.setAttribute("aria-label", "Copy original code");
+  copy.setAttribute("aria-label", "Copy code (original source)");
   copy.disabled = typeof onCopy !== "function";
   if (typeof onCopy === "function") {
     copy.addEventListener("click", () => {
@@ -59988,7 +59988,7 @@ template.innerHTML = `
         <div class="row-actions thread-controls">
           <div class="status-text" id="thread-status-text"></div>
           <button class="icon-button" type="button" data-action="toggle-chat-menu" title="Chat actions" aria-label="Chat actions" aria-expanded="false" aria-controls="chat-context-menu" id="chat-menu-button"></button>
-          <button class="thread-share" type="button" data-action="share-chat" title="Copy chat link · Home Assistant sign-in required" aria-label="Copy chat link · Home Assistant sign-in required" id="share-chat-button"></button>
+          <button class="thread-share" type="button" data-action="share-chat" title="Copy chat link · Home Assistant sign-in required" aria-label="Share: copy chat link · Home Assistant sign-in required" id="share-chat-button"></button>
           <button class="icon-button" type="button" data-action="toggle-activity" title="Show activity" aria-label="Show activity" aria-pressed="false" id="toggle-activity-button"></button>
           <button class="icon-button" type="button" data-action="toggle-bottom-panel" title="Toggle bottom panel" aria-label="Toggle bottom panel" aria-controls="bottom-panel" aria-expanded="false" id="toggle-bottom-button"></button>
           <button class="icon-button" type="button" data-action="toggle-context" title="Toggle side panel" aria-label="Toggle side panel" aria-controls="context-drawer" aria-expanded="true" id="toggle-context-button"></button>
@@ -64603,7 +64603,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const toggle = this._actionButton(
       "section-head-button",
       "toggle-section",
-      `${collapsed ? "Expand" : "Collapse"} direct chats`
+      `${collapsed ? "Expand" : "Collapse"} Direct chats ${directThreads.length}`
     );
     toggle.dataset.section = "direct";
     toggle.setAttribute("aria-expanded", String(!collapsed));
@@ -64639,7 +64639,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const collapsed = Boolean(this._collapsedSections.assistant) && !searchActive;
     const head = document.createElement("div");
     head.className = `section-head${collapsed ? " compact" : ""}`;
-    const toggle = this._actionButton("section-head-button", "toggle-section", `${collapsed ? "Expand" : "Collapse"} HA Assistant Chats`);
+    const toggle = this._actionButton("section-head-button", "toggle-section", `${collapsed ? "Expand" : "Collapse"} HA Assistant Chats ${threads.length}`);
     toggle.dataset.section = "assistant";
     toggle.setAttribute("aria-expanded", String(!collapsed));
     toggle.setAttribute("aria-controls", "assistant-chat-list");
@@ -64660,7 +64660,7 @@ var CodexBridgePanel = class extends HTMLElement {
       const archived = threads.filter((item) => !this._threadIsPrimaryActive(item));
       if (archived.length) {
         const archiveCollapsed = Boolean(this._collapsedSections.assistantArchived) && !searchActive;
-        const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} archived HA Assistant Chats`);
+        const archiveToggle = this._actionButton("section-head-button", "toggle-section", `${archiveCollapsed ? "Expand" : "Collapse"} Archived ${archived.length}: HA Assistant Chats`);
         archiveToggle.dataset.section = "assistantArchived";
         archiveToggle.setAttribute("aria-expanded", String(!archiveCollapsed));
         archiveToggle.setAttribute("aria-controls", "assistant-archived-chat-list");
@@ -64829,7 +64829,7 @@ var CodexBridgePanel = class extends HTMLElement {
     const toggle = this._actionButton(
       "section-head-button",
       "toggle-section",
-      `${collapsed ? "Expand" : "Collapse"} archived chats`
+      `${collapsed ? "Expand" : "Collapse"} Archived ${archivedProjects.length + archivedThreads.length}: chats`
     );
     toggle.dataset.section = "archived";
     toggle.setAttribute("aria-expanded", String(!collapsed));
@@ -65361,6 +65361,8 @@ var CodexBridgePanel = class extends HTMLElement {
           this._textElement("span", "run-step-agents", `${count} agent${count === 1 ? "" : "s"}${activity.subagents.active ? " active" : ""}`)
         );
       }
+      chip.setAttribute("aria-label", chip.textContent);
+      chip.setAttribute("aria-description", this._runStepAccessibleLabel(activity));
       const tooltip = document.createElement("div");
       tooltip.id = tooltipId;
       tooltip.className = "run-step-tooltip";
@@ -65461,6 +65463,7 @@ var CodexBridgePanel = class extends HTMLElement {
         if (!desiredParts.includes(part)) part.remove();
       }
       previousChip.setAttribute("aria-label", nextChip.getAttribute("aria-label"));
+      previousChip.setAttribute("aria-description", nextChip.getAttribute("aria-description"));
       previousChip.setAttribute("aria-expanded", nextChip.getAttribute("aria-expanded"));
       if (nextChip.hasAttribute("aria-describedby")) {
         previousChip.setAttribute("aria-describedby", nextChip.getAttribute("aria-describedby"));

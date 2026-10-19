@@ -212,7 +212,7 @@ export class CompactComposer {
     this.context.hidden = !count;
     const stale = [...workspace,...chats].some((item) => item.stale);
     this.context.textContent = `${stale ? 'Review ' : ''}${count} context`;
-    this.context.setAttribute('aria-label', `Inspect selected context: ${count} items${stale ? ', changed context requires review' : ''}`);
+    this.context.setAttribute('aria-label', `${this.context.textContent}: inspect selected items${stale ? ', changed context requires review' : ''}`);
     const model = this.root.getElementById('thread-model-select'), thinking = this.root.getElementById('thread-thinking-select');
     const clean = (select) => (select?.selectedOptions[0]?.textContent || '').replace(/^Inherit \((.*)\)$/, '$1');
     const text = [clean(model), clean(thinking)].filter(Boolean).join(' · ') || 'Model and thinking';

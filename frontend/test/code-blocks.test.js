@@ -21,6 +21,7 @@ describe("bounded code block renderer", () => {
     expect(block.querySelector(".code-text").textContent).toBe(source);
     expect(block.querySelector(".code-token-keyword")?.textContent).toBe("const");
     expect(block.querySelectorAll(".code-line[data-line-number]")).toHaveLength(3);
+    expect(block.querySelector(".copy-button").getAttribute("aria-label")).toContain(block.querySelector(".copy-button").textContent);
     block.querySelector(".copy-button").click();
     expect(onCopy).toHaveBeenCalledWith(source);
   });

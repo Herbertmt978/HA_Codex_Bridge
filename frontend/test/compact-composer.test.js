@@ -51,6 +51,7 @@ describe("compact composer presentation", () => {
     expect(ui.options.getAttribute("aria-label")).toContain("Plan, 5 minutes, Search Off");
     expect(ui.context.hidden).toBe(false);
     expect(ui.context.getAttribute("aria-label")).toContain("changed context requires review");
+    expect(ui.context.getAttribute("aria-label")).toContain(ui.context.textContent);
     ui.open("files",ui.context); ui.close();
     expect(p._workspaceContext.current()[0].stale).toBe(true);
     expect(p.shadowRoot.getElementById("elapsed-time-limit").value).toBe("300");
