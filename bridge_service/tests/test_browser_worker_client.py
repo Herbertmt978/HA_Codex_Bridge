@@ -6,8 +6,10 @@ import io
 import json
 import os
 from pathlib import Path
+import stat
 from threading import Event, Thread
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -243,3 +245,32 @@ def test_attestation_shape_is_exact_and_not_created_by_the_client(
     # portable because production verification also rejects symlinks/modes.
     assert client_module.browser_worker_attestation_ready(proof) is False
     assert proof.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("version", "ready"),
+    [(client_module.CHROMIUM_VERSION, True), ("152.0.7977.82", False)],
+)
+def test_attestation_requires_the_exact_pinned_chromium_version(
+    tmp_path: Path, monkeypatch, version: str, ready: bool
+) -> None:
+    proof = tmp_path / "browser-worker-attestation.json"
+    payload = json.dumps(
+        {
+            "schema_version": 1,
+            "worker_protocol": BROWSER_WORKER_PROTOCOL,
+            "chromium_version": version,
+            "chromium_sandbox": "ready",
+            "egress_boundary": "ready",
+        }
+    ).encode("utf-8")
+    proof.write_bytes(payload)
+    root_owned_metadata = SimpleNamespace(
+        st_mode=stat.S_IFREG | 0o444,
+        st_nlink=1,
+        st_uid=0,
+        st_size=len(payload),
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(client_module.os, "fstat", lambda _descriptor: root_owned_metadata)
+        assert client_module.browser_worker_attestation_ready(proof) is ready
