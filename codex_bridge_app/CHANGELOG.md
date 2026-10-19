@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## 1.13.19
+
+- Updates the deployed Python dependencies to FastAPI `0.143.3`, pydantic-settings `2.16.0` and aiohttp `3.14.4`.
+- Regenerates the hash-locked runtime requirements to satisfy the Bridge dependency floors.
+- Keeps Bridge `0.20.1` and verified Codex `0.163.0` without changing Integration API compatibility.
+
 ## 1.13.18
 
 - Restores confined startup on the current Home Assistant base image by using the native S6 user-bundle layout.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.19
+
+- Keeps the Host Access App version aligned with Codex Bridge App `1.13.19`.
+- No Host Access code changes.
+
 ## 1.13.18
 
 - Bundles the Sigstore-verified Codex runtime `0.163.0`.
