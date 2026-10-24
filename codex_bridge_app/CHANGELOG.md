@@ -8,6 +8,12 @@ All notable App changes are recorded here.
 - Updates the source build's checksum-pinned Chromium browser, shared resources and ANGLE packages to `155.0.8059.39-r0`, with matching startup version verification. Browser tools remain disabled by default and require the existing isolation attestation.
 - Keeps Bridge `0.20.1` and verified Codex `0.163.0` without changing Integration API compatibility. These source changes do not publish an App image or establish native HAOS acceptance.
 
+## 1.13.19
+
+- Bundles the Sigstore-verified Codex runtime `0.164.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.18
 
 - Restores confined startup on the current Home Assistant base image by using the native S6 user-bundle layout.
