@@ -3,13 +3,6 @@ name: Build App
 on:
   pull_request:
     branches: [main]
-    paths:
-      - ".github/workflows/build-app.yml"
-      - ".github/workflows/release.yml"
-      - "bridge_service/**"
-      - "codex_bridge_app/**"
-      - "codex_host_access_app/**"
-      - "scripts/**"
   workflow_dispatch:
   workflow_call:
     inputs:
@@ -34,9 +27,61 @@ env:
   PER_ARCH_IMAGE: ghcr.io/herbertmt978/amd64-ha-codex-bridge-app
 
 jobs:
+  scope:
+    name: Determine App verification scope
+    if: inputs.publish != true && github.event_name != 'workflow_call'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      required: ${{ steps.scope.outputs.required || steps.manual-scope.outputs.required }}
+    steps:
+      - name: Check out the pull request merge commit
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect App-relevant pull request changes
+        id: scope
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          [[ "${BASE_SHA}" =~ ^[0-9a-f]{40,64}$ ]]
+          [[ "${HEAD_SHA}" =~ ^[0-9a-f]{40,64}$ ]]
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${HEAD_SHA}^{commit}"
+
+          if git diff --quiet "${BASE_SHA}" "${HEAD_SHA}" -- \
+            .github/workflows/build-app.yml \
+            .github/workflows/release.yml \
+            bridge_service/ \
+            codex_bridge_app/ \
+            codex_host_access_app/ \
+            scripts/; then
+            echo "required=false" >> "${GITHUB_OUTPUT}"
+          else
+            diff_status=$?
+            if [[ "${diff_status}" -ne 1 ]]; then
+              exit "${diff_status}"
+            fi
+            echo "required=true" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Require App verification for manual runs
+        id: manual-scope
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: echo "required=true" >> "${GITHUB_OUTPUT}"
+
   verify:
     name: Build ${{ matrix.arch }} App without publishing
-    if: inputs.publish != true
+    needs: scope
+    if: inputs.publish != true && needs.scope.outputs.required == 'true'
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -107,6 +152,34 @@ jobs:
             io.hass.description=Run Codex privately inside Home Assistant
           push: "false"
           version: ${{ steps.config_version.outputs.version }}
+
+  verification:
+    name: App image verification
+    needs: [scope, verify]
+    if: always() && inputs.publish != true && github.event_name != 'workflow_call'
+    runs-on: ubuntu-24.04
+    permissions: {}
+    steps:
+      - name: Require the scoped App build result
+        shell: bash
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          VERIFY_REQUIRED: ${{ needs.scope.outputs.required }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: |
+          test "${SCOPE_RESULT}" = success
+          case "${VERIFY_REQUIRED}" in
+            false)
+              test "${VERIFY_RESULT}" = skipped
+              ;;
+            true)
+              test "${VERIFY_RESULT}" = success
+              ;;
+            *)
+              echo "App verification scope is missing or invalid." >&2
+              exit 1
+              ;;
+          esac
 
   publish:
     name: Publish signed amd64 App image

@@ -252,8 +252,9 @@ jobs:
             to `${{ needs.generate.outputs.codex_version }}` and bumps the App to
             `${{ needs.generate.outputs.app_version }}`.
 
-            The running App never self-modifies. Required CI must pass before
-            guarded squash auto-merge can make the signed App update available.
+            The running App never self-modifies. Required CI and App image
+            verification must pass before guarded squash auto-merge can make
+            the signed App update available.
           branch: automation/codex-${{ needs.generate.outputs.codex_version }}
           base: main
           commit-message: Update verified Codex to ${{ needs.generate.outputs.codex_version }}

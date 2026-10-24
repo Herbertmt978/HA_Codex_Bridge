@@ -2,11 +2,14 @@
 
 All notable App changes are recorded here.
 
-## Unreleased
+## 1.13.20
 
-- Updates the source build's Python dependency pins to FastAPI `0.143.3`, pydantic-settings `2.16.0` and aiohttp `3.14.4`, with hash-locked requirements that satisfy the Bridge dependency floors.
-- Updates the source build's checksum-pinned Chromium browser, shared resources and ANGLE packages to `155.0.8059.39-r0`, with matching startup version verification. Browser tools remain disabled by default and require the existing isolation attestation.
-- Keeps Bridge `0.20.1` and verified Codex `0.163.0` without changing Integration API compatibility. These source changes do not publish an App image or establish native HAOS acceptance.
+- Repairs App publication after the Chromium packages pinned by 1.13.19 were removed from the upstream package repository. Uses matching checksum-pinned Chromium, shared resources and ANGLE `155.0.8059.84-r0` packages with the same signature and startup version checks.
+- Includes the previously source-only Python dependency updates to FastAPI `0.143.3`, pydantic-settings `2.16.0` and aiohttp `3.14.4`. Browser tools retain their default-disabled setting and existing isolation requirements.
+
+- Bundles the Sigstore-verified Codex runtime `0.164.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
 
 ## 1.13.19
 
