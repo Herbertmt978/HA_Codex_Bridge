@@ -149,6 +149,78 @@ def test_app_build_stages_reproducible_amd64_context_and_uses_official_builder()
     ), "App image must be built with the official Home Assistant builder action"
 
 
+def test_app_verification_is_a_stable_required_check_for_every_main_pull_request() -> None:
+    document, _ = _workflow("build-app")
+    triggers = document["on"]
+    assert triggers["pull_request"] == {"branches": ["main"]}, (
+        "App verification must publish its stable aggregate check on every main PR"
+    )
+
+    jobs = document["jobs"]
+    scope = jobs["scope"]
+    assert scope["if"] == "inputs.publish != true && github.event_name != 'workflow_call'"
+    assert scope["outputs"]["required"] == (
+        "${{ steps.scope.outputs.required || steps.manual-scope.outputs.required }}"
+    )
+    steps = scope["steps"]
+    checkout = next(step for step in steps if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["if"] == "github.event_name == 'pull_request'"
+    assert checkout["with"]["fetch-depth"] == 2
+    scope_step = next(step for step in steps if step.get("id") == "scope")
+    assert scope_step["env"] == {
+        "BASE_SHA": "${{ github.event.pull_request.base.sha }}",
+        "HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+    }
+    scope_script = str(scope_step["run"])
+    assert "[[ \"${BASE_SHA}\" =~ ^[0-9a-f]{40,64}$ ]]" in scope_script
+    assert "[[ \"${HEAD_SHA}\" =~ ^[0-9a-f]{40,64}$ ]]" in scope_script
+    assert 'git diff --quiet "${BASE_SHA}" "${HEAD_SHA}" --' in scope_script
+    for path in (
+        ".github/workflows/build-app.yml",
+        ".github/workflows/release.yml",
+        "bridge_service/",
+        "codex_bridge_app/",
+        "codex_host_access_app/",
+        "scripts/",
+    ):
+        assert path in scope_script
+    assert 'echo "required=false"' in scope_script
+    assert 'echo "required=true"' in scope_script
+    assert 'if [[ "${diff_status}" -ne 1 ]]' in scope_script
+    manual_step = next(step for step in steps if step.get("id") == "manual-scope")
+    assert manual_step["if"] == "github.event_name == 'workflow_dispatch'"
+    assert 'echo "required=true"' in manual_step["run"]
+
+    verify = jobs["verify"]
+    assert verify["needs"] == "scope"
+    assert "needs.scope.outputs.required == 'true'" in verify["if"]
+    assert [entry["arch"] for entry in verify["strategy"]["matrix"]["include"]] == [
+        "amd64",
+        "aarch64",
+    ]
+    aggregate = jobs["verification"]
+    assert aggregate["name"] == "App image verification"
+    assert aggregate["needs"] == ["scope", "verify"]
+    assert "always()" in aggregate["if"]
+    assert "github.event_name != 'workflow_call'" in aggregate["if"]
+    assert jobs["publish"]["if"] == (
+        "inputs.publish == true && github.ref == 'refs/heads/main'"
+    ), "the reusable release publisher must retain its exact main-only gate"
+    gate = aggregate["steps"][0]
+    gate_script = str(gate["run"])
+    assert gate["env"] == {
+        "SCOPE_RESULT": "${{ needs.scope.result }}",
+        "VERIFY_REQUIRED": "${{ needs.scope.outputs.required }}",
+        "VERIFY_RESULT": "${{ needs.verify.result }}",
+    }
+    assert 'test "${SCOPE_RESULT}" = success' in gate_script
+    assert "false)" in gate_script and 'test "${VERIFY_RESULT}" = skipped' in gate_script
+    assert "true)" in gate_script and 'test "${VERIFY_RESULT}" = success' in gate_script
+    assert "*)" in gate_script and "exit 1" in gate_script, (
+        "unknown scope, build failure, cancellation, or an unexpected skip must fail closed"
+    )
+
+
 def test_app_publish_is_main_only_and_uses_exact_config_version_manifest() -> None:
     _, source = _workflow("build-app")
     normalized = source.lower()
