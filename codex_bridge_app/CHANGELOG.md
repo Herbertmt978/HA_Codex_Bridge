@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.13.21
+
+- Updates the hash-locked App runtime dependency OpenTelemetry API to `1.45.1` to address its reported security vulnerability.
+- Updates the frontend test dependency undici to `7.30.1`; installed panel assets and Integration compatibility are unchanged.
+- Bundles the Sigstore-verified Codex runtime `0.164.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.20
 
 - Repairs App publication after the Chromium packages pinned by 1.13.19 were removed from the upstream package repository. Uses matching checksum-pinned Chromium, shared resources and ANGLE `155.0.8059.84-r0` packages with the same signature and startup version checks.
