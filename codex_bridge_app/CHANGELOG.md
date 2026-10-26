@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.13.22
+
+- Updates the hash-locked runtime to FastAPI `0.162.0` and pydantic-settings `2.16.1`. Retains python-dateutil `2.9.0.post0` for Home Assistant test compatibility and covers existing recurrence and clock-change behaviour with regression tests.
+- Retains the complete hash-locked build toolchain with setuptools `84.2.1` and updates the matching Home Assistant test fixture. No feature or access option is enabled by this update.
+- Bundles the Sigstore-verified Codex runtime `0.164.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.21
 
 - Updates the hash-locked App runtime dependency OpenTelemetry API to `1.45.1` to address its reported security vulnerability.

@@ -114,6 +114,51 @@ def test_schedule_preview_follows_home_assistant_clock_change(tmp_path):
     assert runs == ["2026-03-28T09:00:00Z", "2026-03-29T08:00:00Z", "2026-03-30T08:00:00Z"]
 
 
+@pytest.mark.parametrize(("start", "now", "rule", "expected"), [
+    (
+        "2026-10-24T08:30:00Z", "2026-10-24T07:00:00Z",
+        "RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
+        ["2026-10-24T08:30:00Z", "2026-10-25T09:30:00Z", "2026-10-26T09:30:00Z"],
+    ),
+    (
+        "2026-03-28T01:30:00Z", "2026-03-28T00:00:00Z",
+        "RRULE:FREQ=DAILY;BYHOUR=1;BYMINUTE=30;BYSECOND=0",
+        ["2026-03-28T01:30:00Z", "2026-03-29T01:30:00Z", "2026-03-30T00:30:00Z"],
+    ),
+    (
+        "2026-10-24T00:30:00Z", "2026-10-24T00:00:00Z",
+        "RRULE:FREQ=DAILY;BYHOUR=1;BYMINUTE=30;BYSECOND=0",
+        ["2026-10-24T00:30:00Z", "2026-10-25T00:30:00Z", "2026-10-26T01:30:00Z"],
+    ),
+    (
+        "2026-01-31T09:00:00Z", "2026-01-30T00:00:00Z",
+        "RRULE:FREQ=MONTHLY;BYMONTHDAY=31;COUNT=3",
+        ["2026-01-31T09:00:00Z", "2026-03-31T08:00:00Z", "2026-05-31T08:00:00Z"],
+    ),
+    (
+        "2026-03-28T09:00:00Z", "2026-03-28T08:00:00Z",
+        "RRULE:FREQ=DAILY;COUNT=2",
+        ["2026-03-28T09:00:00Z", "2026-03-29T08:00:00Z"],
+    ),
+    (
+        "2026-03-28T09:00:00Z", "2026-03-28T08:00:00Z",
+        "RRULE:FREQ=DAILY;UNTIL=20260329T080000Z",
+        ["2026-03-28T09:00:00Z", "2026-03-29T08:00:00Z"],
+    ),
+])
+def test_recurrence_dependency_preserves_zoneinfo_and_finite_rules(
+    tmp_path, start, now, rule, expected
+):
+    """Keep the existing ZoneInfo gap/fold policy across dateutil upgrades."""
+    schedule = {
+        "kind": "rrule", "rule": rule,
+        "start_at": start, "timezone": "Europe/London",
+    }
+    assert AutomationStore(tmp_path).preview_schedule(
+        schedule, now=datetime.fromisoformat(now)
+    ) == expected
+
+
 def test_create_request_retries_are_durable_and_cannot_recreate_after_delete(tmp_path):
     payload = _payload(client_request_id="a" * 32)
     store = AutomationStore(tmp_path)
