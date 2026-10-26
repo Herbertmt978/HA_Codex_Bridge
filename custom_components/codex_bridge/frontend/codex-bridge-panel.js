@@ -15164,7 +15164,11 @@ var Parser = class _Parser {
         } : null;
       }
       case "raw": {
+        this.gullet.consumeSpaces();
+        var percentCatcode = this.gullet.lexer.catcodes["%"];
+        this.gullet.lexer.setCatcode("%", 12);
         var token = this.parseStringGroup(optional);
+        this.gullet.lexer.setCatcode("%", percentCatcode);
         return token != null ? {
           type: "raw",
           mode: "text",
@@ -15300,11 +15304,13 @@ var Parser = class _Parser {
    * and setting the catcode of % as an active character (as in \hyperref).
    */
   parseUrlGroup(optional) {
+    var percentCatcode = this.gullet.lexer.catcodes["%"];
+    var tildeCatcode = this.gullet.lexer.catcodes["~"];
     this.gullet.lexer.setCatcode("%", 13);
     this.gullet.lexer.setCatcode("~", 12);
     var res = this.parseStringGroup(optional);
-    this.gullet.lexer.setCatcode("%", 14);
-    this.gullet.lexer.setCatcode("~", 13);
+    this.gullet.lexer.setCatcode("%", percentCatcode);
+    this.gullet.lexer.setCatcode("~", tildeCatcode);
     if (res == null) {
       return null;
     }
@@ -15636,7 +15642,7 @@ var renderToHTMLTree = function renderToHTMLTree2(expression, options) {
     return renderError(error, expression, settings);
   }
 };
-var version = "0.19.0";
+var version = "0.19.1";
 var __domTree = {
   Span,
   Anchor,
