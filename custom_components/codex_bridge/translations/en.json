@@ -38,6 +38,18 @@
         "data_description": {
           "bridge_token": "The token configured in your external Bridge. It replaces the saved token."
         }
+      },
+      "reconfigure": {
+        "title": "Update the external Bridge connection",
+        "description": "Enter the external Bridge's current private address and token. Home Assistant checks the connection before saving it.",
+        "data": {
+          "bridge_url": "Bridge URL",
+          "bridge_token": "Bridge token"
+        },
+        "data_description": {
+          "bridge_url": "The private HTTP address of your external legacy Bridge.",
+          "bridge_token": "The token configured in your external Bridge. It replaces the saved token."
+        }
       }
     },
     "error": {
@@ -56,11 +68,12 @@
       "cannot_connect": "Home Assistant could not reach the App.",
       "incompatible_api": "The App API is not compatible with this integration.",
       "unknown": "The App could not be validated safely.",
-      "reconfigure_successful": "The App connection was updated.",
+      "reconfigure_successful": "The Codex Bridge connection was updated.",
       "reauth_successful": "The Codex Bridge connection is working again.",
       "host_bridge_required": "Set up the normal Codex Bridge App first, then restart Codex Host Access.",
       "host_pairing_failed": "Host Access could not pair. Update and restart Codex Bridge, then restart the Host Access App.",
-      "host_paired": "Host Access is paired. Review the warning in Codex Bridge to enable it; pairing alone grants no access."
+      "host_paired": "Host Access is paired. Review the warning in Codex Bridge to enable it; pairing alone grants no access.",
+      "reconfigure_app_managed": "Home Assistant manages the App's address and token through Supervisor discovery. Restart the Codex Bridge App to publish fresh connection details."
     }
   },
   "options": {

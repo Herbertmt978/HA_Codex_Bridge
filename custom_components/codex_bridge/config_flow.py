@@ -218,6 +218,59 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Move an external Bridge to a new private endpoint or token."""
+
+        entry = self._get_reconfigure_entry()
+        if (
+            entry.data.get(CONF_CONNECTION_TYPE, CONNECTION_TYPE_EXTERNAL_LEGACY)
+            != CONNECTION_TYPE_EXTERNAL_LEGACY
+        ):
+            # Supervisor discovery owns the App endpoint and token.
+            return self.async_abort(reason="reconfigure_app_managed")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                bridge_url = validate_bridge_url(user_input[CONF_BRIDGE_URL])
+                bridge_token = validate_bridge_token(user_input[CONF_BRIDGE_TOKEN])
+            except EndpointError:
+                errors["base"] = "invalid_endpoint"
+            else:
+                if error := await self._async_ready_error(
+                    bridge_url, bridge_token, legacy=True
+                ):
+                    errors["base"] = error
+                else:
+                    return self.async_update_reload_and_abort(
+                        entry,
+                        data_updates={
+                            CONF_BRIDGE_URL: bridge_url,
+                            CONF_BRIDGE_TOKEN: bridge_token,
+                        },
+                    )
+
+        # Suggest the endpoint, never the token.
+        suggested_url = (user_input or entry.data).get(CONF_BRIDGE_URL, DEFAULT_BRIDGE_URL)
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                probatio.Schema(
+                    {
+                        probatio.Required(CONF_BRIDGE_URL): str,
+                        probatio.Required(CONF_BRIDGE_TOKEN): selector.TextSelector(
+                            selector.TextSelectorConfig(
+                                type=selector.TextSelectorType.PASSWORD
+                            )
+                        ),
+                    }
+                ),
+                {CONF_BRIDGE_URL: suggested_url},
+            ),
+            errors=errors,
+        )
+
     async def async_step_hassio(self, discovery_info: HassioServiceInfo):
         """Validate Supervisor discovery, then establish a v1-only App entry."""
 
