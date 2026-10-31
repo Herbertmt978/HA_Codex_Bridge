@@ -23,7 +23,8 @@ answers again. A Bridge using the legacy v0 API does not expose these entities.
 
 The entities belong to one Home Assistant service device for the connection.
 Its software version is the App release, or the Bridge release for an external
-Bridge. Entity names are translated and follow that device's name.
+Bridge. For the App, this device appears under the Codex Bridge App device that
+Supervisor registers. Entity names are translated and follow that device's name.
 
 The Integration refreshes the entities together every minute and when relevant
 events arrive through its existing single event broker. The last outcome is an

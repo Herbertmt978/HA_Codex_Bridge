@@ -21,6 +21,7 @@ from custom_components.codex_bridge.const import (
 )
 from custom_components.codex_bridge.entity_coordinator import BridgeEntityCoordinator, project_status
 from custom_components.codex_bridge.event_broker import EventBroker
+from custom_components.codex_bridge.host_access import SUPERVISOR_SLUG_KEY
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 
@@ -319,15 +320,18 @@ async def test_registry_ids_and_availability_survive_reload(hass):
 
 
 @asynccontextmanager
-async def _loaded_usage_entities(hass, *, weekly_only=False, customise=None):
+async def _loaded_usage_entities(hass, *, weekly_only=False, customise=None, slug=None):
     assert await async_setup_component(hass, "homeassistant", {})
+    data = {
+        CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+        CONF_BRIDGE_TOKEN: "a" * 48,
+        CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+    }
+    if slug is not None:
+        data[SUPERVISOR_SLUG_KEY] = slug
     entry = MockConfigEntry(
         domain=DOMAIN, title="Codex Bridge App", source="hassio",
-        data={
-            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
-            CONF_BRIDGE_TOKEN: "a" * 48,
-            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
-        },
+        data=data,
         unique_id="bridge-usage-visibility-test",
     )
     entry.add_to_hass(hass)
@@ -482,6 +486,8 @@ async def test_entities_use_translated_names_on_one_service_device(hass):
         assert device.name == "Codex Bridge App"
         assert device.model == "Home Assistant App"
         assert device.sw_version == "1.13.22"
+        # No Supervisor App device is known for this connection.
+        assert device.via_device_id is None
         entities = [
             item for item in registry.entities.values()
             if item.config_entry_id == entry.entry_id
@@ -504,3 +510,19 @@ async def test_entities_use_translated_names_on_one_service_device(hass):
         assert outcome.attributes["options"] == [
             "completed", "failed", "cancelled", "interrupted",
         ]
+
+
+async def test_app_connection_device_is_shown_under_its_supervisor_app(hass):
+    supervisor = MockConfigEntry(domain="hassio")
+    supervisor.add_to_hass(hass)
+    app = dr.async_get(hass).async_get_or_create(
+        config_entry_id=supervisor.entry_id,
+        identifiers={("hassio", "local_codex_bridge")},
+        name="Codex Bridge",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+    async with _loaded_usage_entities(hass, slug="local_codex_bridge") as (entry, *_):
+        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+        assert device.via_device_id == app.id
+        assert entry.entry_id in device.config_entries
+        assert supervisor.entry_id not in device.config_entries

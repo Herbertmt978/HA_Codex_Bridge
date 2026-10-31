@@ -437,6 +437,9 @@ async def test_each_saved_account_is_a_service_device_that_follows_its_label(has
         assert spare.name == "Spare"
         assert primary.entry_type is dr.DeviceEntryType.SERVICE
         assert primary.model == "Saved ChatGPT account"
+        bridge = devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+        assert primary.via_device_id == bridge.id
+        assert spare.via_device_id == bridge.id
         usage = registry.async_get_entity_id(
             "sensor", DOMAIN, f"{entry.entry_id}_profile_allowance_{PROFILE_A}_five_hour_used"
         )

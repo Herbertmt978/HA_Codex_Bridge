@@ -2,7 +2,8 @@
 
 On App versions that advertise saved-account telemetry, Home Assistant creates
 a service device for each account in the account switcher, named with the
-account's safe display label, and adds diagnostic sensors to it. Renaming the
+account's safe display label and shown under the Codex Bridge connection
+device, and adds diagnostic sensors to it. Renaming the
 account in Codex Bridge renames the device unless you have named it in Home
 Assistant. Each account has five-hour and weekly
 used and remaining percentages, reset timestamps, available reset credits, and

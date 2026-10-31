@@ -53,6 +53,7 @@ class CodexBridgeRuntime:
     capabilities: tuple[str, ...] = ()
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
     device_info: DeviceInfo | None = None
+    device_id: str | None = None
     _capability_refresh_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
         init=False,

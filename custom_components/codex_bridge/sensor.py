@@ -236,13 +236,16 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
         self._attr_translation_key = _ACCOUNT_SENSOR_KEYS[key]
         profile = self._profile
         # Each saved account is its own service device, named by its label.
-        self._attr_device_info = DeviceInfo(
+        device_info = DeviceInfo(
             identifiers={account_device_identifier(runtime.entry_id, profile_id)},
             name=profile.label if profile is not None else "Saved account",
             manufacturer="Codex Bridge",
             model="Saved ChatGPT account",
             entry_type=DeviceEntryType.SERVICE,
         )
+        if runtime.device_id is not None:
+            device_info["via_device_id"] = runtime.device_id
+        self._attr_device_info = device_info
         self._visibility_entry_id = runtime.entry_id
         self._visibility_changes: deque[er.RegistryEntryHider | None] = deque()
         if key == "status":

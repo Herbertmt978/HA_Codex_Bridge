@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONNECTION_TYPE_SUPERVISOR, DOMAIN
 from .entity_coordinator import BridgeEntityCoordinator
+from .host_access import SUPERVISOR_SLUG_KEY
 from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
+
+# Supervisor registers each installed App as a device under this domain.
+SUPERVISOR_DOMAIN = "hassio"
 
 
 def bridge_device_identifier(runtime: CodexBridgeRuntime) -> tuple[str, str]:
@@ -15,6 +21,7 @@ def bridge_device_identifier(runtime: CodexBridgeRuntime) -> tuple[str, str]:
 
 
 def bridge_device_info(
+    hass: HomeAssistant,
     entry: CodexBridgeConfigEntry,
     runtime: CodexBridgeRuntime,
     *,
@@ -22,7 +29,7 @@ def bridge_device_info(
 ) -> DeviceInfo:
     """Describe the connected App or external Bridge as one service device."""
 
-    return DeviceInfo(
+    info = DeviceInfo(
         identifiers={bridge_device_identifier(runtime)},
         name=entry.title,
         manufacturer="Codex Bridge",
@@ -34,6 +41,14 @@ def bridge_device_info(
         sw_version=sw_version,
         entry_type=DeviceEntryType.SERVICE,
     )
+    slug = entry.data.get(SUPERVISOR_SLUG_KEY)
+    if runtime.connection_type == CONNECTION_TYPE_SUPERVISOR and isinstance(slug, str):
+        # Show the connection under the App that serves it. An App device that
+        # Supervisor has not registered yet is linked on the next setup.
+        app = dr.async_get(hass).async_get_device(identifiers={(SUPERVISOR_DOMAIN, slug)})
+        if app is not None:
+            info["via_device_id"] = app.id
+    return info
 
 
 class BridgeEntity(CoordinatorEntity[BridgeEntityCoordinator]):

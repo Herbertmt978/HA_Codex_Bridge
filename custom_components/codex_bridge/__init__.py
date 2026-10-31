@@ -5,7 +5,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.dispatcher import async_dispatcher_send
@@ -161,9 +161,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
             capabilities=tuple(getattr(ready, "capabilities", ())),
         ),
     )
-    runtime.device_info = bridge_device_info(
-        entry, runtime, sw_version=_ready_version(ready)
+    device_info = bridge_device_info(
+        hass, entry, runtime, sw_version=_ready_version(ready)
     )
+    runtime.device_info = device_info
+    # Saved-account devices are shown under this device, so register it first.
+    runtime.device_id = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, **device_info
+    ).id
 
     @callback
     def async_start_reauth() -> None:
