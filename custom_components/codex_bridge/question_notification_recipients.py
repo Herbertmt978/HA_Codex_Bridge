@@ -83,7 +83,11 @@ async def async_resolve_question_recipients(
             or not isinstance(user_id, str)
         ):
             continue
-        device = registry.async_get_device(identifiers={("mobile_app", raw_device_id)})
+        # Identifiers are unique only within a config entry, so scope the lookup to
+        # this registration rather than accept another entry's matching device.
+        device = registry.async_get_device_by_identifier(
+            ("mobile_app", raw_device_id), registration_id
+        )
         if (
             device is None
             or device.disabled_by is not None
