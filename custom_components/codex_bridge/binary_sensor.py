@@ -10,6 +10,9 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from .entity import BridgeEntity
 from .runtime import CodexBridgeConfigEntry
 
+# One coordinator refreshes every entity; these entities make no requests.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -30,7 +33,6 @@ async def async_setup_entry(
 
 
 class BridgeConnectionSensor(BridgeEntity, BinarySensorEntity):
-    _attr_name = "Connection"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -45,7 +47,6 @@ class BridgeConnectionSensor(BridgeEntity, BinarySensorEntity):
 
 
 class BridgeAuthenticatedSensor(BridgeEntity, BinarySensorEntity):
-    _attr_name = "ChatGPT connected"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -56,7 +57,6 @@ class BridgeAuthenticatedSensor(BridgeEntity, BinarySensorEntity):
 
 
 class BridgeTaskRunningSensor(BridgeEntity, BinarySensorEntity):
-    _attr_name = "Task running"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
 
     @property

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .bridge_api import BridgeApiClient, BridgeApiError
 from .const import (
@@ -51,6 +52,7 @@ class CodexBridgeRuntime:
     ha_mcp_shortcut: HaMcpShortcut | None = None
     capabilities: tuple[str, ...] = ()
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
+    device_info: DeviceInfo | None = None
     _capability_refresh_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
         init=False,

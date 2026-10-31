@@ -26,6 +26,7 @@ _TERMINAL_EVENTS = {
     "run.cancelled": "cancelled",
     "run.interrupted": "interrupted",
 }
+TERMINAL_OUTCOMES = tuple(_TERMINAL_EVENTS.values())
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,7 +116,7 @@ def project_status(
     return EntitySnapshot(
         authenticated=authenticated,
         task_running=running,
-        last_outcome=last_outcome if last_outcome in _TERMINAL_EVENTS.values() else None,
+        last_outcome=last_outcome if last_outcome in TERMINAL_OUTCOMES else None,
         usage_available=fresh,
         five_hour_used=primary[0],
         five_hour_reset=primary[1],

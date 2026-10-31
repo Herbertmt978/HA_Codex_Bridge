@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.setup import async_setup_component
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.codex_bridge.account_allowance_coordinator import (
@@ -320,12 +320,12 @@ async def test_five_hour_visibility_and_manual_choices_survive_reload(hass):
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(usage).hidden_by is None
-        assert hass.states.get(usage).state == "unavailable"
+        assert hass.states.get(usage).state == "unknown"
         row["status"] = "available"
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(usage).hidden_by is er.RegistryEntryHider.INTEGRATION
-        assert hass.states.get(usage).state == "unavailable"  # retained window is disabled
+        assert hass.states.get(usage).state == "unknown"  # retained window is disabled
         registry.async_update_entity(usage, hidden_by=None, name="My allowance")
         registry.async_update_entity(remaining, hidden_by=er.RegistryEntryHider.USER)
         registry.async_update_entity(reset, disabled_by=er.RegistryEntryDisabler.USER)
@@ -358,8 +358,8 @@ async def test_entity_states_report_unknown_credits_expiry_staleness_and_outage(
         row["available_resets"] = None
         row["windows"][0]["resets_at"] = None
         await coordinator.async_refresh()
-        assert state("reset_credits").state == "unavailable"
-        assert state("five_hour_reset").state == "unavailable"
+        assert state("reset_credits").state == "unknown"
+        assert state("five_hour_reset").state == "unknown"
         row["available_resets"] = 2
         row["next_reset_expiry"] = "2030-01-01T12:00:00+02:00"
         row["expiry_complete"] = False
@@ -370,18 +370,24 @@ async def test_entity_states_report_unknown_credits_expiry_staleness_and_outage(
         row["updated_at"] = (datetime.now(UTC) - timedelta(minutes=16)).isoformat()
         await coordinator.async_refresh()
         assert state("status").state == "stale"
-        assert state("weekly_used").state == "unavailable"
+        assert state("weekly_used").state == "unknown"
         assert state("status").attributes["data_age_seconds"] >= 960
         row["updated_at"] = datetime.now(UTC).isoformat()
         row["reauthentication_required"] = True
         await coordinator.async_refresh()
         assert state("status").state == "reauthentication_required"
-        assert state("weekly_used").state == "unavailable"
+        assert state("weekly_used").state == "unknown"
+        row["reauthentication_required"] = False
+        row["status"] = "unavailable"
+        await coordinator.async_refresh()
+        # The App reported no usage for this account; HA's state stays distinct.
+        assert state("status").state == "usage_unavailable"
+        assert state("weekly_used").state == "unknown"
         client.async_account_profile_telemetry.side_effect = BridgeApiConnectionError()
         await coordinator.async_refresh()
         assert state("status").state == "unavailable"
-        assert state("status").attributes["source_available"] is False
-        assert state("status").attributes["telemetry_status"] == "unavailable"
+        assert state("weekly_used").state == "unavailable"
+        assert "telemetry_status" not in state("status").attributes
 
 
 @pytest.mark.parametrize("payload", [
@@ -410,3 +416,57 @@ def test_invalid_credit_counts_are_unknown(value):
     assert profile.available_resets is None
     assert profile.next_reset_expiry is None
     assert profile.expiry_complete is False
+
+
+async def test_each_saved_account_is_a_service_device_that_follows_its_label(hass):
+    async with _loaded_account_entities(hass) as (entry, client, payload, coordinator, registry):
+        devices = dr.async_get(hass)
+
+        def account_device(profile_id):
+            return devices.async_get_device(
+                identifiers={(DOMAIN, f"{entry.entry_id}_profile_{profile_id}")}
+            )
+
+        primary = account_device(PROFILE_A)
+        spare = account_device(PROFILE_B)
+        assert primary.name == "Primary"
+        assert spare.name == "Spare"
+        assert primary.entry_type is dr.DeviceEntryType.SERVICE
+        assert primary.model == "Saved ChatGPT account"
+        usage = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_profile_allowance_{PROFILE_A}_five_hour_used"
+        )
+        assert registry.async_get(usage).device_id == primary.id
+        assert registry.async_get(usage).translation_key == "five_hour_used"
+        assert hass.states.get(usage).name == "Primary 5-hour usage"
+        status = hass.states.get(registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_profile_allowance_{PROFILE_A}_status"
+        ))
+        assert status.name == "Primary Allowance status"
+        assert status.state == "available"
+        assert status.attributes["options"] == [
+            "available", "stale", "usage_unavailable", "reauthentication_required",
+        ]
+
+        # A name chosen in HA wins over a later App label change.
+        devices.async_update_device(spare.id, name_by_user="Backup login")
+        payload["profiles"][0]["label"] = "Renamed Primary"
+        payload["profiles"][1]["label"] = "Renamed Spare"
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert account_device(PROFILE_A).name == "Renamed Primary"
+        assert hass.states.get(usage).name == "Renamed Primary 5-hour usage"
+        assert account_device(PROFILE_B).name_by_user == "Backup login"
+
+        # An incomplete inventory keeps both accounts; a complete one removes
+        # the missing account's device as well as its entities.
+        payload["inventory_complete"] = False
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert account_device(PROFILE_B) is not None
+        payload["inventory_complete"] = True
+        payload["profiles"] = payload["profiles"][:1]
+        await coordinator.async_refresh()
+        await hass.async_block_till_done()
+        assert account_device(PROFILE_B) is None
+        assert account_device(PROFILE_A).id == primary.id

@@ -244,5 +244,67 @@
         }
       }
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "name": "Connection"
+      },
+      "authenticated": {
+        "name": "ChatGPT connected"
+      },
+      "task_running": {
+        "name": "Task running"
+      }
+    },
+    "conversation": {
+      "assist": {
+        "name": "Assist"
+      }
+    },
+    "sensor": {
+      "last_outcome": {
+        "name": "Last task outcome",
+        "state": {
+          "completed": "Completed",
+          "failed": "Failed",
+          "cancelled": "Cancelled",
+          "interrupted": "Interrupted"
+        }
+      },
+      "allowance_status": {
+        "name": "Allowance status",
+        "state": {
+          "available": "Available",
+          "stale": "Stale",
+          "usage_unavailable": "Usage unavailable",
+          "reauthentication_required": "Sign-in required"
+        }
+      },
+      "five_hour_used": {
+        "name": "5-hour usage"
+      },
+      "five_hour_remaining": {
+        "name": "5-hour remaining"
+      },
+      "five_hour_reset": {
+        "name": "5-hour reset"
+      },
+      "weekly_used": {
+        "name": "Weekly usage"
+      },
+      "weekly_remaining": {
+        "name": "Weekly remaining"
+      },
+      "weekly_reset": {
+        "name": "Weekly reset"
+      },
+      "reset_credits": {
+        "name": "Available reset credits"
+      },
+      "next_reset_expiry": {
+        "name": "Next known reset credit expiry"
+      }
+    }
   }
 }

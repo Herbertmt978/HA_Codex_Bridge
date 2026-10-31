@@ -35,6 +35,7 @@ from .const import (
 )
 from .account_allowance_coordinator import AccountAllowanceCoordinator
 from .event_broker import EventBroker
+from .entity import bridge_device_info
 from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
@@ -157,6 +158,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
             capabilities=tuple(getattr(ready, "capabilities", ())),
         ),
     )
+    runtime.device_info = bridge_device_info(
+        entry, runtime, sw_version=_ready_version(ready)
+    )
+
     @callback
     def async_start_reauth() -> None:
         # A rejection racing a reload must not outlive the reload it raced.
@@ -293,6 +298,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
         raise
 
     return True
+
+
+def _ready_version(ready: object) -> str | None:
+    """Return the App release, or the Bridge release for an external Bridge."""
+
+    for field in ("app_version", "bridge_version"):
+        version = getattr(ready, field, None)
+        if isinstance(version, str) and version:
+            return version
+    return None
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> None:

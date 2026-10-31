@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.setup import async_setup_component
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.codex_bridge.const import (
@@ -297,7 +297,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
             "next_cursor": 3, "minimum_cursor": 0, "has_more": False, "heartbeat": False,
         })
         await hass.async_block_till_done()
-        assert hass.states.get(first[("sensor", f"{entry.entry_id}_last_outcome")]).state == "unavailable"
+        assert hass.states.get(first[("sensor", f"{entry.entry_id}_last_outcome")]).state == "unknown"
 
         # A lost App makes the connection off and the remaining entities unavailable.
         from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError
@@ -335,7 +335,9 @@ async def _loaded_usage_entities(hass, *, weekly_only=False, customise=None):
     if customise is not None:
         customise(registry, entry)
     client = Mock()
-    client.async_ready = AsyncMock(return_value=Mock(capabilities=("api_v1",)))
+    client.async_ready = AsyncMock(
+        return_value=Mock(capabilities=("api_v1",), app_version="1.13.22")
+    )
     client.require_api_v1 = Mock()
     client.negotiated_api_version = 1
     status = _weekly_status if weekly_only else _status
@@ -385,7 +387,7 @@ async def test_five_hour_visibility_tracks_allowance_without_replacing_entities(
             assert item.hidden_by is er.RegistryEntryHider.INTEGRATION
             assert item.disabled_by is None
             assert item.unique_id == f"{entry.entry_id}_{key}"
-            assert hass.states.get(ids[key]).state == "unavailable"
+            assert hass.states.get(ids[key]).state == "unknown"
         assert registry.async_get(ids["weekly_used"]).hidden_by is None
         assert float(hass.states.get(ids["weekly_used"]).state) == 80
         assert registry.async_get(unrelated.entity_id).hidden_by is None
@@ -470,3 +472,35 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
         await entry.runtime_data.entity_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(ids["five_hour_used"]).options[DOMAIN]["five_hour_visibility"] == "manual"
+
+
+async def test_entities_use_translated_names_on_one_service_device(hass):
+    async with _loaded_usage_entities(hass) as (entry, _client, registry, ids):
+        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+        assert device is not None
+        assert device.entry_type is dr.DeviceEntryType.SERVICE
+        assert device.name == "Codex Bridge App"
+        assert device.model == "Home Assistant App"
+        assert device.sw_version == "1.13.22"
+        entities = [
+            item for item in registry.entities.values()
+            if item.config_entry_id == entry.entry_id
+        ]
+        assert {item.device_id for item in entities} == {device.id}
+        assert all(item.has_entity_name for item in entities)
+        assert all(item.translation_key for item in entities)
+
+        connection = registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{entry.entry_id}_connection"
+        )
+        assert hass.states.get(connection).name == "Codex Bridge App Connection"
+        assert hass.states.get(ids["weekly_used"]).name == "Codex Bridge App Weekly usage"
+        outcome = hass.states.get(registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_last_outcome"
+        ))
+        # The App answered, but no run has finished since setup.
+        assert outcome.state == "unknown"
+        assert outcome.name == "Codex Bridge App Last task outcome"
+        assert outcome.attributes["options"] == [
+            "completed", "failed", "cancelled", "interrupted",
+        ]

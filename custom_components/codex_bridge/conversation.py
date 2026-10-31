@@ -18,7 +18,6 @@ from homeassistant.components.conversation import (
 from homeassistant.components.conversation.chat_log import AssistantContent
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
@@ -67,6 +66,10 @@ class _AssistSession:
         self.pending_payload = None
 
 
+# The agent has no polled state and rejects concurrent requests itself.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: CodexBridgeConfigEntry,
@@ -86,18 +89,14 @@ async def async_setup_entry(
 class CodexAssistConversation(ConversationEntity):
     """Return a Codex answer from an explicitly exposed, observe-only project."""
 
-    _attr_name = "Codex Bridge Assist"
-    _attr_icon = "mdi:robot-outline"
+    _attr_has_entity_name = True
+    _attr_translation_key = "assist"
 
     def __init__(self, entry: CodexBridgeConfigEntry, runtime: CodexBridgeRuntime) -> None:
         self._entry = entry
         self._runtime = runtime
         self._attr_unique_id = f"{entry.entry_id}_assist"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, getattr(runtime, "discovery_uuid", None) or entry.entry_id)},
-            name=getattr(runtime, "title", entry.title),
-            manufacturer="Codex Bridge",
-        )
+        self._attr_device_info = runtime.device_info
         self._sessions: OrderedDict[str, _AssistSession] = OrderedDict()
         # Reject concurrent voice requests rather than queueing unbounded work.
         self._request_lock = asyncio.Lock()

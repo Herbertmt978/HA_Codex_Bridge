@@ -1,8 +1,10 @@
 # Saved-account allowance sensors
 
 On App versions that advertise saved-account telemetry, Home Assistant creates
-diagnostic sensors for each account in the account switcher. Their names begin
-with the account's safe display label. Each account has five-hour and weekly
+a service device for each account in the account switcher, named with the
+account's safe display label, and adds diagnostic sensors to it. Renaming the
+account in Codex Bridge renames the device unless you have named it in Home
+Assistant. Each account has five-hour and weekly
 used and remaining percentages, reset timestamps, available reset credits, and
 the next known reset-credit expiry. A reset credit is only reported; these
 sensors never use one.
@@ -15,22 +17,22 @@ or time-based automations. For example, a numeric sensor can trigger when its
 state changes, while a timestamp sensor can be used with a time trigger.
 
 Missing or disabled windows, values outside the reported bounds, stale
-snapshots, unavailable Bridge responses and accounts requiring reauthentication
-remain unknown or unavailable. An incomplete credit inventory may show the
-next **known** expiry, with `expiry_complete: false`; it does not establish the
+snapshots, accounts without reported usage and accounts requiring
+reauthentication are unknown. If the App cannot answer, every account sensor is
+unavailable until it can. An incomplete credit inventory may show the next
+**known** expiry, with `expiry_complete: false`; it does not establish the
 earliest expiry of every available credit. Zero available credits is a reported
-value; an absent credit count remains unavailable. They are not treated as zero.
-The allowance status sensor reports freshness and source failures. Its
-`telemetry_status`, `last_updated`, `data_age_seconds`, `last_refresh` and
-`source_available` attributes describe retained data even during a source
-outage. Home Assistant omits extra attributes from unavailable numeric and
-timestamp entities. The reset-credit sensor also reports whether the expiry
-inventory is complete while it is available. The existing Integration-
-wide sensors and their five-hour visibility choice remain unchanged.
+value; an absent credit count is unknown. They are not treated as zero.
+The allowance status sensor is an enum sensor with the states `available`,
+`stale`, `usage_unavailable` and `reauthentication_required`. Its
+`telemetry_status`, `last_updated`, `data_age_seconds` and `last_refresh`
+attributes describe the retained data. The reset-credit sensor also reports
+whether the expiry inventory is complete. The existing Integration-wide sensors
+and their five-hour visibility choice remain unchanged.
 
 Account entities keep a stable Home Assistant registry identity when an
 account is renamed, reordered or selected as active. A complete profile
-inventory removes entities for accounts that were removed. An unavailable or
+inventory removes the device and entities of an account that was removed. An unavailable or
 incomplete inventory preserves existing registry entries until the Bridge can
 confirm the account list again. Older App versions without the telemetry
 capability do not create per-account entities.
