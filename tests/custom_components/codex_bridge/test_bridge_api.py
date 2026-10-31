@@ -1370,7 +1370,7 @@ async def test_interrupted_event_body_reconnects_and_forwards_accepted_once(
     [(b"{", "upstream_error"), (b"x" * 65, "upstream_error"),
      (b'{"events":[],"next_cursor":"invalid","minimum_cursor":0}', "protocol_error")],
 )
-async def test_invalid_event_responses_stop_without_transport_retry(
+async def test_invalid_event_responses_back_off_without_transport_retry(
     bridge_server_factory, monkeypatch, body, expected_state,
 ) -> None:
     event_requests = []
@@ -1392,8 +1392,11 @@ async def test_invalid_event_responses_stop_without_transport_retry(
             await broker.async_start()
             status = await asyncio.wait_for(subscription.get(), 2)
             assert status["state"] == expected_state
+            assert status["phase"] == "backoff"
             await asyncio.sleep(0)
-            assert broker._task.done()
+            # The slow failure back-off, not the transport reconnect loop, owns
+            # the next attempt.
+            assert not broker._task.done()
             assert event_requests == ["/events/replay"]
         finally:
             await broker.async_close()

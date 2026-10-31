@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import math
 from collections import deque
 from collections.abc import Callable, Coroutine, Mapping
@@ -32,6 +33,7 @@ _MESSAGE_TEXT_EVENTS = frozenset(
     {"message.created", "message.completed", "message.delta", "message.updated"}
 )
 _CLOSE = object()
+_LOGGER = logging.getLogger(__name__)
 
 
 class _ListenerRetryError(Exception):
@@ -62,6 +64,13 @@ def default_reconnect_delay(attempt: int) -> float:
 
     bounded_attempt = max(1, min(attempt, 7))
     return min(30.0, 0.5 * (2 ** (bounded_attempt - 1)))
+
+
+def default_failure_retry_delay(attempt: int) -> float:
+    """Return a slow, capped delay before retrying a stream that failed hard."""
+
+    bounded_attempt = max(1, min(attempt, 5))
+    return min(600.0, 60.0 * 2.0 ** (bounded_attempt - 1))
 
 
 def _safe_payload(
@@ -352,7 +361,9 @@ class EventBroker:
         queue_bytes: int = MAX_SUBSCRIBER_BYTES,
         history_bytes: int = MAX_HISTORY_BYTES,
         reconnect_delay: Callable[[int], float] | None = None,
+        failure_retry_delay: Callable[[int], float] | None = None,
         task_factory: TaskFactory | None = None,
+        on_authentication_failed: Callable[[], None] | None = None,
     ) -> None:
         if initial_cursor is not None and (
             type(initial_cursor) is not int
@@ -371,7 +382,9 @@ class EventBroker:
         self._history: deque[EventRecord] = deque()
         self._history_bytes = 0
         self._reconnect_delay = reconnect_delay or default_reconnect_delay
+        self._failure_retry_delay = failure_retry_delay or default_failure_retry_delay
         self._task_factory = task_factory or _default_task_factory
+        self._on_authentication_failed = on_authentication_failed
         self._subscribers: set[EventSubscription] = set()
         self._listeners: set[Callable[[EventRecord | None], None]] = set()
         self._async_listeners: set[
@@ -725,8 +738,27 @@ class EventBroker:
             else:
                 self._publish_envelope(envelope)
 
+    async def _retry_after_failure(self, state: str, *, failures: int) -> None:
+        """Publish a hard failure, then retry slowly instead of stopping for good.
+
+        An App update or restart can clear protocol and upstream failures, so
+        recovery must not depend on reloading the Integration.
+        """
+
+        delay = self._failure_retry_delay(failures)
+        if failures == 1:
+            _LOGGER.info(
+                "Codex Bridge live updates stopped (%s); retrying in %.0f seconds",
+                state,
+                delay,
+                exc_info=state == "failed",
+            )
+        self._set_status(state, phase="backoff", retry_count=failures, notify=True)
+        await asyncio.sleep(delay)
+
     async def _run(self) -> None:
         retry = 0
+        failures = 0
         replay = True
         while not self._closed:
             phase = "replay" if replay else "wait"
@@ -736,11 +768,14 @@ class EventBroker:
                 else:
                     payload = await self._client.async_wait_events(after=self._cursor)
                 replay = await self._consume(payload)
+                if failures:
+                    _LOGGER.info("Codex Bridge live updates recovered")
                 self._set_status(
                     "connected", phase="replay" if replay else "wait", retry_count=0,
-                    notify=retry > 0,
+                    notify=retry > 0 or failures > 0,
                 )
                 retry = 0
+                failures = 0
                 # A mocked or immediately-resolved wait must not monopolise HA's loop.
                 await asyncio.sleep(0)
             except asyncio.CancelledError:
@@ -749,16 +784,18 @@ class EventBroker:
                 try:
                     await self._recover_snapshot(error.problem)
                 except BridgeApiError:
-                    self._set_status(
-                        "protocol_error", phase="stopped", retry_count=retry, notify=True
-                    )
-                    return
+                    failures += 1
+                    await self._retry_after_failure("protocol_error", failures=failures)
                 replay = True
                 retry = 0
             except BridgeApiAuthError:
+                # Only a new token can recover; the Integration reload replaces
+                # this broker after re-authentication.
                 self._set_status(
                     "authentication_failed", phase="stopped", retry_count=retry, notify=True
                 )
+                if self._on_authentication_failed is not None:
+                    self._on_authentication_failed()
                 return
             except BridgeApiConnectionError:
                 retry += 1
@@ -775,24 +812,21 @@ class EventBroker:
                 )
                 await asyncio.sleep(self._reconnect_delay(retry))
             except BridgeApiError as error:
-                if not error.retryable:
-                    self._set_status(
-                        "upstream_error", phase="stopped", retry_count=retry, notify=True
-                    )
-                    return
-                retry += 1
                 replay = True
+                if not error.retryable:
+                    failures += 1
+                    await self._retry_after_failure("upstream_error", failures=failures)
+                    continue
+                retry += 1
                 self._set_status(
                     "reconnecting", phase=phase, retry_count=retry, notify=True
                 )
                 await asyncio.sleep(self._reconnect_delay(retry))
             except EndpointError:
-                self._set_status(
-                    "protocol_error", phase="stopped", retry_count=retry, notify=True
-                )
-                return
+                failures += 1
+                replay = True
+                await self._retry_after_failure("protocol_error", failures=failures)
             except Exception:
-                self._set_status(
-                    "failed", phase="stopped", retry_count=retry, notify=True
-                )
-                return
+                failures += 1
+                replay = True
+                await self._retry_after_failure("failed", failures=failures)

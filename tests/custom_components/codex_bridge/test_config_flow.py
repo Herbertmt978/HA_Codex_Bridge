@@ -1,12 +1,17 @@
 """Configuration-flow coverage for the Supervisor-native Codex Bridge."""
 
+from collections.abc import AsyncIterator
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from packaging.version import Version
 import pytest
 
+from homeassistant.config_entries import SOURCE_HASSIO, SOURCE_REAUTH
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.setup import async_setup_component
 from homeassistant.helpers.service_info.hassio import HassioServiceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -641,6 +646,19 @@ async def test_hassio_rotation_updates_and_reloads_without_exposing_token(hass, 
     assert rotated_token not in caplog.text
 
 
+def test_schemas_use_probatio_from_the_minimum_home_assistant() -> None:
+    """Home Assistant 2026.9 replaced voluptuous with probatio as its schema library."""
+
+    minimum = json.loads((REPOSITORY_ROOT / "hacs.json").read_text("utf-8"))
+    assert Version(minimum["homeassistant"]) >= Version("2026.9.0")
+    integration_root = REPOSITORY_ROOT / "custom_components" / DOMAIN
+    assert not [
+        module.name
+        for module in integration_root.glob("*.py")
+        if "voluptuous" in module.read_text("utf-8")
+    ]
+
+
 def test_manifest_and_english_localisation_describe_the_supervisor_flow() -> None:
     integration_root = REPOSITORY_ROOT / "custom_components" / DOMAIN
     manifest = json.loads((integration_root / "manifest.json").read_text("utf-8"))
@@ -767,3 +785,200 @@ async def test_assist_mcp_and_question_options_preserve_each_other(hass, change)
     assert options["question_notifications_persistent"] is True
     assert options["question_notifications_preview"] is (change == "notification_preview")
     assert options["question_notifications_targets"] == []
+
+@pytest.fixture
+async def mock_setup_entry(
+    hass: HomeAssistant, enable_custom_integrations: None
+) -> AsyncIterator[AsyncMock]:
+    """Let flows reload entries through HA while replacing the Integration setup."""
+
+    # The conversation dependency expects HA's exposed-entity registry.
+    assert await async_setup_component(hass, "homeassistant", {})
+    with (
+        patch(
+            "homeassistant.components.frontend.async_setup",
+            new=AsyncMock(return_value=True),
+        ),
+        patch(
+            "custom_components.codex_bridge.async_setup_entry",
+            new=AsyncMock(return_value=True),
+        ) as setup_entry,
+    ):
+        yield setup_entry
+
+
+def _app_entry(
+    hass: HomeAssistant, *, discovery_uuid: str = UUID, source: str = "hassio"
+) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        version=1,
+        minor_version=1,
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: TOKEN,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+            CONF_DISCOVERY_UUID: discovery_uuid,
+            "supervisor_slug": "local_codex_bridge",
+        },
+        source=source,
+        unique_id=discovery_uuid,
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (BridgeApiAuthError(), "app_restart_required"),
+        (BridgeApiConnectionError(), "cannot_connect"),
+        (BridgeApiIncompatibleError(), "incompatible_api"),
+    ],
+)
+async def test_app_reauth_rechecks_saved_credentials_and_resumes_setup(
+    hass, mock_setup_entry, error, reason
+):
+    entry = _app_entry(hass)
+    saved = dict(entry.data)
+    client = AsyncMock()
+    client.negotiated_api_version = 1
+    client.async_ready.side_effect = error
+    with patch(
+        "custom_components.codex_bridge.config_flow.BridgeApiClient",
+        return_value=client,
+    ) as client_class:
+        result = await entry.start_reauth_flow(hass)
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reauth_confirm"
+        assert not result["data_schema"].schema
+
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": reason}
+        assert entry.data == saved
+        mock_setup_entry.assert_not_awaited()
+
+        client.async_ready.side_effect = None
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data == saved
+    assert client_class.call_args.args[1:] == ("http://127.0.0.1:8766", TOKEN)
+    assert client_class.call_args.kwargs == {"allow_legacy_v0": False}
+    mock_setup_entry.assert_awaited_once()
+
+
+async def test_rotated_app_discovery_resolves_a_pending_reauth(hass, mock_setup_entry):
+    entry = _app_entry(hass)
+    rotated_token = "b" * 48
+    client = AsyncMock()
+    client.negotiated_api_version = 1
+    client.async_ready.return_value = object()
+    with patch(
+        "custom_components.codex_bridge.config_flow.BridgeApiClient",
+        return_value=client,
+    ):
+        await entry.start_reauth_flow(hass)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_HASSIO},
+            data=_discovery(token=rotated_token),
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_BRIDGE_TOKEN] == rotated_token
+    assert not list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
+    mock_setup_entry.assert_awaited_once()
+
+
+async def test_external_reauth_replaces_only_a_validated_token(hass, mock_setup_entry):
+    entry = MockConfigEntry(
+        version=1,
+        minor_version=1,
+        domain=DOMAIN,
+        title="External Codex Bridge",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: TOKEN,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_EXTERNAL_LEGACY,
+        },
+        source="user",
+        unique_id=f"{DOMAIN}:external",
+    )
+    entry.add_to_hass(hass)
+    saved = dict(entry.data)
+    replacement = "b" * 48
+    client = AsyncMock()
+    client.negotiated_api_version = 0
+    client.async_ready.side_effect = BridgeApiAuthError()
+    with patch(
+        "custom_components.codex_bridge.config_flow.BridgeApiClient",
+        return_value=client,
+    ) as client_class:
+        result = await entry.start_reauth_flow(hass)
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reauth_external"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_BRIDGE_TOKEN: "too-short"}
+        )
+        assert result["errors"] == {"base": "invalid_endpoint"}
+        client_class.assert_not_called()
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_BRIDGE_TOKEN: replacement}
+        )
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": "invalid_auth"}
+        assert entry.data == saved
+        mock_setup_entry.assert_not_awaited()
+
+        client.async_ready.side_effect = None
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_BRIDGE_TOKEN: replacement}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data == {**saved, CONF_BRIDGE_TOKEN: replacement}
+    assert client_class.call_args.args[1:] == ("http://127.0.0.1:8766", replacement)
+    assert client_class.call_args.kwargs == {"allow_legacy_v0": True}
+    mock_setup_entry.assert_awaited_once()
+
+
+# A reinstalled App publishes a new identity, journal and token. Merging it into
+# the old entry would keep that entry's event cursors and device, so the old
+# entry is left for the administrator to delete instead.
+@pytest.mark.parametrize("source", ["user", "hassio"])
+async def test_reinstalled_app_identity_is_not_merged_into_the_old_entry(
+    hass, mock_setup_entry, source
+):
+    entry = _app_entry(hass, discovery_uuid="e" * 32, source=source)
+    client = AsyncMock()
+    client.negotiated_api_version = 1
+    client.async_ready.return_value = object()
+    with patch(
+        "custom_components.codex_bridge.config_flow.BridgeApiClient",
+        return_value=client,
+    ):
+        await entry.start_reauth_flow(hass)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_HASSIO},
+            data=_discovery(token="c" * 48),
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.unique_id == "e" * 32
+    assert entry.data[CONF_BRIDGE_TOKEN] == TOKEN
+    assert list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
+    mock_setup_entry.assert_not_awaited()

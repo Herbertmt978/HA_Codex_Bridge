@@ -5,8 +5,8 @@ from pathlib import Path
 
 import aiohttp
 from aiohttp import web
+import probatio
 import pytest
-import voluptuous as vol
 
 from custom_components.codex_bridge.bridge_api import BridgeApiClient
 from custom_components.codex_bridge.protocol import ReadyRecord
@@ -107,7 +107,7 @@ async def test_context_refusal_survives_http_protocol_and_websocket(problem, bri
 
 @pytest.mark.parametrize("invalid", [0, -1, "1", 9_007_199_254_740_992])
 def test_nullable_file_selector_keeps_its_bounds(invalid):
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_read_workspace_context._ws_schema({"id": 703, **REQUESTS["read_file"], "start_line": invalid})
 
 
@@ -116,5 +116,5 @@ def test_nullable_file_selector_keeps_its_bounds(invalid):
 def test_nullable_chat_selector_keeps_its_bounds(field, invalid):
     payload = json.loads(json.dumps(REQUESTS["send_chat"]))
     payload["chat_context"][0][field] = invalid
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_send_prompt._ws_schema({"id": 704, **payload})

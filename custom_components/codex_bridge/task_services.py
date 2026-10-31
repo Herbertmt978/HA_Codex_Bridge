@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-import voluptuous as vol
+import probatio
 
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import ServiceValidationError, Unauthorized
@@ -13,32 +13,32 @@ from .bridge_api import BridgeApiError
 from .const import CONF_ALLOW_UNATTENDED_TASK_ACTIONS, DOMAIN
 from .runtime import CodexBridgeRuntime, async_get_runtime
 
-_ID = vol.Match(r"^[a-f0-9]{32}$")
-_TEXT = vol.All(str, vol.Length(min=1, max=65_536))
-_TARGET = vol.All(str, vol.Length(min=1, max=128))
-_MODEL = vol.All(str, vol.Length(min=1, max=160))
+_ID = probatio.Match(r"^[a-f0-9]{32}$")
+_TEXT = probatio.All(str, probatio.Length(min=1, max=65_536))
+_TARGET = probatio.All(str, probatio.Length(min=1, max=128))
+_MODEL = probatio.All(str, probatio.Length(min=1, max=160))
 
-START_SCHEMA = vol.Schema(
+START_SCHEMA = probatio.Schema(
     {
-        vol.Required("project_id"): _TARGET,
-        vol.Required("title"): vol.All(str, vol.Length(min=1, max=160)),
-        vol.Required("prompt"): _TEXT,
-        vol.Optional("mode", default="observe"): vol.In(
+        probatio.Required("project_id"): _TARGET,
+        probatio.Required("title"): probatio.All(str, probatio.Length(min=1, max=160)),
+        probatio.Required("prompt"): _TEXT,
+        probatio.Optional("mode", default="observe"): probatio.In(
             ("observe", "edit", "full-auto")
         ),
-        vol.Optional("model_override"): _MODEL,
-        vol.Optional("thinking_override"): _MODEL,
-        vol.Optional("task_id"): _ID,
+        probatio.Optional("model_override"): _MODEL,
+        probatio.Optional("thinking_override"): _MODEL,
+        probatio.Optional("task_id"): _ID,
     }
 )
-CONTINUE_SCHEMA = vol.Schema(
+CONTINUE_SCHEMA = probatio.Schema(
     {
-        vol.Required("thread_id"): _TARGET,
-        vol.Required("prompt"): _TEXT,
-        vol.Optional("task_id"): _ID,
+        probatio.Required("thread_id"): _TARGET,
+        probatio.Required("prompt"): _TEXT,
+        probatio.Optional("task_id"): _ID,
     }
 )
-REFERENCE_SCHEMA = vol.Schema({vol.Required("task_id"): _ID})
+REFERENCE_SCHEMA = probatio.Schema({probatio.Required("task_id"): _ID})
 
 _ERROR_MESSAGES = {
     "authentication_required": "Codex sign-in is required before running a task.",
