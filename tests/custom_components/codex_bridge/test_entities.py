@@ -479,7 +479,7 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
 
 
 async def test_entities_use_translated_names_on_one_service_device(hass):
-    async with _loaded_usage_entities(hass) as (entry, _client, registry, ids):
+    async with _loaded_usage_entities(hass) as (entry, client, registry, ids):
         device = dr.async_get(hass).async_get_device_by_identifier(
             (DOMAIN, entry.entry_id), entry.entry_id
         )
@@ -512,6 +512,18 @@ async def test_entities_use_translated_names_on_one_service_device(hass):
         assert outcome.attributes["options"] == [
             "completed", "failed", "cancelled", "interrupted",
         ]
+
+        # An App update reconnects without reloading the entry; the device and
+        # diagnostics follow the new release.
+        client.async_refresh_ready = AsyncMock(
+            return_value=Mock(capabilities=("api_v1",), app_version="1.13.23")
+        )
+        assert await entry.runtime_data.async_refresh_capabilities(force=True)
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
+        assert device.sw_version == "1.13.23"
+        assert entry.runtime_data.device_info["sw_version"] == "1.13.23"
 
 
 async def test_app_connection_device_is_shown_under_its_supervisor_app(hass, caplog):

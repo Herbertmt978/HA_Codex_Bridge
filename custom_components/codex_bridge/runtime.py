@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from time import monotonic
 from typing import TYPE_CHECKING, Any
@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .bridge_api import BridgeApiClient, BridgeApiError
+from .protocol import ReadyRecord
 from .const import (
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
@@ -54,6 +55,10 @@ class CodexBridgeRuntime:
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
     device_info: DeviceInfo | None = None
     device_id: str | None = None
+    # Lets setup keep the device's App release current after an App update.
+    on_ready_refreshed: Callable[[ReadyRecord], None] | None = field(
+        default=None, repr=False
+    )
     _capability_refresh_lock: asyncio.Lock = field(
         default_factory=asyncio.Lock,
         init=False,
@@ -108,6 +113,8 @@ class CodexBridgeRuntime:
             self.capabilities = tuple(ready.capabilities)
             self.api_version = self.client.negotiated_api_version or self.api_version
             self._capability_refreshed_at = monotonic()
+            if self.on_ready_refreshed is not None:
+                self.on_ready_refreshed(ready)
             if self.automation_scheduler is not None:
                 self.automation_scheduler.web_search_mode = (
                     self.web_search_mode

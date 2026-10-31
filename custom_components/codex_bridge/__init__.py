@@ -168,6 +168,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
     ).id
 
     @callback
+    def sync_software_version(refreshed: object) -> None:
+        # An App update reconnects without reloading this entry.
+        version = _ready_version(refreshed)
+        if version == device_info.get("sw_version") or runtime.device_id is None:
+            return
+        device_info["sw_version"] = version
+        dr.async_get(hass).async_update_device(runtime.device_id, sw_version=version)
+
+    runtime.on_ready_refreshed = sync_software_version
+
+    @callback
     def async_start_reauth() -> None:
         # A rejection racing a reload must not outlive the reload it raced.
         if entry.state is not ConfigEntryState.UNLOAD_IN_PROGRESS:
