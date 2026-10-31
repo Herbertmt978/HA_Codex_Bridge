@@ -15,15 +15,27 @@ from .bridge_api import BridgeApiConnectionError, BridgeApiError
 from .const import CONF_ALLOW_UNATTENDED_TASK_ACTIONS, DOMAIN
 from .runtime import CodexBridgeRuntime, async_get_runtime
 
+
+def _bridge_text(value: str) -> str:
+    """Apply the Bridge's rule: text is not blank and fits in 65,536 UTF-8 bytes."""
+
+    if not value.strip() or len(value.encode("utf-8")) > 65_536:
+        raise probatio.Invalid("text must not be blank or exceed 65,536 bytes")
+    return value
+
+
+# Mirror the Bridge's request models, so HA rejects a field the Bridge would.
 _ID = probatio.Match(r"^[a-f0-9]{32}$")
-_TEXT = probatio.All(str, probatio.Length(min=1, max=65_536))
-_TARGET = probatio.All(str, probatio.Length(min=1, max=128))
-_MODEL = probatio.All(str, probatio.Length(min=1, max=160))
+_TEXT = probatio.All(str, probatio.Length(min=1, max=65_536), _bridge_text)
+_TARGET = probatio.All(str, probatio.Match(r"^[a-zA-Z0-9_-]{1,128}\Z"))
+_MODEL = probatio.All(str, probatio.Length(min=1, max=160), _bridge_text)
 
 START_SCHEMA = probatio.Schema(
     {
         probatio.Required("project_id"): _TARGET,
-        probatio.Required("title"): probatio.All(str, probatio.Length(min=1, max=160)),
+        probatio.Required("title"): probatio.All(
+            str, probatio.Length(min=1, max=160), _bridge_text
+        ),
         probatio.Required("prompt"): _TEXT,
         probatio.Optional("mode", default="observe"): probatio.In(
             ("observe", "edit", "full-auto")
@@ -68,6 +80,8 @@ _EXECUTION_ERRORS = frozenset({
     "runtime_idempotency_capacity",
 })
 _TRANSLATION_KEYS = {"runtime_request_conflict": "task_retry_conflict"}
+# Statuses of a request the Bridge rejected as invalid without a specific code.
+_INVALID_REQUEST_STATUSES = frozenset({400, 422})
 
 
 def _task_id(call: ServiceCall) -> str:
@@ -121,6 +135,10 @@ async def _invoke(action: Awaitable[dict[str, Any]]) -> ServiceResponse:
         if key in _VALIDATION_ERRORS:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key=key
+            ) from None
+        if key not in _EXECUTION_ERRORS and error.status in _INVALID_REQUEST_STATUSES:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="task_action_invalid"
             ) from None
         raise HomeAssistantError(
             translation_domain=DOMAIN,

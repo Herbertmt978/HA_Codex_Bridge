@@ -182,6 +182,9 @@
     },
     "task_not_found": {
       "message": "The Codex task was not found."
+    },
+    "task_action_invalid": {
+      "message": "Codex Bridge rejected the task action's data. Check the project or chat ID, title and prompt."
     }
   },
   "services": {

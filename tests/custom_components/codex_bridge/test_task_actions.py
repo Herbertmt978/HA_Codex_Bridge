@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
+import probatio
 import pytest
 
 from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
@@ -439,6 +440,21 @@ def _loaded_task_entry(hass):
             "task_retry_conflict",
             "This task ID was already used for different work",
         ),
+        # The Bridge's request validation answers without a specific code.
+        (
+            BridgeApiError("bridge_problem", status=422),
+            ServiceValidationError,
+            "task_action_invalid",
+            "Codex Bridge rejected the task action's data. "
+            "Check the project or chat ID, title and prompt",
+        ),
+        (
+            BridgeApiError("bad_request", status=400),
+            ServiceValidationError,
+            "task_action_invalid",
+            "Codex Bridge rejected the task action's data. "
+            "Check the project or chat ID, title and prompt",
+        ),
     ],
 )
 async def test_app_outages_are_execution_errors_and_bad_targets_are_validation_errors(
@@ -466,3 +482,51 @@ async def test_app_outages_are_execution_errors_and_bad_targets_are_validation_e
 
     # The actions stay registered for the next load.
     assert hass.services.has_service(DOMAIN, "start_task")
+
+
+_VALID_TASK_DATA = {
+    "start_task": {"project_id": "prj_home-2", "title": "Review", "prompt": "Check it."},
+    "continue_task": {"thread_id": "thr_1", "prompt": "Check it."},
+}
+
+
+@pytest.mark.parametrize(
+    ("action", "data"),
+    [
+        ("start_task", {"project_id": "prj home", "title": "Review", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj.home", "title": "Review", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj_home ", "title": "Review", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj_home", "title": "   ", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj_home", "title": "Review", "prompt": " \n\t "}),
+        # Within 65,536 characters but over the Bridge's 65,536-byte limit.
+        ("start_task", {"project_id": "prj_home", "title": "Review", "prompt": "\u20ac" * 30_000}),
+        (
+            "start_task",
+            {"project_id": "prj_home", "title": "Review", "prompt": "Check it.",
+             "model_override": "  "},
+        ),
+        ("continue_task", {"thread_id": "thr/1", "prompt": "Check it."}),
+        ("continue_task", {"thread_id": "thr_1", "prompt": "   "}),
+    ],
+)
+async def test_actions_reject_data_the_bridge_would_refuse_before_any_request(
+    hass, action, data
+):
+    assert await async_setup_component(hass, "homeassistant", {})
+    with _loaded_task_entry(hass) as (entry, client):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        client.async_start_task = AsyncMock(return_value=TASK_REFERENCE)
+        client.async_continue_task = AsyncMock(return_value=TASK_REFERENCE)
+        with pytest.raises(probatio.Invalid):
+            await hass.services.async_call(
+                DOMAIN, action, data, blocking=True, return_response=True, context=Context()
+            )
+        client.async_start_task.assert_not_awaited()
+        client.async_continue_task.assert_not_awaited()
+
+        # The nearest valid request still reaches the App.
+        assert await hass.services.async_call(
+            DOMAIN, action, _VALID_TASK_DATA[action],
+            blocking=True, return_response=True, context=Context(),
+        ) == TASK_REFERENCE
+        assert await hass.config_entries.async_unload(entry.entry_id)
