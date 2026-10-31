@@ -95,7 +95,6 @@ async def test_setup_and_reload_keep_views_and_websocket_registration_process_li
         patch("custom_components.codex_bridge.async_remove_panel") as remove_panel,
     ):
         assert await _setup_entry(hass, entry)
-        assert hass.services.has_service(DOMAIN, "start_task")
         assert await async_unload_entry(hass, entry)
         assert await _setup_entry(hass, entry)
 

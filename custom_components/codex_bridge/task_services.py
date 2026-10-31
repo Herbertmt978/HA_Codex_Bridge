@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable
+from typing import Any
 from uuid import uuid4
 
 import probatio
 
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import ServiceValidationError, Unauthorized
+from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError, Unauthorized
 
-from .bridge_api import BridgeApiError
+from .bridge_api import BridgeApiConnectionError, BridgeApiError
 from .const import CONF_ALLOW_UNATTENDED_TASK_ACTIONS, DOMAIN
 from .runtime import CodexBridgeRuntime, async_get_runtime
 
@@ -40,26 +42,32 @@ CONTINUE_SCHEMA = probatio.Schema(
 )
 REFERENCE_SCHEMA = probatio.Schema({probatio.Required("task_id"): _ID})
 
-_ERROR_MESSAGES = {
-    "authentication_required": "Codex sign-in is required before running a task.",
-    "authentication_failed": "The Codex Bridge connection needs to be repaired.",
-    "runtime_unavailable": "The Codex Bridge App is unavailable.",
-    "app_server_unavailable": "The Codex runtime is unavailable. Try again later.",
-    "runtime_closed": "The Codex runtime is restarting. Try again later.",
-    "runtime_queue_full": "Codex is at capacity. Try again later.",
-    "task_actions_unavailable": "Update the Codex Bridge App to use task actions.",
-    "capabilities_unavailable": "The requested Codex capability is unavailable.",
-    "task_target_not_found": "The selected Codex project or chat was not found.",
-    "task_target_unavailable": "The selected Codex project or chat is archived or busy.",
-    "task_retry_conflict": "This task ID was already used for different work.",
-    "runtime_request_conflict": "This task ID was already used for different work.",
-    "thread_prompt_pending": "This chat already has a Codex turn waiting to start.",
-    "turn_cancelling": "This chat is cancelling its current Codex turn.",
-    "runtime_idempotency_capacity": "The Codex task history is full. Remove an old chat before retrying.",
-    "task_model_unavailable": "The selected model or reasoning level is unavailable.",
-    "task_host_access_denied": "Unattended task actions cannot use Home Assistant OS host access.",
-    "task_not_found": "The Codex task was not found.",
-}
+# Bridge problem codes that the caller can correct by changing the action's
+# target or data. Their translation keys match the code.
+_VALIDATION_ERRORS = frozenset({
+    "capabilities_unavailable",
+    "task_actions_unavailable",
+    "task_target_not_found",
+    "task_target_unavailable",
+    "task_retry_conflict",
+    "thread_prompt_pending",
+    "turn_cancelling",
+    "task_model_unavailable",
+    "task_host_access_denied",
+    "task_not_found",
+})
+# Problems with the App, its runtime or the connection. The action was valid
+# but could not run now, so HA reports an ordinary execution failure.
+_EXECUTION_ERRORS = frozenset({
+    "authentication_required",
+    "authentication_failed",
+    "runtime_unavailable",
+    "app_server_unavailable",
+    "runtime_closed",
+    "runtime_queue_full",
+    "runtime_idempotency_capacity",
+})
+_TRANSLATION_KEYS = {"runtime_request_conflict": "task_retry_conflict"}
 
 
 def _task_id(call: ServiceCall) -> str:
@@ -77,7 +85,7 @@ async def _runtime_for_action(
         runtime = async_get_runtime(hass)
     except RuntimeError:
         raise ServiceValidationError(
-            "Codex Bridge is not configured or loaded."
+            translation_domain=DOMAIN, translation_key="not_loaded"
         ) from None
     user_id = call.context.user_id
     if user_id is None:
@@ -94,25 +102,35 @@ async def _runtime_for_action(
     if not runtime.supports_capability("task_actions_v1"):
         await runtime.async_refresh_capabilities()
     if not runtime.supports_capability("task_actions_v1"):
-        raise ServiceValidationError("Update the Codex Bridge App to use task actions.")
+        raise ServiceValidationError(
+            translation_domain=DOMAIN, translation_key="task_actions_unavailable"
+        )
     return runtime
 
 
-async def _invoke(action):
+async def _invoke(action: Awaitable[dict[str, Any]]) -> ServiceResponse:
     try:
         return await action
+    except BridgeApiConnectionError:
+        raise HomeAssistantError(
+            translation_domain=DOMAIN, translation_key="cannot_connect"
+        ) from None
     except BridgeApiError as error:
-        raise ServiceValidationError(
-            _ERROR_MESSAGES.get(
-                error.code, "Codex Bridge could not process this task action."
-            )
+        key = _TRANSLATION_KEYS.get(error.code, error.code)
+        if key in _VALIDATION_ERRORS:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key=key
+            ) from None
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key=key if key in _EXECUTION_ERRORS else "task_action_failed",
         ) from None
 
 
 def async_register_task_services(hass: HomeAssistant) -> None:
-    """Register process-lifetime actions so missing Apps fail clearly."""
+    """Register the actions once, so a missing or unloaded App fails clearly."""
 
-    async def start_task(call: ServiceCall) -> dict[str, str]:
+    async def start_task(call: ServiceCall) -> ServiceResponse:
         runtime = await _runtime_for_action(hass, call)
         payload = {
             **call.data,
@@ -121,7 +139,7 @@ def async_register_task_services(hass: HomeAssistant) -> None:
         }
         return await _invoke(runtime.client.async_start_task(payload))
 
-    async def continue_task(call: ServiceCall) -> dict[str, str]:
+    async def continue_task(call: ServiceCall) -> ServiceResponse:
         runtime = await _runtime_for_action(hass, call)
         payload = {
             **call.data,
@@ -130,11 +148,11 @@ def async_register_task_services(hass: HomeAssistant) -> None:
         }
         return await _invoke(runtime.client.async_continue_task(payload))
 
-    async def cancel_task(call: ServiceCall) -> dict[str, str]:
+    async def cancel_task(call: ServiceCall) -> ServiceResponse:
         runtime = await _runtime_for_action(hass, call)
         return await _invoke(runtime.client.async_cancel_task(call.data["task_id"]))
 
-    async def get_task(call: ServiceCall) -> dict[str, str]:
+    async def get_task(call: ServiceCall) -> ServiceResponse:
         runtime = await _runtime_for_action(hass, call)
         return await _invoke(runtime.client.async_get_task(call.data["task_id"]))
 

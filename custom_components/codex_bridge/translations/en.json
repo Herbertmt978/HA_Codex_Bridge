@@ -115,6 +115,134 @@
     },
     "not_ready": {
       "message": "Codex Bridge is not ready yet."
+    },
+    "not_loaded": {
+      "message": "Codex Bridge is not configured or loaded."
+    },
+    "authentication_required": {
+      "message": "Codex sign-in is required before running a task."
+    },
+    "runtime_unavailable": {
+      "message": "The Codex Bridge App is unavailable."
+    },
+    "app_server_unavailable": {
+      "message": "The Codex runtime is unavailable. Try again later."
+    },
+    "runtime_closed": {
+      "message": "The Codex runtime is restarting. Try again later."
+    },
+    "runtime_queue_full": {
+      "message": "Codex is at capacity. Try again later."
+    },
+    "runtime_idempotency_capacity": {
+      "message": "The Codex task history is full. Remove an old chat before retrying."
+    },
+    "task_action_failed": {
+      "message": "Codex Bridge could not process this task action."
+    },
+    "task_actions_unavailable": {
+      "message": "Update the Codex Bridge App to use task actions."
+    },
+    "capabilities_unavailable": {
+      "message": "The requested Codex capability is unavailable."
+    },
+    "task_target_not_found": {
+      "message": "The selected Codex project or chat was not found."
+    },
+    "task_target_unavailable": {
+      "message": "The selected Codex project or chat is archived or busy."
+    },
+    "task_retry_conflict": {
+      "message": "This task ID was already used for different work."
+    },
+    "thread_prompt_pending": {
+      "message": "This chat already has a Codex turn waiting to start."
+    },
+    "turn_cancelling": {
+      "message": "This chat is cancelling its current Codex turn."
+    },
+    "task_model_unavailable": {
+      "message": "The selected model or reasoning level is unavailable."
+    },
+    "task_host_access_denied": {
+      "message": "Unattended task actions cannot use Home Assistant OS host access."
+    },
+    "task_not_found": {
+      "message": "The Codex task was not found."
+    }
+  },
+  "services": {
+    "start_task": {
+      "name": "Start Codex task",
+      "description": "Starts a new unattended task in an existing Codex project. Returns a durable task ID and exact run reference.",
+      "fields": {
+        "project_id": {
+          "name": "Project ID",
+          "description": "The ID of the existing Codex Bridge project to work in."
+        },
+        "title": {
+          "name": "Title",
+          "description": "The title of the new chat."
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "What Codex should do."
+        },
+        "mode": {
+          "name": "Mode",
+          "description": "The permission mode for the new chat: observe, edit or full-auto."
+        },
+        "model_override": {
+          "name": "Model",
+          "description": "A model to use instead of the project default."
+        },
+        "thinking_override": {
+          "name": "Reasoning level",
+          "description": "A reasoning level to use instead of the project default."
+        },
+        "task_id": {
+          "name": "Task ID",
+          "description": "Reuse the same 32-character hexadecimal ID only when retrying the same request."
+        }
+      }
+    },
+    "continue_task": {
+      "name": "Continue Codex task",
+      "description": "Runs an unattended prompt in an existing idle chat, using its current mode and model.",
+      "fields": {
+        "thread_id": {
+          "name": "Chat ID",
+          "description": "The ID of the existing idle chat to continue."
+        },
+        "prompt": {
+          "name": "Prompt",
+          "description": "What Codex should do next."
+        },
+        "task_id": {
+          "name": "Task ID",
+          "description": "Reuse the same 32-character hexadecimal ID only when retrying the same request."
+        }
+      }
+    },
+    "cancel_task": {
+      "name": "Cancel Codex task",
+      "description": "Cancels only the run identified by this task ID; a newer run in the same chat is not affected.",
+      "fields": {
+        "task_id": {
+          "name": "Task ID",
+          "description": "The ID returned when the task started."
+        }
+      }
+    },
+    "get_task": {
+      "name": "Get Codex task",
+      "description": "Reads the durable status and exact run reference for a task ID.",
+      "fields": {
+        "task_id": {
+          "name": "Task ID",
+          "description": "The ID returned when the task started."
+        }
+      }
     }
   }
 }

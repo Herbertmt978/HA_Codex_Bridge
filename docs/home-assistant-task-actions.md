@@ -81,3 +81,11 @@ They cannot enable Home Assistant OS host access, including when continuing an
 existing host-access chat. An archived target, busy chat, unavailable provider
 or invalid model/effort fails without starting a second run. Configure the
 project and any permitted workspace access in the Bridge first.
+
+The actions are registered when Home Assistant loads the Integration, so they
+exist even while the App connection is not loaded. A call then fails with a
+validation error explaining that Codex Bridge is not configured or loaded. A
+problem the caller can correct, such as an unknown project or chat, a busy chat,
+a reused task ID or an unavailable model, is also a validation error. An App
+outage, a Codex sign-in requirement or a full Codex queue is an ordinary action
+error, because the same request can succeed later.

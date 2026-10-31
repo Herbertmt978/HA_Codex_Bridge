@@ -12,7 +12,6 @@ from homeassistant.setup import async_setup_component
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.codex_bridge import async_setup_entry, async_unload_entry
 from custom_components.codex_bridge.const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
@@ -24,11 +23,6 @@ from custom_components.codex_bridge.entity_coordinator import BridgeEntityCoordi
 from custom_components.codex_bridge.event_broker import EventBroker
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
-
-
-async def _setup_entry(hass, entry):
-    async with entry.setup_lock:
-        return await async_setup_entry(hass, entry)
 
 
 NOW = datetime(2026, 9, 23, 12, tzinfo=UTC)
@@ -258,7 +252,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         patch("custom_components.codex_bridge.async_remove_panel"),
         patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
     ):
-        assert await _setup_entry(hass, entry)
+        assert await hass.config_entries.async_setup(entry.entry_id)
         registry = er.async_get(hass)
         first = {
             (item.domain, item.unique_id): item.entity_id
@@ -312,16 +306,16 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         assert hass.states.get(first[("binary_sensor", f"{entry.entry_id}_connection")]).state == "off"
         assert hass.states.get(first[("binary_sensor", f"{entry.entry_id}_task_running")]).state == "unavailable"
 
-        assert await async_unload_entry(hass, entry)
+        assert await hass.config_entries.async_unload(entry.entry_id)
         client.async_get_status.side_effect = None
-        assert await _setup_entry(hass, entry)
+        assert await hass.config_entries.async_setup(entry.entry_id)
         second = {
             (item.domain, item.unique_id): item.entity_id
             for item in registry.entities.values()
             if item.config_entry_id == entry.entry_id
         }
         assert second == first
-        assert await async_unload_entry(hass, entry)
+        assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 @asynccontextmanager

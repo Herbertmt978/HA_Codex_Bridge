@@ -5,9 +5,11 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.typing import ConfigType
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -53,7 +55,15 @@ from .task_events import TaskEventForwarder
 from .websocket_api import async_register_websocket_commands
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.CONVERSATION]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the task actions, which resolve the loaded entry when called."""
+
+    async_register_task_services(hass)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> bool:
@@ -230,8 +240,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
                 selection_callback=select_owned_mcp,
             )
             await runtime.ha_mcp_shortcut.async_setup()
-        if not hass.services.has_service(DOMAIN, "start_task"):
-            async_register_task_services(hass)
         if not domain_data[DATA_VIEWS_REGISTERED]:
             async_register_http_views(hass)
             domain_data[DATA_VIEWS_REGISTERED] = True
