@@ -33,7 +33,10 @@ from .const import (
     CONF_WEB_SEARCH_MODE,
     CONF_ASSIST_MCP_SERVERS,
 )
-from .account_allowance_coordinator import AccountAllowanceCoordinator
+from .account_allowance_coordinator import (
+    AccountAllowanceCoordinator,
+    async_delete_reauthentication_issues,
+)
 from .event_broker import EventBroker
 from .entity import bridge_device_info
 from .entity_coordinator import BridgeEntityCoordinator
@@ -312,6 +315,8 @@ def _ready_version(ready: object) -> str | None:
 
 async def async_remove_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> None:
     """Clear this entry's question notices and revoke its managed MCP grant."""
+    async_delete_reauthentication_issues(hass, entry.entry_id)
+
     async def clear_questions() -> None:
         # HA keeps runtime data only after a cancelled/failed unload. That owner
         # may still hold an admitted delivery, and HA can proceed to remove

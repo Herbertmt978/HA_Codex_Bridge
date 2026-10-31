@@ -9,10 +9,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .bridge_api import BridgeApiError
+from .const import DOMAIN
 from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
 
 
@@ -24,6 +26,7 @@ _EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 _BEARER = re.compile(r"\bbearer\s+[A-Z0-9._~+/-]+=*", re.IGNORECASE)
 _SECRET = re.compile(r"\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+", re.IGNORECASE)
 _PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\|/(?:data|config|share|home|root|Users)/)[^\s,;]+")
+_REAUTHENTICATION_ISSUE = "account_reauthentication"
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,12 +205,55 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
             raise UpdateFailed("Saved-account usage telemetry is unavailable")
         try:
             payload = await self.runtime.client.async_account_profile_telemetry()
-            return project_account_telemetry(payload)
+            snapshot = project_account_telemetry(payload)
         except (BridgeApiError, TypeError, ValueError) as error:
             raise UpdateFailed("Saved-account usage telemetry is unavailable") from error
+        self._sync_reauthentication_issues(snapshot)
+        return snapshot
+
+    @callback
+    def _sync_reauthentication_issues(self, snapshot: AccountAllowanceSnapshot) -> None:
+        """Raise one repair per signed-out account; a complete inventory clears the rest."""
+
+        prefix = _reauthentication_issue_prefix(self.config_entry.entry_id)
+        current: set[str] = set()
+        for profile in snapshot.profiles.values():
+            if not (
+                profile.reauthentication_required
+                or profile.status == "reauthentication_required"
+            ):
+                continue
+            issue_id = f"{prefix}{profile.profile_id}"
+            current.add(issue_id)
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="account_reauthentication_required",
+                translation_placeholders={"account": profile.label},
+            )
+        for domain, issue_id in tuple(ir.async_get(self.hass).issues):
+            if domain == DOMAIN and issue_id.startswith(prefix) and issue_id not in current:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def async_close(self) -> None:
         manager = getattr(self, "manager", None)
         if manager is not None:
             await manager.async_close()
         await self.async_shutdown()
+
+
+def _reauthentication_issue_prefix(entry_id: str) -> str:
+    return f"{_REAUTHENTICATION_ISSUE}_{entry_id}_"
+
+
+@callback
+def async_delete_reauthentication_issues(hass: HomeAssistant, entry_id: str) -> None:
+    """Remove a deleted entry's account repairs; unloading keeps them."""
+
+    prefix = _reauthentication_issue_prefix(entry_id)
+    for domain, issue_id in tuple(ir.async_get(hass).issues):
+        if domain == DOMAIN and issue_id.startswith(prefix):
+            ir.async_delete_issue(hass, DOMAIN, issue_id)

@@ -9,7 +9,11 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.setup import async_setup_component
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.codex_bridge.account_allowance_coordinator import (
@@ -470,3 +474,51 @@ async def test_each_saved_account_is_a_service_device_that_follows_its_label(has
         await hass.async_block_till_done()
         assert account_device(PROFILE_B) is None
         assert account_device(PROFILE_A).id == primary.id
+
+
+async def test_signed_out_account_raises_a_repair_until_it_signs_in_again(hass):
+    issues = ir.async_get(hass)
+    async with _loaded_account_entities(hass) as (entry, client, payload, coordinator, _registry):
+        spare_issue = f"account_reauthentication_{entry.entry_id}_{PROFILE_B}"
+        primary_issue = f"account_reauthentication_{entry.entry_id}_{PROFILE_A}"
+        assert issues.async_get_issue(DOMAIN, spare_issue) is None
+
+        spare = payload["profiles"][1]
+        spare["status"] = "reauthentication_required"
+        spare["reauthentication_required"] = True
+        await coordinator.async_refresh()
+        issue = issues.async_get_issue(DOMAIN, spare_issue)
+        assert issue is not None
+        assert issue.translation_key == "account_reauthentication_required"
+        assert issue.translation_placeholders == {"account": "Spare"}
+        assert issue.severity is ir.IssueSeverity.WARNING
+        assert issue.is_fixable is False
+        assert issues.async_get_issue(DOMAIN, primary_issue) is None
+
+        # An outage proves nothing about the sign-in, so the repair stays.
+        client.async_account_profile_telemetry.side_effect = BridgeApiConnectionError()
+        await coordinator.async_refresh()
+        assert issues.async_get_issue(DOMAIN, spare_issue) is not None
+
+        client.async_account_profile_telemetry.side_effect = lambda: payload
+        spare["status"] = "available"
+        spare["reauthentication_required"] = False
+        spare["updated_at"] = datetime.now(UTC).isoformat()
+        await coordinator.async_refresh()
+        assert issues.async_get_issue(DOMAIN, spare_issue) is None
+
+        # A complete inventory without the account also clears its repair.
+        spare["reauthentication_required"] = True
+        await coordinator.async_refresh()
+        assert issues.async_get_issue(DOMAIN, spare_issue) is not None
+        payload["profiles"] = payload["profiles"][:1]
+        payload["profiles"][0]["reauthentication_required"] = True
+        await coordinator.async_refresh()
+        assert issues.async_get_issue(DOMAIN, spare_issue) is None
+        assert issues.async_get_issue(DOMAIN, primary_issue) is not None
+
+    # Unloading keeps the repair; removing the entry deletes it.
+    assert issues.async_get_issue(DOMAIN, primary_issue) is not None
+    with patch("custom_components.codex_bridge.BridgeApiClient", return_value=client):
+        await hass.config_entries.async_remove(entry.entry_id)
+    assert issues.async_get_issue(DOMAIN, primary_issue) is None

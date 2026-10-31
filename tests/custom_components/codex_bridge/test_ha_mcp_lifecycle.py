@@ -42,6 +42,8 @@ async def _prepare_removal(case, monkeypatch):
     monkeypatch.setattr(integration, "Store", lambda *_args: SimpleNamespace(
         async_load=AsyncMock(return_value=None), async_save=AsyncMock(),
     ))
+    # Account repairs are covered through real HA entries; this hass has no registry.
+    monkeypatch.setattr(integration, "async_delete_reauthentication_issues", Mock())
     entry = SimpleNamespace(entry_id="entry-owned", data={
         CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
         CONF_BRIDGE_URL: "http://127.0.0.1:8766",
