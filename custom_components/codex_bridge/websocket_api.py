@@ -1,14 +1,22 @@
 import asyncio
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import probatio
 
 from homeassistant.components import websocket_api
+from homeassistant.components.websocket_api.connection import ActiveConnection
+from homeassistant.components.websocket_api.decorators import (
+    async_response,
+    require_admin,
+    websocket_command,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import VolDictType
 
 from .bridge_api import (
     BridgeApiAuthError,
+    BridgeApiClient,
     BridgeApiConnectionError,
     BridgeApiError,
     BridgeApiGoneError,
@@ -16,7 +24,7 @@ from .bridge_api import (
 from .const import BRIDGE_EVENT_CURSOR_MAX, DOMAIN
 from .event_broker import EventBatch, EventRecord
 from .protocol import EndpointError
-from .runtime import async_get_runtime
+from .runtime import CodexBridgeRuntime, async_get_runtime
 
 _INTERACTION_ERROR_MESSAGES = {
     "mcp_request_invalid": "Review the MCP answer and try again",
@@ -223,10 +231,10 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
         ws_terminal,
     )
     for command in commands:
-        websocket_api.async_register_command(hass, websocket_api.require_admin(command))
+        websocket_api.async_register_command(hass, require_admin(command))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/terminal",
     probatio.Required("operation"): probatio.In({"open", "read", "write", "resize", "close"}),
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -237,8 +245,10 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     probatio.Optional("sequence"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
     probatio.Optional("data"): probatio.All(str, probatio.Length(max=16 * 1024)),
 })
-@websocket_api.async_response
-async def ws_terminal(hass, connection, msg):
+@async_response
+async def ws_terminal(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     payload = {key: value for key, value in msg.items() if key not in {"id", "type", "operation"}}
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_terminal(msg["operation"], payload))
@@ -246,19 +256,21 @@ async def ws_terminal(hass, connection, msg):
 
 async def _async_handle(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
-    handler,
+    handler: Callable[[BridgeApiClient], Awaitable[Any]] | None,
     *,
     safe_error_messages: dict[str, str] | None = None,
-    after_success=None,
-    runtime_handler=None,
+    after_success: Callable[[CodexBridgeRuntime], Awaitable[None]] | None = None,
+    runtime_handler: Callable[[CodexBridgeRuntime], Awaitable[Any]] | None = None,
 ) -> None:
     try:
         runtime = async_get_runtime(hass)
         if runtime_handler is not None:
             result = await runtime_handler(runtime)
         else:
+            # Every command passes one of the two handlers.
+            assert handler is not None
             result = await handler(runtime.client)
     except BridgeApiAuthError:
         connection.send_error(msg["id"], "invalid_auth", "Bridge authentication failed")
@@ -287,14 +299,14 @@ async def _async_handle(
         connection.send_result(msg["id"], result)
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_config"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/get_config"})
+@async_response
 async def ws_get_config(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    async def _handler(runtime) -> dict[str, Any]:
+    async def _handler(runtime: CodexBridgeRuntime) -> dict[str, Any]:
         return {
             "panel_title": runtime.title,
             "connection_type": runtime.connection_type,
@@ -306,14 +318,14 @@ async def ws_get_config(
     await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_status"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/get_status"})
+@async_response
 async def ws_get_status(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    async def _handler(runtime) -> dict[str, Any]:
+    async def _handler(runtime: CodexBridgeRuntime) -> dict[str, Any]:
         status = await runtime.client.async_get_status()
         await runtime.async_refresh_capabilities(
             force=runtime.capability_refresh_is_urgent(status)
@@ -323,13 +335,15 @@ async def ws_get_status(
     await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/consume_reset_credit",
     probatio.Required("credit_id"): probatio.Match(r"^[\x21-\x7e]{1,256}$"),
     probatio.Required("idempotency_key"): probatio.Match(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
 })
-@websocket_api.async_response
-async def ws_consume_reset_credit(hass, connection, msg) -> None:
+@async_response
+async def ws_consume_reset_credit(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_consume_reset_credit(
@@ -338,11 +352,11 @@ async def ws_consume_reset_credit(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_event_status"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/get_event_status"})
+@async_response
 async def ws_get_event_status(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     """Expose only the Integration's safe event-consumer health projection."""
@@ -368,11 +382,11 @@ async def ws_get_event_status(
     connection.send_result(msg["id"], dict(runtime.event_broker.connection_status))
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_auth_status"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/get_auth_status"})
+@async_response
 async def ws_get_auth_status(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -380,16 +394,16 @@ async def ws_get_auth_status(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/start_auth_login",
         probatio.Optional("force_logout", default=False): bool,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_start_auth_login(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -400,11 +414,11 @@ async def ws_start_auth_login(
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/cancel_auth_login"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/cancel_auth_login"})
+@async_response
 async def ws_cancel_auth_login(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -412,11 +426,11 @@ async def ws_cancel_auth_login(
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/logout_auth"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/logout_auth"})
+@async_response
 async def ws_logout_auth(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -424,76 +438,88 @@ async def ws_logout_auth(
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_account_profiles"})
-@websocket_api.async_response
-async def ws_list_account_profiles(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/list_account_profiles"})
+@async_response
+async def ws_list_account_profiles(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg, lambda client: client.async_list_account_profiles()
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/save_account_profile",
     probatio.Required("label"): probatio.All(str, probatio.Length(min=1, max=60)),
 })
-@websocket_api.async_response
-async def ws_save_account_profile(hass, connection, msg) -> None:
+@async_response
+async def ws_save_account_profile(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_save_account_profile(msg["label"]),
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/switch_account_profile",
     probatio.Required("profile_id"): probatio.Match(r"^[a-f0-9]{32}$"),
 })
-@websocket_api.async_response
-async def ws_switch_account_profile(hass, connection, msg) -> None:
+@async_response
+async def ws_switch_account_profile(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_switch_account_profile(msg["profile_id"]),
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/account_profile_details",
     probatio.Required("profile_id"): probatio.Match(r"^[a-f0-9]{32}$"),
 })
-@websocket_api.async_response
-async def ws_account_profile_details(hass, connection, msg) -> None:
+@async_response
+async def ws_account_profile_details(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_account_profile_details(msg["profile_id"]),
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/prepare_new_account_login"})
-@websocket_api.async_response
-async def ws_prepare_new_account_login(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/prepare_new_account_login"})
+@async_response
+async def ws_prepare_new_account_login(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_prepare_new_account_login(),
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/remove_account_profile",
     probatio.Required("profile_id"): probatio.Match(r"^[a-f0-9]{32}$"),
 })
-@websocket_api.async_response
-async def ws_remove_account_profile(hass, connection, msg) -> None:
+@async_response
+async def ws_remove_account_profile(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_remove_account_profile(msg["profile_id"]),
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_projects"})
-@websocket_api.async_response
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/list_projects"})
+@async_response
 async def ws_list_projects(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -501,7 +527,7 @@ async def ws_list_projects(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/create_project",
         probatio.Required("name"): str,
@@ -510,10 +536,10 @@ async def ws_list_projects(
         probatio.Optional("default_thinking_level"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_create_project(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -529,7 +555,7 @@ async def ws_create_project(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/update_project",
         probatio.Required("project_id"): str,
@@ -539,13 +565,13 @@ async def ws_create_project(
         probatio.Optional("default_thinking_level"): probatio.Any(None, str),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_update_project(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    updates = {
+    updates: dict[str, Any] = {
         key: msg[key]
         for key in ("name", "root_path", "default_model", "default_thinking_level")
         if key in msg
@@ -558,16 +584,16 @@ async def ws_update_project(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/archive_project",
         probatio.Required("project_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_archive_project(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -578,16 +604,16 @@ async def ws_archive_project(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/restore_project",
         probatio.Required("project_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_restore_project(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -598,16 +624,16 @@ async def ws_restore_project(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/delete_project",
         probatio.Required("project_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_delete_project(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -618,16 +644,16 @@ async def ws_delete_project(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/browse_paths",
         probatio.Optional("path"): probatio.Any(None, str),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_browse_paths(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -638,17 +664,17 @@ async def ws_browse_paths(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/create_folder",
         probatio.Required("parent_path"): str,
         probatio.Required("folder_name"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_create_folder(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -661,16 +687,16 @@ async def ws_create_folder(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_threads",
         probatio.Optional("include_archived", default=False): bool,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_list_threads(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -681,7 +707,7 @@ async def ws_list_threads(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/search_transcript",
         probatio.Required("query"): probatio.All(str, probatio.Length(min=1, max=256)),
@@ -690,10 +716,10 @@ async def ws_list_threads(
         probatio.Optional("before_cursor"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_search_transcript(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -709,17 +735,17 @@ async def ws_search_transcript(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/get_transcript_message",
         probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Required("sequence"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_get_transcript_message(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -732,14 +758,14 @@ async def ws_get_transcript_message(
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/git_context",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Optional("base_ref"): probatio.All(str, probatio.Length(min=1, max=256)),
 })
-@websocket_api.async_response
+@async_response
 async def ws_git_context(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection,
+    hass: HomeAssistant, connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -748,7 +774,7 @@ async def ws_git_context(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/git_review",
         probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -759,10 +785,10 @@ async def ws_git_context(
         probatio.Optional("expected_state_token"): probatio.Match(r"^[a-f0-9]{64}$"),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_git_review(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -780,16 +806,16 @@ async def ws_git_review(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/get_thread",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_get_thread(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -800,7 +826,7 @@ async def ws_get_thread(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/create_thread",
         probatio.Required("title"): str,
@@ -813,10 +839,10 @@ async def ws_get_thread(
         probatio.Optional("thinking_override"): probatio.Any(None, str),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_create_thread(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -834,7 +860,7 @@ async def ws_create_thread(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/update_thread",
         probatio.Required("thread_id"): str,
@@ -849,13 +875,13 @@ async def ws_create_thread(
         probatio.Optional("navigation_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_update_thread(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    updates = {
+    updates: dict[str, Any] = {
         key: msg[key]
         for key in ("title", "mode", "model_override", "thinking_override", "host_access_grant", "pinned", "unread", "section_id", "navigation_revision")
         if key in msg
@@ -868,40 +894,40 @@ async def ws_update_thread(
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_chat_sections"})
-@websocket_api.async_response
-async def ws_list_chat_sections(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/list_chat_sections"})
+@async_response
+async def ws_list_chat_sections(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_chat_sections())
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/create_chat_section", probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=320))})
-@websocket_api.async_response
-async def ws_create_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/create_chat_section", probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=320))})
+@async_response
+async def ws_create_chat_section(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_create_chat_section(msg["name"]))
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/update_chat_section", probatio.Required("section_id"): probatio.All(str, probatio.Length(min=1, max=128)), probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=320)), probatio.Required("revision"): probatio.All(int, probatio.Range(min=1))})
-@websocket_api.async_response
-async def ws_update_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/update_chat_section", probatio.Required("section_id"): probatio.All(str, probatio.Length(min=1, max=128)), probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=320)), probatio.Required("revision"): probatio.All(int, probatio.Range(min=1))})
+@async_response
+async def ws_update_chat_section(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_update_chat_section(msg["section_id"], msg["name"], msg["revision"]))
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/delete_chat_section", probatio.Required("section_id"): probatio.All(str, probatio.Length(min=1, max=128)), probatio.Required("revision"): probatio.All(int, probatio.Range(min=1))})
-@websocket_api.async_response
-async def ws_delete_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/delete_chat_section", probatio.Required("section_id"): probatio.All(str, probatio.Length(min=1, max=128)), probatio.Required("revision"): probatio.All(int, probatio.Range(min=1))})
+@async_response
+async def ws_delete_chat_section(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_delete_chat_section(msg["section_id"], msg["revision"]))
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/archive_thread",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_archive_thread(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -912,16 +938,16 @@ async def ws_archive_thread(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/restore_thread",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_restore_thread(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -932,16 +958,16 @@ async def ws_restore_thread(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/delete_thread",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_delete_thread(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -952,9 +978,9 @@ async def ws_delete_thread(
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/fork_thread", probatio.Required("thread_id"): str})
-@websocket_api.async_response
-async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/fork_thread", probatio.Required("thread_id"): str})
+@async_response
+async def ws_fork_thread(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(
         hass,
         connection,
@@ -966,7 +992,7 @@ async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveCo
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/move_thread_project",
     probatio.Required("thread_id"): str,
     probatio.Required("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -975,8 +1001,8 @@ async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveCo
         [probatio.All(str, probatio.Length(min=1, max=128))], probatio.Length(max=100)
     ),
 })
-@websocket_api.async_response
-async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+@async_response
+async def ws_move_thread_project(hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(
         hass,
         connection,
@@ -993,30 +1019,34 @@ async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.
     )
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/search_conversation",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("query"): probatio.All(str, probatio.Length(min=1, max=256)),
     probatio.Optional("limit", default=50): probatio.All(int, probatio.Range(min=1, max=100)),
     probatio.Optional("before_cursor"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
 })
-@websocket_api.async_response
-async def ws_search_conversation(hass, connection, msg):
+@async_response
+async def ws_search_conversation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_search_conversation(
         msg["thread_id"], msg["query"], limit=msg["limit"], before_cursor=msg.get("before_cursor"),
     ))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/get_goal",
     probatio.Required("thread_id"): probatio.Match(r"^[A-Za-z0-9_-]{1,128}$"),
 })
-@websocket_api.async_response
-async def ws_get_goal(hass, connection, msg):
+@async_response
+async def ws_get_goal(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_get_goal(msg["thread_id"]))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/goal_action",
     probatio.Required("thread_id"): probatio.Match(r"^[A-Za-z0-9_-]{1,128}$"),
     probatio.Required("action"): probatio.In({"create", "edit", "progress", "pause", "resume", "complete", "cancel"}),
@@ -1027,28 +1057,34 @@ async def ws_get_goal(hass, connection, msg):
     probatio.Optional("progress"): probatio.All(str, probatio.Length(max=8192)),
     probatio.Optional("completion_confirmed"): bool,
 })
-@websocket_api.async_response
-async def ws_goal_action(hass, connection, msg):
+@async_response
+async def ws_goal_action(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     payload = {key: value for key, value in msg.items() if key not in {"id", "type", "thread_id"}}
     await _async_handle(hass, connection, msg, lambda client: client.async_goal_action(msg["thread_id"], payload))
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/attention_inbox"})
-@websocket_api.async_response
-async def ws_attention_inbox(hass, connection, msg):
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/attention_inbox"})
+@async_response
+async def ws_attention_inbox(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_attention_inbox())
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/child_agents",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
 })
-@websocket_api.async_response
-async def ws_child_agents(hass, connection, msg):
+@async_response
+async def ws_child_agents(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_child_agents(msg["thread_id"]))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/child_agent_action",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("child_id"): probatio.Match(r"^[a-f0-9]{32}$"),
@@ -1056,33 +1092,39 @@ async def ws_child_agents(hass, connection, msg):
     probatio.Optional("revision"): probatio.All(probatio.Coerce(int), probatio.Range(min=1)),
     probatio.Optional("client_request_id"): probatio.All(str, probatio.Length(min=1, max=256)),
 })
-@websocket_api.async_response
-async def ws_child_agent_action(hass, connection, msg):
+@async_response
+async def ws_child_agent_action(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_child_agent_action(
         msg["thread_id"], msg["child_id"], msg["action"],
         revision=msg.get("revision"), client_request_id=msg.get("client_request_id"),
     ))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/usage_history",
     probatio.Optional("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
 })
-@websocket_api.async_response
-async def ws_usage_history(hass, connection, msg):
+@async_response
+async def ws_usage_history(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_usage_history(
         thread_id=msg.get("thread_id"), project_id=msg.get("project_id"),
     ))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/workspace_context",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Optional("directory", default="."): probatio.All(str, probatio.Length(min=1, max=2048)),
 })
-@websocket_api.async_response
-async def ws_workspace_context(hass, connection, msg):
+@async_response
+async def ws_workspace_context(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_workspace_context(
         msg["thread_id"], directory=msg["directory"],
     ))
@@ -1091,7 +1133,7 @@ async def ws_workspace_context(hass, connection, msg):
 _NULLABLE_CONTEXT_LINE = probatio.Any(None, probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/read_workspace_context",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("path"): probatio.All(str, probatio.Length(min=1, max=2048)),
@@ -1099,8 +1141,10 @@ _NULLABLE_CONTEXT_LINE = probatio.Any(None, probatio.All(int, probatio.Range(min
     probatio.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
     probatio.Optional("expected_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
-@websocket_api.async_response
-async def ws_read_workspace_context(hass, connection, msg):
+@async_response
+async def ws_read_workspace_context(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_read_workspace_context(
         msg["thread_id"], path=msg["path"], start_line=msg.get("start_line"),
         end_line=msg.get("end_line"), expected_revision=msg.get("expected_revision"),
@@ -1121,26 +1165,30 @@ _CHAT_CONTEXT_SELECTION: VolDictType = {
 }
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/chat_context",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("source_thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Optional("before_sequence"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
 })
-@websocket_api.async_response
-async def ws_chat_context(hass, connection, msg):
+@async_response
+async def ws_chat_context(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_chat_context(
         msg["thread_id"], source_thread_id=msg["source_thread_id"], before_sequence=msg.get("before_sequence"),
     ))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/read_chat_context",
     probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     **_CHAT_CONTEXT_SELECTION,
 })
-@websocket_api.async_response
-async def ws_read_chat_context(hass, connection, msg):
+@async_response
+async def ws_read_chat_context(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_read_chat_context(
         msg["thread_id"], **{key: msg[key] for key in ("source_thread_id", "message_sequence", "start_char", "end_char") if key in msg},
     ))
@@ -1160,7 +1208,7 @@ _WORKSPACE_CONTEXT_REFERENCE = probatio.Schema({
 })
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/send_prompt",
         probatio.Required("thread_id"): str,
@@ -1174,10 +1222,10 @@ _WORKSPACE_CONTEXT_REFERENCE = probatio.Schema({
         probatio.Optional("chat_context"): probatio.All([_CHAT_CONTEXT_REFERENCE], probatio.Length(min=1, max=8)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_send_prompt(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     explicit_mode_kwargs = {
@@ -1186,7 +1234,7 @@ async def ws_send_prompt(
         if msg.get(field) is not None
     }
 
-    async def _send(runtime):
+    async def _send(runtime: CodexBridgeRuntime) -> dict[str, Any]:
         if msg.get("follow_up_mode") is not None and not runtime.supports_capability(
             "prompt_queue_v1"
         ):
@@ -1229,16 +1277,16 @@ async def ws_send_prompt(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/prompt_queue",
         probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_prompt_queue(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1249,7 +1297,7 @@ async def ws_prompt_queue(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/update_queued_prompt",
         probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -1258,10 +1306,10 @@ async def ws_prompt_queue(
         probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_update_queued_prompt(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1277,17 +1325,17 @@ async def ws_update_queued_prompt(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/cancel_queued_prompt",
         probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Required("run_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_cancel_queued_prompt(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1300,16 +1348,16 @@ async def ws_cancel_queued_prompt(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/cancel_run",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_cancel_run(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1320,7 +1368,7 @@ async def ws_cancel_run(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/get_events",
         probatio.Optional("after", default=0): probatio.All(int, probatio.Range(min=0)),
@@ -1332,13 +1380,13 @@ async def ws_cancel_run(
         probatio.Optional("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_get_events(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    async def _handler(client) -> dict[str, Any] | list[dict[str, Any]]:
+    async def _handler(client: BridgeApiClient) -> dict[str, Any] | list[dict[str, Any]]:
         runtime = async_get_runtime(hass)
         if runtime.api_version == 0:
             if "thread_id" not in msg:
@@ -1378,7 +1426,7 @@ async def ws_get_events(
     await _async_handle(hass, connection, msg, _handler)
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/subscribe_events",
         probatio.Optional("after", default=0): probatio.All(int, probatio.Range(min=0)),
@@ -1389,10 +1437,10 @@ async def ws_get_events(
         probatio.Optional("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_subscribe_events(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     try:
@@ -1542,16 +1590,16 @@ async def ws_subscribe_events(
     connection.send_result(msg["id"], {"subscription_id": msg["id"], "api_version": 0})
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/unsubscribe_events",
         probatio.Required("subscription_id"): int,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_unsubscribe_events(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     unsubscribe = connection.subscriptions.pop(msg["subscription_id"], None)
@@ -1560,15 +1608,15 @@ async def ws_unsubscribe_events(
     connection.send_result(msg["id"], {"unsubscribed": unsubscribe is not None})
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_pending_interactions",
         probatio.Optional("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_list_pending_interactions(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     await _async_handle(
         hass,
@@ -1580,7 +1628,7 @@ async def ws_list_pending_interactions(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/decide_interaction",
         probatio.Required("interaction_id"): str,
@@ -1589,9 +1637,9 @@ async def ws_list_pending_interactions(
         probatio.Required("client_request_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_decide_interaction(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     await _async_handle(
         hass,
@@ -1612,7 +1660,7 @@ async def ws_decide_interaction(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/answer_interaction",
         probatio.Required("interaction_id"): str,
@@ -1632,9 +1680,9 @@ async def ws_decide_interaction(
         probatio.Required("client_request_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_answer_interaction(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     await _async_handle(
         hass,
@@ -1655,7 +1703,7 @@ async def ws_answer_interaction(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/answer_mcp_form",
         probatio.Required("interaction_id"): str,
@@ -1664,9 +1712,9 @@ async def ws_answer_interaction(
         probatio.Required("client_request_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_answer_mcp_form(
-    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
 ) -> None:
     await _async_handle(
         hass,
@@ -1759,16 +1807,16 @@ def _legacy_snapshot_event(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_artifacts",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_list_artifacts(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1780,17 +1828,17 @@ async def ws_list_artifacts(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/preview_artifact",
         probatio.Required("thread_id"): str,
         probatio.Required("artifact_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_preview_artifact(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1802,16 +1850,16 @@ async def ws_preview_artifact(
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/create_workspace_archive",
         probatio.Required("thread_id"): str,
     }
 )
-@websocket_api.async_response
+@async_response
 async def ws_create_workspace_archive(
     hass: HomeAssistant,
-    connection: websocket_api.ActiveConnection,
+    connection: ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
     await _async_handle(
@@ -1822,7 +1870,7 @@ async def ws_create_workspace_archive(
     )
 
 
-async def _automation_refresh(runtime) -> None:
+async def _automation_refresh(runtime: CodexBridgeRuntime) -> None:
     scheduler = getattr(runtime, "automation_scheduler", None)
     if scheduler is not None:
         try:
@@ -1834,22 +1882,26 @@ async def _automation_refresh(runtime) -> None:
             return
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_automations"})
-@websocket_api.async_response
-async def ws_list_automations(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/list_automations"})
+@async_response
+async def ws_list_automations(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg, lambda client: client.async_list_automations()
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/get_automation",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_get_automation(hass, connection, msg) -> None:
+@async_response
+async def ws_get_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -1858,21 +1910,23 @@ async def ws_get_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/preview_automation_schedule",
         probatio.Required("schedule"): probatio.All(dict, probatio.Length(max=16)),
     }
 )
-@websocket_api.async_response
-async def ws_preview_automation_schedule(hass, connection, msg) -> None:
+@async_response
+async def ws_preview_automation_schedule(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg,
         lambda client: client.async_preview_automation_schedule(msg["schedule"]),
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/create_automation",
         probatio.Optional("client_request_id"): probatio.Match(r"^[a-f0-9]{32}$"),
@@ -1892,9 +1946,11 @@ async def ws_preview_automation_schedule(hass, connection, msg) -> None:
         probatio.Optional("notifications"): probatio.All(dict, probatio.Length(max=4)),
     }
 )
-@websocket_api.async_response
-async def ws_create_automation(hass, connection, msg) -> None:
-    payload = {
+@async_response
+async def ws_create_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    payload: dict[str, Any] = {
         key: msg[key]
         for key in ("name", "prompt", "target", "schedule", "mode", "model", "thinking", "host_access_grant", "host_unattended_approved", "client_request_id", "notifications")
         if key in msg
@@ -1909,7 +1965,7 @@ async def ws_create_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/update_automation",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -1928,9 +1984,11 @@ async def ws_create_automation(hass, connection, msg) -> None:
         probatio.Optional("notifications"): probatio.All(dict, probatio.Length(max=4)),
     }
 )
-@websocket_api.async_response
-async def ws_update_automation(hass, connection, msg) -> None:
-    payload = {
+@async_response
+async def ws_update_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
+    payload: dict[str, Any] = {
         key: msg[key]
         for key in (
             "expected_revision",
@@ -1956,15 +2014,17 @@ async def ws_update_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/pause_automation",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
-@websocket_api.async_response
-async def ws_pause_automation(hass, connection, msg) -> None:
+@async_response
+async def ws_pause_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -1976,15 +2036,17 @@ async def ws_pause_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/resume_automation",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
-@websocket_api.async_response
-async def ws_resume_automation(hass, connection, msg) -> None:
+@async_response
+async def ws_resume_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -1996,15 +2058,17 @@ async def ws_resume_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/delete_automation",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
-@websocket_api.async_response
-async def ws_delete_automation(hass, connection, msg) -> None:
+@async_response
+async def ws_delete_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2016,14 +2080,16 @@ async def ws_delete_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/run_automation",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_run_automation(hass, connection, msg) -> None:
+@async_response
+async def ws_run_automation(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2036,15 +2102,17 @@ async def ws_run_automation(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_automation_runs",
         probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Optional("limit", default=100): probatio.All(int, probatio.Range(min=1, max=200)),
     }
 )
-@websocket_api.async_response
-async def ws_list_automation_runs(hass, connection, msg) -> None:
+@async_response
+async def ws_list_automation_runs(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2055,15 +2123,17 @@ async def ws_list_automation_runs(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_skills",
         probatio.Required("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
         probatio.Optional("force_reload", default=False): bool,
     }
 )
-@websocket_api.async_response
-async def ws_list_skills(hass, connection, msg) -> None:
+@async_response
+async def ws_list_skills(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2074,7 +2144,7 @@ async def ws_list_skills(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/set_skill",
         probatio.Required("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
@@ -2083,8 +2153,10 @@ async def ws_list_skills(hass, connection, msg) -> None:
         probatio.Optional("path"): probatio.Any(None, probatio.All(str, probatio.Length(min=1, max=4096))),
     }
 )
-@websocket_api.async_response
-async def ws_set_skill(hass, connection, msg) -> None:
+@async_response
+async def ws_set_skill(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2099,7 +2171,7 @@ async def ws_set_skill(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/create_skill",
         probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -2109,8 +2181,10 @@ async def ws_set_skill(hass, connection, msg) -> None:
         probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_create_skill(hass, connection, msg) -> None:
+@async_response
+async def ws_create_skill(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2131,7 +2205,7 @@ async def ws_create_skill(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/delete_skill",
         probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -2139,8 +2213,10 @@ async def ws_create_skill(hass, connection, msg) -> None:
         probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_delete_skill(hass, connection, msg) -> None:
+@async_response
+async def ws_delete_skill(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2153,15 +2229,17 @@ async def ws_delete_skill(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_plugins",
         probatio.Required("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
         probatio.Optional("installed_only", default=False): bool,
     }
 )
-@websocket_api.async_response
-async def ws_list_plugins(hass, connection, msg) -> None:
+@async_response
+async def ws_list_plugins(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2172,7 +2250,7 @@ async def ws_list_plugins(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/install_plugin",
         probatio.Required("plugin_name"): probatio.All(str, probatio.Length(min=1, max=128)),
@@ -2181,8 +2259,10 @@ async def ws_list_plugins(hass, connection, msg) -> None:
         ),
     }
 )
-@websocket_api.async_response
-async def ws_install_plugin(hass, connection, msg) -> None:
+@async_response
+async def ws_install_plugin(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2193,14 +2273,16 @@ async def ws_install_plugin(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/uninstall_plugin",
         probatio.Required("plugin_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_uninstall_plugin(hass, connection, msg) -> None:
+@async_response
+async def ws_uninstall_plugin(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2209,7 +2291,7 @@ async def ws_uninstall_plugin(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/list_marketplaces",
         probatio.Optional("workspace_path", default="."): probatio.All(
@@ -2217,8 +2299,10 @@ async def ws_uninstall_plugin(hass, connection, msg) -> None:
         ),
     }
 )
-@websocket_api.async_response
-async def ws_list_marketplaces(hass, connection, msg) -> None:
+@async_response
+async def ws_list_marketplaces(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2227,7 +2311,7 @@ async def ws_list_marketplaces(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/add_marketplace",
         probatio.Required("source"): probatio.All(str, probatio.Length(min=1, max=512)),
@@ -2239,8 +2323,10 @@ async def ws_list_marketplaces(hass, connection, msg) -> None:
         ),
     }
 )
-@websocket_api.async_response
-async def ws_add_marketplace(hass, connection, msg) -> None:
+@async_response
+async def ws_add_marketplace(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2255,14 +2341,16 @@ async def ws_add_marketplace(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/remove_marketplace",
         probatio.Required("marketplace_name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_remove_marketplace(hass, connection, msg) -> None:
+@async_response
+async def ws_remove_marketplace(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2271,14 +2359,16 @@ async def ws_remove_marketplace(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/upgrade_marketplace",
         probatio.Required("marketplace_name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_upgrade_marketplace(hass, connection, msg) -> None:
+@async_response
+async def ws_upgrade_marketplace(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2287,41 +2377,49 @@ async def ws_upgrade_marketplace(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_mcp"})
-@websocket_api.async_response
-async def ws_list_mcp(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/list_mcp"})
+@async_response
+async def ws_list_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_mcp())
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_stdio_packages"})
-@websocket_api.async_response
-async def ws_list_stdio_packages(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/list_stdio_packages"})
+@async_response
+async def ws_list_stdio_packages(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_stdio_packages())
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/add_stdio_mcp",
     probatio.Required("name"): probatio.All(str, probatio.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
     probatio.Required("package_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("revision"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("acknowledged"): probatio.All(bool, probatio.In([True])),
 })
-@websocket_api.async_response
-async def ws_add_stdio_mcp(hass, connection, msg) -> None:
+@async_response
+async def ws_add_stdio_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_add_stdio_mcp({key: msg[key] for key in (
                             "name", "package_id", "revision", "acknowledged")}))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/update_stdio_mcp",
     probatio.Required("name"): probatio.All(str, probatio.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
     probatio.Required("revision"): probatio.All(str, probatio.Length(min=1, max=128)),
     probatio.Required("expected_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
     probatio.Required("acknowledged"): probatio.All(bool, probatio.In([True])),
 })
-@websocket_api.async_response
-async def ws_update_stdio_mcp(hass, connection, msg) -> None:
+@async_response
+async def ws_update_stdio_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_update_stdio_mcp(
                             msg["name"], {"revision": msg["revision"],
@@ -2329,29 +2427,33 @@ async def ws_update_stdio_mcp(hass, connection, msg) -> None:
                                           "acknowledged": True}))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/rollback_stdio_mcp",
     probatio.Required("name"): probatio.All(str, probatio.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
     probatio.Required("expected_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
-@websocket_api.async_response
-async def ws_rollback_stdio_mcp(hass, connection, msg) -> None:
+@async_response
+async def ws_rollback_stdio_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_rollback_stdio_mcp(
                             msg["name"], msg["expected_revision"]))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/list_mcp_tools",
     probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=64)),
 })
-@websocket_api.async_response
-async def ws_list_mcp_tools(hass, connection, msg) -> None:
+@async_response
+async def ws_list_mcp_tools(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_list_mcp_tools(msg["name"]))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/set_mcp_tools",
     probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=64)),
     probatio.Required("enabled_tools"): probatio.All(list, probatio.Length(max=512)),
@@ -2359,8 +2461,10 @@ async def ws_list_mcp_tools(hass, connection, msg) -> None:
     probatio.Required("catalogue_revision"): probatio.All(str, probatio.Length(min=64, max=64)),
     probatio.Optional("approval_mode"): probatio.In(("auto", "approve")),
 })
-@websocket_api.async_response
-async def ws_set_mcp_tools(hass, connection, msg) -> None:
+@async_response
+async def ws_set_mcp_tools(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_set_mcp_tools(msg["name"], {
                             key: msg[key] for key in ("enabled_tools", "revision", "catalogue_revision", "approval_mode")
@@ -2368,18 +2472,20 @@ async def ws_set_mcp_tools(hass, connection, msg) -> None:
                         }))
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/lock_down_mcp_tools",
     probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=64)),
     probatio.Required("revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
-@websocket_api.async_response
-async def ws_lock_down_mcp_tools(hass, connection, msg) -> None:
+@async_response
+async def ws_lock_down_mcp_tools(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg,
                         lambda client: client.async_lock_down_mcp_tools(msg["name"], msg["revision"]))
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/add_mcp",
         probatio.Optional("local"): bool,
@@ -2395,8 +2501,10 @@ async def ws_lock_down_mcp_tools(hass, connection, msg) -> None:
         ),
     }
 )
-@websocket_api.async_response
-async def ws_add_mcp(hass, connection, msg) -> None:
+@async_response
+async def ws_add_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2411,41 +2519,47 @@ async def ws_add_mcp(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/remove_mcp",
         probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_remove_mcp(hass, connection, msg) -> None:
+@async_response
+async def ws_remove_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass, connection, msg, lambda client: client.async_remove_mcp(msg["name"])
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/login_mcp",
         probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_login_mcp(hass, connection, msg) -> None:
+@async_response
+async def ws_login_mcp(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     # OAuth state remains only in this direct WebSocket response.
     await _async_handle(
         hass, connection, msg, lambda client: client.async_login_mcp(msg["name"])
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/get_agents",
         probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_get_agents(hass, connection, msg) -> None:
+@async_response
+async def ws_get_agents(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2454,15 +2568,17 @@ async def ws_get_agents(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/update_agents",
         probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
         probatio.Required("content"): probatio.All(str, probatio.Length(max=256 * 1024)),
     }
 )
-@websocket_api.async_response
-async def ws_update_agents(hass, connection, msg) -> None:
+@async_response
+async def ws_update_agents(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2473,14 +2589,16 @@ async def ws_update_agents(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command(
+@websocket_command(
     {
         probatio.Required("type"): f"{DOMAIN}/delete_agents",
         probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
-@websocket_api.async_response
-async def ws_delete_agents(hass, connection, msg) -> None:
+@async_response
+async def ws_delete_agents(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(
         hass,
         connection,
@@ -2489,25 +2607,31 @@ async def ws_delete_agents(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/host_access"})
-@websocket_api.async_response
-async def ws_host_access(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/host_access"})
+@async_response
+async def ws_host_access(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_host_access())
 
 
-@websocket_api.websocket_command({
+@websocket_command({
     probatio.Required("type"): f"{DOMAIN}/enable_host_access",
     probatio.Required("scope_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
     probatio.Required("acknowledged"): bool,
 })
-@websocket_api.async_response
-async def ws_enable_host_access(hass, connection, msg) -> None:
+@async_response
+async def ws_enable_host_access(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_enable_host_access(
         msg["scope_revision"], msg["acknowledged"],
     ))
 
 
-@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/revoke_host_access"})
-@websocket_api.async_response
-async def ws_revoke_host_access(hass, connection, msg) -> None:
+@websocket_command({probatio.Required("type"): f"{DOMAIN}/revoke_host_access"})
+@async_response
+async def ws_revoke_host_access(
+    hass: HomeAssistant, connection: ActiveConnection, msg: dict[str, Any]
+) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_revoke_host_access())

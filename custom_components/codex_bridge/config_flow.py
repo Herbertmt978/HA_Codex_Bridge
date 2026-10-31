@@ -13,6 +13,7 @@ from homeassistant.helpers import selector
 
 from .assist_settings import (
     MAX_ASSIST_INSTRUCTIONS,
+    AssistModelChoice,
     assist_mcp_selection,
     assist_mcp_server_choices,
     assist_selection_supported,
@@ -151,12 +152,16 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return "unknown"
         return None
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         """Guide manual users to the App, leaving legacy Bridge setup explicit."""
 
         return self.async_show_menu(step_id="user", menu_options=["app", "external"])
 
-    async def async_step_app(self, user_input=None):
+    async def async_step_app(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         """Explain that Supervisor discovery owns App credentials and endpoint data."""
 
         return self.async_show_form(
@@ -165,7 +170,9 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors={"base": "app_not_discovered"} if user_input is not None else {},
         )
 
-    async def async_step_external(self, user_input=None):
+    async def async_step_external(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         """Allow only the deliberately constrained legacy external transport."""
 
         if self._async_current_entries():
@@ -271,7 +278,9 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_hassio(self, discovery_info: HassioServiceInfo):
+    async def async_step_hassio(
+        self, discovery_info: HassioServiceInfo
+    ) -> config_entries.ConfigFlowResult:
         """Validate Supervisor discovery, then establish a v1-only App entry."""
 
         if discovery_info.config.get("kind") == "host_access":
@@ -337,7 +346,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._set_confirm_only()
         return await self.async_step_hassio_confirm()
 
-    async def _async_host_discovery(self, info: HassioServiceInfo):
+    async def _async_host_discovery(self, info: HassioServiceInfo) -> config_entries.ConfigFlowResult:
         entries = self._async_current_entries()
         if len(entries) != 1 or entries[0].data.get(CONF_CONNECTION_TYPE) != CONNECTION_TYPE_SUPERVISOR:
             return self.async_abort(reason="host_bridge_required")
@@ -359,7 +368,9 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
         return self.async_abort(reason="host_paired")
 
-    async def async_step_hassio_confirm(self, user_input=None):
+    async def async_step_hassio_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         """Require an administrator to confirm a newly discovered App."""
 
         discovery = self._hassio_discovery
@@ -509,7 +520,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
             and project.get("archived_at") is None
         }
 
-    async def _assist_models(self):
+    async def _assist_models(self) -> dict[str, AssistModelChoice]:
         """Keep stale or unverified catalogues out of explicit Assist settings."""
 
         data = self.config_entry.data
@@ -525,7 +536,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         except BridgeApiError:
             return {}
 
-    async def _assist_mcp_servers(self):
+    async def _assist_mcp_servers(self) -> dict[str, tuple[str, bool]]:
         """List configured MCP names without exposing endpoints or credentials."""
 
         data = self.config_entry.data
@@ -542,7 +553,9 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         except BridgeApiError:
             return {}
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
         """Offer task, Assist and question notification settings to Supervisor entries."""
 
         if (
@@ -734,7 +747,7 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         CONF_QUESTION_NOTIFICATIONS_TARGETS,
                         default=notifications["mobile_targets"],
                     ): selector.SelectSelector(selector.SelectSelectorConfig(
-                        options=[{"value": key, "label": label} for key, label in {
+                        options=[selector.SelectOptionDict(value=key, label=label) for key, label in {
                             **recipient_choices,
                             **{target: "Unavailable Companion device" for target in notifications["mobile_targets"] if target not in recipient_choices},
                         }.items()],
@@ -748,7 +761,10 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         CONF_ASSIST_MCP_SERVERS,
                         default=list(form_mcp if form_mcp is not None else saved_mcp),
                     ): selector.SelectSelector(selector.SelectSelectorConfig(
-                        options=[{"value": name, "label": label} for name, label in sorted(mcp_choices.items())],
+                        options=[
+                            selector.SelectOptionDict(value=name, label=label)
+                            for name, label in sorted(mcp_choices.items())
+                        ],
                         multiple=True,
                     )),
                 }

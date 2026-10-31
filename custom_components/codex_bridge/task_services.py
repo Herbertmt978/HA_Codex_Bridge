@@ -71,7 +71,8 @@ _TRANSLATION_KEYS = {"runtime_request_conflict": "task_retry_conflict"}
 
 
 def _task_id(call: ServiceCall) -> str:
-    if supplied := call.data.get("task_id"):
+    supplied = call.data.get("task_id")
+    if isinstance(supplied, str) and supplied:
         return supplied
     # A script can issue several actions under one HA context. Give each call
     # its own identity; callers that need retry safety supply the original ID.
