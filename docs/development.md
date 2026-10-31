@@ -70,8 +70,8 @@ HAOS: Supervisor reports them as unsupported software. Check
 `ha resolution info` before and after DEV installation and remove only
 task-owned disposable containers if an earlier test left any behind.
 
-This release pairs App `1.8.2`, Integration and panel `1.8.2`, with Bridge `0.14.2` and
-Codex `0.157.0`. Keep their version authorities and release projections
+This release pairs App `1.13.25`, Integration and panel `1.13.25`, with Bridge `0.20.1` and
+Codex `0.166.0`. Keep their version authorities and release projections
 consistent. Do not change runtime dependencies without regenerating the
 hash-locked deployed requirements and testing the resulting App image.
 

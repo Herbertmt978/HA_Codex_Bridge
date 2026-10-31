@@ -2,6 +2,28 @@
 
 All notable App changes are recorded here.
 
+## 1.13.25
+
+- Pairs with Integration and panel 1.13.25, which require Home Assistant 2026.9.0 or later. Update Home Assistant Core before installing the Integration.
+- Retries Integration setup automatically while the App is starting or unreachable, so the connection loads once the App answers without a manual reload.
+- Starts Home Assistant's reauthentication flow when the App rejects the Integration's token. Select **Reconfigure** on the "Authentication expired for Codex Bridge" repair: an App connection reconnects after the App restarts, and an external Bridge accepts a new token.
+- Recovers live updates from a lasting App outage: retries back off to at most 10 minutes, the log records one message per outage, and updates resume when the App returns.
+- Adds redacted diagnostics to the Codex Bridge integration entry.
+- Raises a Repairs issue for each saved account that needs a fresh sign-in. It closes on the next reading that reports the account as signed in.
+- Adds **Reconfigure** for an external Bridge to change its address or token. On an App connection it explains that restarting the App reconnects it.
+- Shows each saved account as its own device under the Codex Bridge connection device, which is shown under the App's device.
+- Registers task actions when the Integration loads and checks their data before contacting the App. Problems the caller can correct are validation errors and App outages are action errors, both with translated messages.
+- Compatibility changes to check in automations, scripts and dashboards:
+  - Entity IDs and unique IDs are unchanged, but saved-account sensors take their friendly names from the account device. For example, "Codex Bridge Work weekly usage" becomes "Work Weekly usage".
+  - The Assist agent's name now follows the connection device. With the default entry title it remains "Codex Bridge Assist".
+  - Sensors the App answers without a value report `unknown` instead of `unavailable`: the last task outcome, usage and reset sensors, and saved-account values that are stale, signed out or unreported. `unavailable` now means the App cannot answer.
+  - The saved-account allowance status sensor is an enum sensor with the states `available`, `stale`, `usage_unavailable` (previously `unavailable`) and `reauthentication_required`. It is unavailable during an App outage, and its `source_available` attribute has been removed.
+  - Task actions reject project or chat IDs containing characters other than letters, digits, underscores and hyphens, blank titles, prompts and overrides, and prompts over 65,536 bytes.
+  - Downgrading to Integration 1.13.12 leaves the saved-account devices in place without entities. Reinstalling 1.13.25 reuses them.
+- Bundles the Sigstore-verified Codex runtime `0.166.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.24
 
 - Bundles the Sigstore-verified Codex runtime `0.166.0`.
