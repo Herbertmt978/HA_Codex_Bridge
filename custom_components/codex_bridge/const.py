@@ -64,7 +64,6 @@ STATIC_URL_BASE = "/codex_bridge_static"
 PANEL_ASSET_VERSION = "1.13.12"
 PANEL_MODULE_URL = f"{STATIC_URL_BASE}/codex-bridge-panel.js?v={PANEL_ASSET_VERSION}"
 
-DATA_ENTRIES = "entries"
 DATA_PANEL_REGISTERED = "panel_registered"
 DATA_VIEWS_REGISTERED = "views_registered"
 DATA_WS_REGISTERED = "ws_registered"

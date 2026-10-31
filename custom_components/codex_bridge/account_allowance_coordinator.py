@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .bridge_api import BridgeApiError
-from .runtime import CodexBridgeRuntime
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
 
 
 UPDATE_INTERVAL = timedelta(seconds=60)
@@ -179,10 +179,18 @@ def project_account_telemetry(payload: object, *, now: datetime | None = None) -
 class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot]):
     """Poll one cached Bridge projection; native profile refresh stays App-owned."""
 
-    def __init__(self, hass: HomeAssistant, runtime: CodexBridgeRuntime) -> None:
+    config_entry: CodexBridgeConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: CodexBridgeConfigEntry,
+        runtime: CodexBridgeRuntime,
+    ) -> None:
         super().__init__(
             hass,
             logger=logging.getLogger(__name__),
+            config_entry=config_entry,
             name="Codex Bridge account allowances",
             update_interval=UPDATE_INTERVAL,
             always_update=False,

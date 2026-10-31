@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .bridge_api import BridgeApiError
 from .event_broker import EventBroker, EventRecord
-from .runtime import CodexBridgeRuntime
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
 
 
 UPDATE_INTERVAL = timedelta(seconds=60)
@@ -128,10 +128,18 @@ def project_status(
 class BridgeEntityCoordinator(DataUpdateCoordinator[EntitySnapshot]):
     """Share one status/threads refresh across all entities and broker events."""
 
-    def __init__(self, hass: HomeAssistant, runtime: CodexBridgeRuntime) -> None:
+    config_entry: CodexBridgeConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: CodexBridgeConfigEntry,
+        runtime: CodexBridgeRuntime,
+    ) -> None:
         super().__init__(
             hass,
             logger=_LOGGER,
+            config_entry=config_entry,
             name="Codex Bridge entities",
             update_interval=UPDATE_INTERVAL,
             always_update=False,

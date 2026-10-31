@@ -4,12 +4,12 @@ from dataclasses import dataclass, field
 from time import monotonic
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .bridge_api import BridgeApiClient, BridgeApiError
 from .const import (
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DOMAIN,
     WEB_SEARCH_CAPABILITY,
     WEB_SEARCH_MODE_DISABLED,
@@ -20,6 +20,7 @@ from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
 
 if TYPE_CHECKING:
+    from .account_allowance_coordinator import AccountAllowanceCoordinator
     from .ha_mcp_shortcut import HaMcpShortcut
     from .entity_coordinator import BridgeEntityCoordinator
     from .task_events import TaskEventForwarder
@@ -46,6 +47,7 @@ class CodexBridgeRuntime:
         "enabled": False, "persistent": True, "preview": False, "mobile_targets": [],
     }, repr=False)
     entity_coordinator: BridgeEntityCoordinator | None = None
+    account_allowance_coordinator: AccountAllowanceCoordinator | None = None
     ha_mcp_shortcut: HaMcpShortcut | None = None
     capabilities: tuple[str, ...] = ()
     web_search_mode: str = WEB_SEARCH_MODE_DISABLED
@@ -56,6 +58,7 @@ class CodexBridgeRuntime:
     )
     _capability_refreshed_at: float = field(default=0.0, init=False, repr=False)
     _capability_auth_ready: bool | None = field(default=None, init=False, repr=False)
+    _closed: bool = field(default=False, init=False, repr=False)
 
     def supports_capability(self, capability: str) -> bool:
         return capability in self.capabilities
@@ -134,11 +137,17 @@ class CodexBridgeRuntime:
     async def async_close(self) -> None:
         """Provide a lifecycle seam without taking ownership of HA's session."""
 
+        # A failed setup closes its runtime before HA can remove the entry. An
+        # interrupted close stays open so removal can finish draining it.
+        if self._closed:
+            return
         try:
             if self.ha_mcp_shortcut is not None:
                 await self.ha_mcp_shortcut.async_close()
             if self.task_event_forwarder is not None:
                 await self.task_event_forwarder.async_close()
+            if self.account_allowance_coordinator is not None:
+                await self.account_allowance_coordinator.async_close()
             if self.entity_coordinator is not None:
                 await self.entity_coordinator.async_close()
             if self.automation_scheduler is not None:
@@ -155,13 +164,19 @@ class CodexBridgeRuntime:
                 result: Any = close()
                 if hasattr(result, "__await__"):
                     await result
+        self._closed = True
+
+
+type CodexBridgeConfigEntry = ConfigEntry[CodexBridgeRuntime]
 
 
 def async_get_runtime(hass: HomeAssistant) -> CodexBridgeRuntime:
-    domain_data = hass.data.get(DOMAIN)
-    if not domain_data or not domain_data[DATA_ENTRIES]:
-        raise RuntimeError("Codex Bridge is not configured")
-    return next(iter(domain_data[DATA_ENTRIES].values()))
+    """Return the one loaded connection for domain-wide views and actions."""
+
+    for entry in hass.config_entries.async_loaded_entries(DOMAIN):
+        runtime: CodexBridgeRuntime = entry.runtime_data
+        return runtime
+    raise RuntimeError("Codex Bridge is not configured")
 
 
 def normalize_web_search_mode(

@@ -22,7 +22,6 @@ from custom_components.codex_bridge.const import (
     CONF_BRIDGE_TOKEN, CONF_BRIDGE_URL, CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_SUPERVISOR, DOMAIN,
 )
-from custom_components.codex_bridge.runtime import async_get_runtime
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 
@@ -107,7 +106,7 @@ async def test_legacy_bridge_coordinator_does_not_call_unsupported_endpoint(hass
 
     runtime = Runtime()
     runtime.client.async_account_profile_telemetry = AsyncMock()
-    coordinator = AccountAllowanceCoordinator(hass, runtime)
+    coordinator = AccountAllowanceCoordinator(hass, None, runtime)
     await coordinator.async_refresh()
     assert coordinator.last_update_success is False
     runtime.client.async_account_profile_telemetry.assert_not_called()
@@ -173,7 +172,7 @@ async def _loaded_account_entities(hass, *, fail_initial=False, capability=True,
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-        coordinator = hass.data[DOMAIN]["account_allowance_coordinators"][entry.entry_id]
+        coordinator = entry.runtime_data.account_allowance_coordinator
         try:
             yield entry, client, payload, coordinator, er.async_get(hass)
         finally:
@@ -184,7 +183,7 @@ async def _loaded_account_entities(hass, *, fail_initial=False, capability=True,
 async def test_account_entities_follow_complete_inventory_and_keep_stable_registry_ids(hass):
     """Exercise real Integration setup, coordinator, sensor platform and registry."""
     async with _loaded_account_entities(hass) as (entry, client, payload, coordinator, registry):
-        assert "account_profile_telemetry_v1" in async_get_runtime(hass).capabilities
+        assert "account_profile_telemetry_v1" in entry.runtime_data.capabilities
         assert client.async_account_profile_telemetry.await_count == 1
         assert coordinator.last_update_success, repr(coordinator.last_exception)
         def account_registry_ids():

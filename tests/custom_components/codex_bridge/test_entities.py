@@ -22,7 +22,6 @@ from custom_components.codex_bridge.const import (
 )
 from custom_components.codex_bridge.entity_coordinator import BridgeEntityCoordinator, project_status
 from custom_components.codex_bridge.event_broker import EventBroker
-from custom_components.codex_bridge.runtime import async_get_runtime
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 
@@ -145,7 +144,7 @@ async def test_event_during_refresh_triggers_follow_up(hass):
 
     client.async_list_threads = AsyncMock(side_effect=list_threads)
     broker = EventBroker(AsyncMock(), initial_cursor=0)
-    coordinator = BridgeEntityCoordinator(hass, Mock(client=client, event_broker=broker))
+    coordinator = BridgeEntityCoordinator(hass, None, Mock(client=client, event_broker=broker))
 
     async def emit(cursor, event_type):
         await broker._consume({
@@ -186,7 +185,7 @@ async def test_auth_change_clears_usage_while_the_new_snapshot_is_pending(hass):
     client.async_get_status = AsyncMock(side_effect=status_after_switch)
     client.async_list_threads = AsyncMock(return_value=[])
     broker = EventBroker(AsyncMock(), initial_cursor=0)
-    coordinator = BridgeEntityCoordinator(hass, Mock(client=client, event_broker=broker))
+    coordinator = BridgeEntityCoordinator(hass, None, Mock(client=client, event_broker=broker))
     coordinator.async_set_updated_data(project_status(
         _status(at=datetime.now(UTC)), [], now=datetime.now(UTC), last_outcome="completed",
     ))
@@ -271,7 +270,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         assert hass.states.get(first[("sensor", f"{entry.entry_id}_five_hour_used")]).state == "27.5"
 
         client.async_list_threads.return_value = [{"status": "running", "title": "private prompt"}]
-        broker = async_get_runtime(hass).event_broker
+        broker = entry.runtime_data.event_broker
         await broker._consume({
             "events": [{
                 "cursor": 1, "event_id": "evt_1", "scope": "thread",
@@ -309,7 +308,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         # A lost App makes the connection off and the remaining entities unavailable.
         from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError
         client.async_get_status.side_effect = BridgeApiConnectionError()
-        await async_get_runtime(hass).entity_coordinator.async_refresh()
+        await entry.runtime_data.entity_coordinator.async_refresh()
         assert hass.states.get(first[("binary_sensor", f"{entry.entry_id}_connection")]).state == "off"
         assert hass.states.get(first[("binary_sensor", f"{entry.entry_id}_task_running")]).state == "unavailable"
 
@@ -384,7 +383,7 @@ async def test_five_hour_visibility_tracks_allowance_without_replacing_entities(
     async with _loaded_usage_entities(hass, weekly_only=weekly_only) as (entry, client, registry, ids):
         unrelated = registry.async_get_or_create("sensor", DOMAIN, "unrelated-allowance")
         client.async_get_status.return_value = _weekly_status(at=datetime.now(UTC))
-        coordinator = async_get_runtime(hass).entity_coordinator
+        coordinator = entry.runtime_data.entity_coordinator
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         for key in ("five_hour_used", "five_hour_reset"):
@@ -428,10 +427,10 @@ async def test_allowance_visibility_preserves_user_hidden_and_disabled_choices(h
         registry.async_update_entity(usage.entity_id, name="My five-hour diagnostic")
         registry.async_update_entity_options(reset.entity_id, "sensor", {"precision": 1})
 
-    async with _loaded_usage_entities(hass, customise=customise) as (_, client, registry, ids):
+    async with _loaded_usage_entities(hass, customise=customise) as (entry, client, registry, ids):
         for status in (_weekly_status, _status):
             client.async_get_status.return_value = status(at=datetime.now(UTC))
-            await async_get_runtime(hass).entity_coordinator.async_refresh()
+            await entry.runtime_data.entity_coordinator.async_refresh()
             await hass.async_block_till_done()
             assert registry.async_get(ids["five_hour_used"]).hidden_by is er.RegistryEntryHider.USER
             assert registry.async_get(ids["five_hour_used"]).name == "My five-hour diagnostic"
@@ -448,11 +447,11 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
         assert registry.async_get(ids["five_hour_used"]).options[DOMAIN] == {
             "retained_option": True, "five_hour_visibility": "manual",
         }
-        await async_get_runtime(hass).entity_coordinator.async_refresh()
+        await entry.runtime_data.entity_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(ids["five_hour_used"]).hidden_by is None
 
-        old_coordinator = async_get_runtime(hass).entity_coordinator
+        old_coordinator = entry.runtime_data.entity_coordinator
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
         unloaded_listener_count = hass.bus.async_listeners().get(er.EVENT_ENTITY_REGISTRY_UPDATED, 0)
@@ -474,6 +473,6 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
             assert registry.async_get(ids[key]).options[DOMAIN]["five_hour_visibility"] == "manual"
             assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{key}") == ids[key]
         client.async_get_status.return_value = _status(at=datetime.now(UTC))
-        await async_get_runtime(hass).entity_coordinator.async_refresh()
+        await entry.runtime_data.entity_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(ids["five_hour_used"]).options[DOMAIN]["five_hour_visibility"] == "manual"

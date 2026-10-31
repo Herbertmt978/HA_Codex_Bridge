@@ -123,8 +123,8 @@ async def test_conversation_platform_requires_explicit_supervisor_opt_in(hass):
             CONF_ASSIST_PROJECT_ID: "prj_assist",
         },
     )
-    with patch("custom_components.codex_bridge.conversation.async_get_runtime", return_value=Mock()):
-        await async_setup_entry(hass, entry, added)
+    entry.runtime_data = Mock()
+    await async_setup_entry(hass, entry, added)
     assert isinstance(added.call_args.args[0][0], CodexAssistConversation)
 
 

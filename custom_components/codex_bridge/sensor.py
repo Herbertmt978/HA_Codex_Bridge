@@ -7,24 +7,25 @@ from collections import deque
 from datetime import UTC, datetime
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .account_allowance_coordinator import MAX_USAGE_AGE, AccountAllowance, AccountAllowanceCoordinator, AccountAllowanceSnapshot
 from .entity import BridgeEntity
 from .const import DOMAIN
-from .runtime import async_get_runtime
+from .runtime import CodexBridgeConfigEntry
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: CodexBridgeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    runtime = async_get_runtime(hass)
+    runtime = entry.runtime_data
     coordinator = runtime.entity_coordinator
     if coordinator is None:
         return
@@ -37,23 +38,17 @@ async def async_setup_entry(
             BridgeResetSensor(coordinator, runtime, "weekly_reset", "Weekly reset"),
         ]
     )
-    await _async_setup_account_allowance_sensors(hass, entry, runtime, async_add_entities)
-
-
-async def _async_setup_account_allowance_sensors(
-    hass: HomeAssistant, entry: ConfigEntry, runtime, async_add_entities: AddEntitiesCallback,
-) -> None:
-    coordinator = AccountAllowanceCoordinator(hass, runtime)
-    coordinators = hass.data.setdefault(DOMAIN, {}).setdefault("account_allowance_coordinators", {})
-    coordinators[entry.entry_id] = coordinator
-    if runtime.supports_capability("account_profile_telemetry_v1"):
-        # An account telemetry outage must not prevent the other platforms
-        # loading. Retain registered profiles and retry through this coordinator.
-        await coordinator.async_refresh()
-    manager = AccountAllowanceEntityManager(hass, entry, runtime, coordinator, async_add_entities)
-    coordinator.manager = manager
+    allowance_coordinator = runtime.account_allowance_coordinator
+    if allowance_coordinator is None:
+        return
+    manager = AccountAllowanceEntityManager(
+        hass, entry, runtime, allowance_coordinator, async_add_entities
+    )
+    allowance_coordinator.manager = manager
     await manager.async_sync()
-    manager.remove_listener = coordinator.async_add_listener(manager.coordinator_updated)
+    manager.remove_listener = allowance_coordinator.async_add_listener(
+        manager.coordinator_updated
+    )
 
 
 class BridgeLastOutcomeSensor(BridgeEntity, SensorEntity):

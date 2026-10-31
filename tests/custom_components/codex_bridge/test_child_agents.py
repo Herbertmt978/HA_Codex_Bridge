@@ -11,7 +11,7 @@ from aiohttp import web
 import pytest
 
 from custom_components.codex_bridge.bridge_api import BridgeApiClient, BridgeApiCapabilityError
-from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
+from custom_components.codex_bridge.const import DOMAIN
 from custom_components.codex_bridge.event_broker import EventBroker
 from custom_components.codex_bridge.runtime import CodexBridgeRuntime
 from custom_components.codex_bridge.websocket_api import ws_child_agent_action
@@ -92,7 +92,8 @@ async def test_child_refusals_survive_real_client_and_ws_without_private_error(c
             tasks.append(task)
             return task
 
-        hass = SimpleNamespace(data={DOMAIN: {DATA_ENTRIES: {"entry": runtime}}},
+        loaded = [SimpleNamespace(runtime_data=runtime)]
+        hass = SimpleNamespace(config_entries=SimpleNamespace(async_loaded_entries=lambda _domain: loaded),
                                async_create_task=create_task,
                                async_create_background_task=create_task)
         connection = SimpleNamespace(

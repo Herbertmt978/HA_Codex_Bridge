@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Context
 from homeassistant.exceptions import ServiceValidationError, Unauthorized
 from homeassistant.helpers import entity_registry as er
@@ -21,7 +22,6 @@ from custom_components.codex_bridge.const import (
     CONF_BRIDGE_URL,
     CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DOMAIN,
 )
 from custom_components.codex_bridge.event_broker import EventBroker
@@ -149,7 +149,8 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
         async_refresh_capabilities=AsyncMock(),
         web_search_payload=lambda: {},
     )
-    hass.data[DOMAIN] = {DATA_ENTRIES: {entry.entry_id: runtime}}
+    entry.runtime_data = runtime
+    entry.mock_state(hass, ConfigEntryState.LOADED)
     async_register_task_services(hass)
 
     with pytest.raises(Unauthorized):

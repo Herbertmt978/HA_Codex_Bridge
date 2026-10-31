@@ -16,11 +16,10 @@ from homeassistant.components.conversation import (
     ConversationResult,
 )
 from homeassistant.components.conversation.chat_log import AssistantContent
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
 from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .bridge_api import BridgeApiConnectionError, BridgeApiError
@@ -43,7 +42,7 @@ from .const import (
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
 )
-from .runtime import CodexBridgeRuntime, async_get_runtime
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
 
 
 _MAX_PROMPT_CHARS = 4096
@@ -69,7 +68,9 @@ class _AssistSession:
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: CodexBridgeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add a selectable agent only after an administrator has chosen its project."""
 
@@ -79,7 +80,7 @@ async def async_setup_entry(
         or not entry.options.get(CONF_ASSIST_PROJECT_ID)
     ):
         return
-    async_add_entities([CodexAssistConversation(entry, async_get_runtime(hass))])
+    async_add_entities([CodexAssistConversation(entry, entry.runtime_data)])
 
 
 class CodexAssistConversation(ConversationEntity):
@@ -88,7 +89,7 @@ class CodexAssistConversation(ConversationEntity):
     _attr_name = "Codex Bridge Assist"
     _attr_icon = "mdi:robot-outline"
 
-    def __init__(self, entry: ConfigEntry, runtime: CodexBridgeRuntime) -> None:
+    def __init__(self, entry: CodexBridgeConfigEntry, runtime: CodexBridgeRuntime) -> None:
         self._entry = entry
         self._runtime = runtime
         self._attr_unique_id = f"{entry.entry_id}_assist"
