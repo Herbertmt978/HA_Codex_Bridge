@@ -235,7 +235,70 @@ async def test_setup_refuses_a_second_active_connection(hass):
 
         assert first.state is ConfigEntryState.LOADED
         assert second.state is ConfigEntryState.SETUP_RETRY
+        assert second.error_reason_translation_key == "connection_already_active"
         assert await hass.config_entries.async_unload(first.entry_id)
+
+
+async def test_a_failed_unload_keeps_its_live_runtime_exclusive(hass, monkeypatch):
+    # The conversation dependency needs HA's exposed-entity registry.
+    assert await async_setup_component(hass, "homeassistant", {})
+    first = _entry(hass)
+    second = MockConfigEntry(
+        domain=DOMAIN,
+        title="Second Codex Bridge",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.2:8766",
+            CONF_BRIDGE_TOKEN: "b" * 48,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+            CONF_DISCOVERY_UUID: "f" * 32,
+        },
+        source="hassio",
+        unique_id="f" * 32,
+    )
+    client = Mock()
+    client.async_ready = AsyncMock(return_value=Mock(capabilities=()))
+    client.async_close = AsyncMock()
+    client.require_api_v1 = Mock()
+    client.negotiated_api_version = 1
+    client.async_get_status = AsyncMock(return_value={})
+    client.async_list_threads = AsyncMock(return_value=[])
+
+    async def wait_for_events(*, after: int) -> None:
+        await asyncio.Event().wait()
+
+    client.async_replay_events = AsyncMock(side_effect=wait_for_events)
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_http_views"),
+        patch("custom_components.codex_bridge.async_register_websocket_commands"),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel") as remove_panel,
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
+    ):
+        assert await hass.config_entries.async_setup(first.entry_id)
+        live = first.runtime_data
+        # Fail only HA's sensor platform unload; the first runtime stays open.
+        from homeassistant.components import sensor
+
+        monkeypatch.setattr(sensor, "async_unload_entry", AsyncMock(return_value=False))
+        assert not await hass.config_entries.async_unload(first.entry_id)
+        assert first.state is ConfigEntryState.FAILED_UNLOAD
+        assert not live.closed
+        remove_panel.assert_not_called()
+        monkeypatch.undo()
+
+        second.add_to_hass(hass)
+        assert not await hass.config_entries.async_setup(second.entry_id)
+        assert second.state is ConfigEntryState.SETUP_RETRY
+        assert second.error_reason_translation_key == "connection_already_active"
+
+        # Removal drains the surviving runtime, which frees the connection.
+        await hass.config_entries.async_remove(first.entry_id)
+        assert live.closed
+        assert await hass.config_entries.async_reload(second.entry_id)
+        assert second.state is ConfigEntryState.LOADED
+        assert await hass.config_entries.async_unload(second.entry_id)
+        remove_panel.assert_called_once()
 
 
 async def test_partial_setup_closes_runtime_and_preserves_permanent_registrations(hass):

@@ -79,10 +79,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
             DATA_WS_REGISTERED: False,
         },
     )
-    if any(
-        other.entry_id != entry.entry_id
-        for other in hass.config_entries.async_loaded_entries(DOMAIN)
-    ):
+    if _other_live_runtime(hass, entry.entry_id):
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN, translation_key="connection_already_active"
         )
@@ -308,6 +305,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) 
     return True
 
 
+def _other_live_runtime(hass: HomeAssistant, entry_id: str) -> bool:
+    """Return whether another entry still owns an open runtime.
+
+    HA keeps runtime data after a failed or interrupted unload, so such an
+    entry's broker, scheduler and notifications may still be running.
+    """
+
+    for other in hass.config_entries.async_entries(DOMAIN):
+        runtime: CodexBridgeRuntime | None = getattr(other, "runtime_data", None)
+        if other.entry_id != entry_id and runtime is not None and not runtime.closed:
+            return True
+    return False
+
+
 def _ready_version(ready: object) -> str | None:
     """Return the App release, or the Bridge release for an external Bridge."""
 
@@ -393,7 +404,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry)
     # close keeps the draining owner, so permanent removal cannot race a
     # still-admitted timer or mobile action.
     await runtime.async_close()
-    if not hass.config_entries.async_loaded_entries(DOMAIN):
+    if not _other_live_runtime(hass, entry.entry_id):
         async_remove_panel(hass)
         hass.data.setdefault(DOMAIN, {})[DATA_PANEL_REGISTERED] = False
 

@@ -161,7 +161,7 @@ async def test_real_home_assistant_lifecycle_cancels_shortcut_renewal_timer(tmp_
     )
     hass.data[DOMAIN] = {DATA_PANEL_REGISTERED: False}
     # A bare instance has no entry manager; this entry is the only connection.
-    hass.config_entries = Mock(async_loaded_entries=Mock(return_value=[]))
+    hass.config_entries = Mock(async_entries=Mock(return_value=[]))
     try:
         await helper.async_setup()
         # Capture the actual HA interval handle; no scheduler/event seam is mocked.

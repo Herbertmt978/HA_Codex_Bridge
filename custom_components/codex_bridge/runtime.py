@@ -63,6 +63,12 @@ class CodexBridgeRuntime:
     _capability_auth_ready: bool | None = field(default=None, init=False, repr=False)
     _closed: bool = field(default=False, init=False, repr=False)
 
+    @property
+    def closed(self) -> bool:
+        """Return whether every owned service finished closing."""
+
+        return self._closed
+
     def supports_capability(self, capability: str) -> bool:
         return capability in self.capabilities
 
