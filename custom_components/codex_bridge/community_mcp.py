@@ -6,13 +6,19 @@ import asyncio
 import hmac
 import json
 import re
+from typing import Any
 
 from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.helpers.http import HomeAssistantView
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import Unauthorized
 
 from .bridge_api import BridgeApiError
-from .community_mcp_discovery import CommunityMcpDiscoveryError, async_discover_community_mcp
+from .community_mcp_discovery import (
+    CommunityMcpDiscoveryError,
+    CommunityMcpEndpoint,
+    async_discover_community_mcp,
+)
 from .const import CONNECTION_TYPE_SUPERVISOR
 from .runtime import async_get_runtime
 
@@ -23,8 +29,8 @@ _NAME = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _REVISION = re.compile(r"[a-f0-9]{64}\Z")
 
 
-def _public(state: str, *, endpoint=None, server_name: str | None = None,
-            reused: bool = False) -> dict:
+def _public(state: str, *, endpoint: CommunityMcpEndpoint | None = None,
+            server_name: str | None = None, reused: bool = False) -> dict[str, Any]:
     """Project only known non-secret discovery fields and fixed state codes."""
     return {"state": state if state in _STATES else "unavailable",
             "server_name": server_name, "reused": reused,
@@ -38,7 +44,7 @@ class CodexBridgeCommunityMcpView(HomeAssistantView):
     name = "api:codex_bridge:community_mcp"
     requires_auth = True
 
-    def __init__(self, hass) -> None:
+    def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
 
     async def get(self, request: web.Request) -> web.Response:
@@ -80,7 +86,10 @@ class CodexBridgeCommunityMcpView(HomeAssistantView):
             if not runtime.supports_capability("community_mcp_quick_connect_v1"):
                 return web.json_response(_public("enable_mcp"), headers=headers)
             endpoint = await async_discover_community_mcp(self.hass)
-            if connect and not hmac.compare_digest(revision, endpoint.consent_revision):
+            if connect and (
+                revision is None
+                or not hmac.compare_digest(revision, endpoint.consent_revision)
+            ):
                 return web.json_response(_public("connection_changed", endpoint=endpoint),
                                          status=409, headers=headers)
             result = await runtime.client.async_community_mcp(

@@ -44,7 +44,7 @@ class CodexBridgeRuntime:
     automation_scheduler: AutomationScheduler | None = None
     automation_notifications: AutomationNotificationCoordinator | None = None
     question_notifications: QuestionNotificationCoordinator | None = None
-    question_notification_settings: dict = field(default_factory=lambda: {
+    question_notification_settings: dict[str, Any] = field(default_factory=lambda: {
         "enabled": False, "persistent": True, "preview": False, "mobile_targets": [],
     }, repr=False)
     entity_coordinator: BridgeEntityCoordinator | None = None

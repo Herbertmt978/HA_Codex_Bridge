@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from homeassistant.components.conversation import (
@@ -58,7 +58,7 @@ class _AssistSession:
     mcp_fingerprint: tuple[str, ...]
     pending_task_id: str | None = None
     pending_prompt: str | None = None
-    pending_payload: dict | None = None
+    pending_payload: dict[str, Any] | None = None
 
     def clear_pending(self) -> None:
         self.pending_task_id = None
@@ -360,6 +360,7 @@ class CodexAssistConversation(ConversationEntity):
                     conversation_id if session.thread_id else None,
                 )
 
+            reply_id: str | None = conversation_id
             if answer["status"] == "completed":
                 session.clear_pending()
                 speech = (
@@ -370,12 +371,12 @@ class CodexAssistConversation(ConversationEntity):
                 session.clear_pending()
                 self._sessions.pop(conversation_id, None)
                 speech = "Codex could not complete that answer. Please try again."
-                conversation_id = None
+                reply_id = None
             else:
                 speech = "Codex is still working. You can review the answer in the Codex Bridge chat."
             if previous_answer:
                 speech = f"Previous answer: {previous_answer[:1024]}\n\n{speech}"
-            return self._reply(user_input, chat_log, speech, conversation_id)
+            return self._reply(user_input, chat_log, speech, reply_id)
 
     async def _submit_pending(self, session: _AssistSession) -> None:
         """Replay an ambiguous request with exactly its original task ID and body."""
@@ -425,7 +426,7 @@ class CodexAssistConversation(ConversationEntity):
             reasoning = selected_reasoning or project.get("default_thinking_level")
         return assist_selection_supported(choices, model, reasoning)
 
-    async def _wait_for_answer(self, task_id: str) -> dict:
+    async def _wait_for_answer(self, task_id: str) -> dict[str, Any]:
         async with asyncio.timeout(_RESPONSE_TIMEOUT_SECONDS):
             while True:
                 result = await self._runtime.client.async_get_task_answer(task_id)

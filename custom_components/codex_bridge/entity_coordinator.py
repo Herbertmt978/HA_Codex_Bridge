@@ -57,7 +57,7 @@ def _time(value: object) -> datetime | None:
 
 
 def _percent(value: object) -> float | None:
-    if type(value) not in (int, float) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return None
     return round(float(value), 1) if 0 <= value <= 100 else None
 

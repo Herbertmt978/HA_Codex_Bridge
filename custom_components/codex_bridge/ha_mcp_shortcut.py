@@ -20,7 +20,7 @@ from homeassistant.helpers import llm
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 
-from .bridge_api import BridgeApiClient, BridgeApiError
+from .bridge_api import BridgeApiClient, BridgeApiConnectionError, BridgeApiError
 from .const import CONNECTION_TYPE_SUPERVISOR, DOMAIN
 
 FIXED_URL = "http://homeassistant:8123/api/mcp/assist"
@@ -85,6 +85,13 @@ class HaMcpShortcut:
         self._loaded = False
         self._closed = False
         self._notice: str | None = None
+
+    def _bridge(self) -> BridgeApiClient:
+        """Return the App client; a removal-only helper has none, so it is unavailable."""
+
+        if self.client is None:
+            raise BridgeApiConnectionError()
+        return self.client
 
     async def async_setup(self) -> None:
         """Restore/recover owned metadata; never create a server or refresh token."""
@@ -172,7 +179,7 @@ class HaMcpShortcut:
             if self._notice == "retry":
                 return self._status("retry")
             try:
-                rows = await self.client.async_list_mcp()
+                rows = await self._bridge().async_list_mcp()
             except BridgeApiError:
                 return self._status("configured")
             if not isinstance(rows, list) or len(rows) > 128:
@@ -231,7 +238,7 @@ class HaMcpShortcut:
                 jwt = self.hass.auth.async_create_access_token(token)
                 self._record.update(fingerprint=_fingerprint(jwt), access_expires_at=time() + ACCESS_TOKEN_EXPIRATION.total_seconds(), state="creating")
                 await self._save()
-                await self.client.async_add_mcp({
+                await self._bridge().async_add_mcp({
                     "name": name, "url": FIXED_URL, "local": True,
                     "local_acknowledged": True, "authentication": {"mode": "bearer", "token": jwt},
                     "auth_acknowledged": True, "require_tool_selection": True,
@@ -272,7 +279,7 @@ class HaMcpShortcut:
                 self._record.update(state="rotating", pending_fingerprint=_fingerprint(jwt),
                                     pending_expires_at=time() + ACCESS_TOKEN_EXPIRATION.total_seconds())
                 await self._save()
-                await self.client.async_replace_mcp_credential(self._record["server_name"], {
+                await self._bridge().async_replace_mcp_credential(self._record["server_name"], {
                     "authentication": {"mode": "bearer", "token": jwt}, "auth_acknowledged": True,
                     "expected_url": FIXED_URL, "expected_token_sha256": self._record["fingerprint"],
                 })
@@ -391,7 +398,7 @@ class HaMcpShortcut:
             else:
                 for digest in digests:
                     try:
-                        await self.client.async_remove_managed_mcp(record["server_name"], {
+                        await self._bridge().async_remove_managed_mcp(record["server_name"], {
                             "expected_url": FIXED_URL, "expected_token_sha256": digest,
                         })
                         break

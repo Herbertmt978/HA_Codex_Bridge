@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
+from typing import TYPE_CHECKING
+
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import BridgeEntity
 from .runtime import CodexBridgeConfigEntry
+
+if TYPE_CHECKING:
+    from homeassistant.components.binary_sensor.const import BinarySensorDeviceClass
+else:
+    # Every supported release re-exports it here; HA 2026.10 moved its definition.
+    from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 
 # One coordinator refreshes every entity; these entities make no requests.
 PARALLEL_UPDATES = 0

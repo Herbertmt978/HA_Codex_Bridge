@@ -103,7 +103,7 @@ async def async_resolve_question_recipients(
         ]
         if len(services) != 1:
             continue
-        name = device.name_by_user or device.name or entry.title
+        name = device.name_by_user or device.name or getattr(entry, "title", None)
         label = (
             name
             if isinstance(name, str) and 1 <= len(name) <= 128 and name.isprintable()

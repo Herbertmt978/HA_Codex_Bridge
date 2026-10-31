@@ -8,6 +8,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
@@ -16,6 +17,9 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .bridge_api import BridgeApiError
 from .const import DOMAIN
 from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
+
+if TYPE_CHECKING:
+    from .sensor import AccountAllowanceEntityManager
 
 
 UPDATE_INTERVAL = timedelta(seconds=60)
@@ -89,7 +93,12 @@ def _timestamp(value: object) -> datetime | None:
 
 
 def _percent(value: object) -> float | None:
-    if type(value) not in (int, float) or not 0 <= value <= 100 or not math.isfinite(value):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not 0 <= value <= 100
+        or not math.isfinite(value)
+    ):
         return None
     return round(float(value), 1)
 
@@ -123,8 +132,12 @@ def _profile(row: object, now: datetime) -> AccountAllowance:
         if not isinstance(item, Mapping):
             raise ValueError("account telemetry window is invalid")
         name = item.get("name")
-        expected_minutes = _WINDOW_MINUTES.get(name) if isinstance(name, str) else None
-        if expected_minutes is None or item.get("window_minutes") != expected_minutes or name in windows:
+        if (
+            not isinstance(name, str)
+            or (expected_minutes := _WINDOW_MINUTES.get(name)) is None
+            or item.get("window_minutes") != expected_minutes
+            or name in windows
+        ):
             continue
         reset = _timestamp(item.get("resets_at"))
         windows[name] = AllowanceWindow(_percent(item.get("remaining_percent")), reset)
@@ -199,6 +212,8 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
             always_update=False,
         )
         self.runtime = runtime
+        # The sensor platform owns the account entities; closing ends its sync.
+        self.manager: AccountAllowanceEntityManager | None = None
 
     async def _async_update_data(self) -> AccountAllowanceSnapshot:
         if not self.runtime.supports_capability("account_profile_telemetry_v1"):
@@ -239,9 +254,8 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def async_close(self) -> None:
-        manager = getattr(self, "manager", None)
-        if manager is not None:
-            await manager.async_close()
+        if self.manager is not None:
+            await self.manager.async_close()
         await self.async_shutdown()
 
 

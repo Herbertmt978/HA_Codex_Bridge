@@ -6,14 +6,19 @@ import asyncio
 import logging
 import re
 from collections.abc import Mapping
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.storage import Store
 
 from .bridge_api import BridgeApiError
 from .const import PANEL_URL_PATH
+
+if TYPE_CHECKING:
+    from .runtime import CodexBridgeRuntime
 
 _LOGGER = logging.getLogger(__name__)
 _RUN_ID = re.compile(r"autrun_[a-f0-9]{32}\Z")
@@ -44,7 +49,7 @@ _LABELS = {
 }
 
 
-def _settings(value: object) -> dict | None:
+def _settings(value: object) -> dict[str, Any] | None:
     if not isinstance(value, Mapping) or set(value) != {
         "policy",
         "persistent",
@@ -78,7 +83,12 @@ class AutomationNotificationCoordinator:
     claim first favours no duplicate alert after a crash over guaranteed delivery.
     """
 
-    def __init__(self, hass: HomeAssistant, runtime, store) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        runtime: CodexBridgeRuntime,
+        store: Store[dict[str, Any]],
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
         self._store = store
@@ -115,7 +125,7 @@ class AutomationNotificationCoordinator:
             self._remove_timer()
             self._remove_timer = None
 
-    async def _on_tick(self, _now) -> None:
+    async def _on_tick(self, _now: datetime) -> None:
         await self.async_refresh()
 
     async def async_refresh(self) -> None:
@@ -156,7 +166,7 @@ class AutomationNotificationCoordinator:
                 _LOGGER.warning("Scheduled notification delivery check failed")
 
     async def _deliver(
-        self, definition: Mapping, current: Mapping, run: object
+        self, definition: Mapping[str, Any], current: Mapping[str, Any], run: object
     ) -> None:
         if self._closed or not isinstance(run, Mapping):
             return

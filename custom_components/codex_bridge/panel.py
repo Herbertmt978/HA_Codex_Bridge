@@ -1,8 +1,14 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from homeassistant.components import frontend, panel_custom
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
+
+if TYPE_CHECKING:
+    from homeassistant.components.http.server import StaticPathConfig
+else:
+    # Every supported release re-exports it here; HA 2026.9 moved its definition.
+    from homeassistant.components.http import StaticPathConfig
 
 from .const import (
     PANEL_COMPONENT_NAME,
