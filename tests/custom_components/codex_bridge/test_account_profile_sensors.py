@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -553,3 +554,39 @@ async def test_signed_out_account_raises_a_repair_until_it_signs_in_again(hass):
     with patch("custom_components.codex_bridge.BridgeApiClient", return_value=client):
         await hass.config_entries.async_remove(entry.entry_id)
     assert _repair(issues, "Primary") is None
+
+
+async def test_incomplete_inventory_keeps_a_missing_accounts_repair(hass):
+    issues = ir.async_get(hass)
+    async with _loaded_account_entities(hass) as (_entry, _client, payload, coordinator, _registry):
+        for profile in payload["profiles"]:
+            profile["status"] = "reauthentication_required"
+            profile["reauthentication_required"] = True
+        await coordinator.async_refresh()
+        assert _repair(issues, "Primary") is not None
+        assert _repair(issues, "Spare") is not None
+
+        # A partial inventory with Primary signed in again and Spare missing
+        # closes Primary's repair but proves nothing about Spare.
+        primary = payload["profiles"][0]
+        primary["status"] = "available"
+        primary["reauthentication_required"] = False
+        primary["updated_at"] = datetime.now(UTC).isoformat()
+        complete = project_account_telemetry({**payload, "profiles": [primary]})
+        coordinator._sync_reauthentication_issues(replace(complete, inventory_complete=False))
+        assert _repair(issues, "Primary") is None
+        assert _repair(issues, "Spare") is not None
+
+        # The same reading as a complete inventory proves Spare was removed.
+        coordinator._sync_reauthentication_issues(complete)
+        assert _repair(issues, "Spare") is None
+
+        # The App's incomplete inventory fails the refresh and keeps repairs.
+        payload["profiles"][1]["reauthentication_required"] = True
+        await coordinator.async_refresh()
+        assert _repair(issues, "Spare") is not None
+        payload["inventory_complete"] = False
+        payload["profiles"] = payload["profiles"][:1]
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is False
+        assert _repair(issues, "Spare") is not None

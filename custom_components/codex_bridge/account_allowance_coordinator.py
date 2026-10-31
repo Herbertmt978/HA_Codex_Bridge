@@ -239,8 +239,10 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
         entry_id = self.config_entry.entry_id
         prefix = _reauthentication_issue_prefix(entry_id)
         keep: set[str] = set()
+        present: set[str] = set()
         for profile in snapshot.profiles.values():
             issue_id = _reauthentication_issue_id(entry_id, profile.profile_id)
+            present.add(issue_id)
             if profile.status == "available" and not profile.reauthentication_required:
                 continue
             keep.add(issue_id)
@@ -258,9 +260,12 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
                 translation_key="account_reauthentication_required",
                 translation_placeholders={"account": profile.label},
             )
-        # A complete inventory without the account also closes its repair.
         for domain, issue_id in tuple(ir.async_get(self.hass).issues):
-            if domain == DOMAIN and issue_id.startswith(prefix) and issue_id not in keep:
+            if domain != DOMAIN or not issue_id.startswith(prefix) or issue_id in keep:
+                continue
+            # A signed-in account closes its own repair. A missing account's
+            # repair closes only when a complete inventory proves its removal.
+            if issue_id in present or snapshot.inventory_complete:
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def async_close(self) -> None:
