@@ -2,20 +2,32 @@
 
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import BinarySensorDeviceClass, BinarySensorEntity
-from homeassistant.config_entries import ConfigEntry
+from typing import TYPE_CHECKING
+
+from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .entity import BridgeEntity
-from .runtime import async_get_runtime
+from .runtime import CodexBridgeConfigEntry
+
+if TYPE_CHECKING:
+    from homeassistant.components.binary_sensor.const import BinarySensorDeviceClass
+else:
+    # Every supported release re-exports it here; HA 2026.10 moved its definition.
+    from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+
+# One coordinator refreshes every entity; these entities make no requests.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: CodexBridgeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    runtime = async_get_runtime(hass)
+    runtime = entry.runtime_data
     coordinator = runtime.entity_coordinator
     if coordinator is None:
         return
@@ -29,7 +41,6 @@ async def async_setup_entry(
 
 
 class BridgeConnectionSensor(BridgeEntity, BinarySensorEntity):
-    _attr_name = "Connection"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -44,7 +55,6 @@ class BridgeConnectionSensor(BridgeEntity, BinarySensorEntity):
 
 
 class BridgeAuthenticatedSensor(BridgeEntity, BinarySensorEntity):
-    _attr_name = "ChatGPT connected"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
@@ -55,7 +65,6 @@ class BridgeAuthenticatedSensor(BridgeEntity, BinarySensorEntity):
 
 
 class BridgeTaskRunningSensor(BridgeEntity, BinarySensorEntity):
-    _attr_name = "Task running"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
 
     @property

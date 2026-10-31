@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
 
 from homeassistant.components.conversation import (
@@ -16,11 +16,9 @@ from homeassistant.components.conversation import (
     ConversationResult,
 )
 from homeassistant.components.conversation.chat_log import AssistantContent
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import intent
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .bridge_api import BridgeApiConnectionError, BridgeApiError
@@ -43,7 +41,7 @@ from .const import (
     CONNECTION_TYPE_SUPERVISOR,
     DOMAIN,
 )
-from .runtime import CodexBridgeRuntime, async_get_runtime
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
 
 
 _MAX_PROMPT_CHARS = 4096
@@ -60,7 +58,7 @@ class _AssistSession:
     mcp_fingerprint: tuple[str, ...]
     pending_task_id: str | None = None
     pending_prompt: str | None = None
-    pending_payload: dict | None = None
+    pending_payload: dict[str, Any] | None = None
 
     def clear_pending(self) -> None:
         self.pending_task_id = None
@@ -68,8 +66,14 @@ class _AssistSession:
         self.pending_payload = None
 
 
+# The agent has no polled state and rejects concurrent requests itself.
+PARALLEL_UPDATES = 0
+
+
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: CodexBridgeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Add a selectable agent only after an administrator has chosen its project."""
 
@@ -79,24 +83,20 @@ async def async_setup_entry(
         or not entry.options.get(CONF_ASSIST_PROJECT_ID)
     ):
         return
-    async_add_entities([CodexAssistConversation(entry, async_get_runtime(hass))])
+    async_add_entities([CodexAssistConversation(entry, entry.runtime_data)])
 
 
 class CodexAssistConversation(ConversationEntity):
     """Return a Codex answer from an explicitly exposed, observe-only project."""
 
-    _attr_name = "Codex Bridge Assist"
-    _attr_icon = "mdi:robot-outline"
+    _attr_has_entity_name = True
+    _attr_translation_key = "assist"
 
-    def __init__(self, entry: ConfigEntry, runtime: CodexBridgeRuntime) -> None:
+    def __init__(self, entry: CodexBridgeConfigEntry, runtime: CodexBridgeRuntime) -> None:
         self._entry = entry
         self._runtime = runtime
         self._attr_unique_id = f"{entry.entry_id}_assist"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, getattr(runtime, "discovery_uuid", None) or entry.entry_id)},
-            name=getattr(runtime, "title", entry.title),
-            manufacturer="Codex Bridge",
-        )
+        self._attr_device_info = runtime.device_info
         self._sessions: OrderedDict[str, _AssistSession] = OrderedDict()
         # Reject concurrent voice requests rather than queueing unbounded work.
         self._request_lock = asyncio.Lock()
@@ -360,6 +360,7 @@ class CodexAssistConversation(ConversationEntity):
                     conversation_id if session.thread_id else None,
                 )
 
+            reply_id: str | None = conversation_id
             if answer["status"] == "completed":
                 session.clear_pending()
                 speech = (
@@ -370,12 +371,12 @@ class CodexAssistConversation(ConversationEntity):
                 session.clear_pending()
                 self._sessions.pop(conversation_id, None)
                 speech = "Codex could not complete that answer. Please try again."
-                conversation_id = None
+                reply_id = None
             else:
                 speech = "Codex is still working. You can review the answer in the Codex Bridge chat."
             if previous_answer:
                 speech = f"Previous answer: {previous_answer[:1024]}\n\n{speech}"
-            return self._reply(user_input, chat_log, speech, conversation_id)
+            return self._reply(user_input, chat_log, speech, reply_id)
 
     async def _submit_pending(self, session: _AssistSession) -> None:
         """Replay an ambiguous request with exactly its original task ID and body."""
@@ -425,7 +426,7 @@ class CodexAssistConversation(ConversationEntity):
             reasoning = selected_reasoning or project.get("default_thinking_level")
         return assist_selection_supported(choices, model, reasoning)
 
-    async def _wait_for_answer(self, task_id: str) -> dict:
+    async def _wait_for_answer(self, task_id: str) -> dict[str, Any]:
         async with asyncio.timeout(_RESPONSE_TIMEOUT_SECONDS):
             while True:
                 result = await self._runtime.client.async_get_task_answer(task_id)

@@ -9,10 +9,12 @@ import logging
 import re
 import secrets
 from collections.abc import Mapping
+from typing import Any, TypeGuard
 from datetime import UTC, datetime, timedelta
 from urllib.parse import quote
 
 from homeassistant.core import CALLBACK_TYPE, Event, EventOrigin, HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.util import dt as dt_util
 
@@ -44,7 +46,7 @@ def _expiry(value: object) -> datetime | None:
     return parsed.astimezone(UTC)
 
 
-def _text(value: object, maximum: int) -> bool:
+def _text(value: object, maximum: int) -> TypeGuard[str]:
     return (
         isinstance(value, str)
         and bool(value)
@@ -72,7 +74,7 @@ def _valid_interaction(value: object) -> bool:
     )
 
 
-def _question(value: Mapping) -> Mapping | None:
+def _question(value: Mapping[str, Any]) -> Mapping[str, Any] | None:
     display = value.get("display")
     questions = display.get("questions") if isinstance(display, Mapping) else None
     if not isinstance(questions, list) or len(questions) != 1:
@@ -89,7 +91,7 @@ def _question(value: Mapping) -> Mapping | None:
     return question
 
 
-def _choice_labels(question: Mapping) -> list[str] | None:
+def _choice_labels(question: Mapping[str, Any]) -> list[str] | None:
     options = question.get("options")
     if not isinstance(options, list) or not 1 <= len(options) <= 2:
         return None
@@ -101,7 +103,7 @@ def _choice_labels(question: Mapping) -> list[str] | None:
     return labels
 
 
-def _question_fingerprint(value: Mapping) -> str | None:
+def _question_fingerprint(value: Mapping[str, Any]) -> str | None:
     display = value.get("display")
     questions = display.get("questions") if isinstance(display, Mapping) else None
     if not isinstance(questions, list) or len(questions) > 32:
@@ -115,7 +117,7 @@ def _question_fingerprint(value: Mapping) -> str | None:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _safe_preview(question: Mapping | None) -> bool:
+def _safe_preview(question: Mapping[str, Any] | None) -> bool:
     if (
         question is None
         or question.get("isSecret")
@@ -147,17 +149,23 @@ def _safe_preview(question: Mapping | None) -> bool:
 class QuestionNotificationCoordinator:
     """Keep a bounded correlation ledger for eligible mobile question replies."""
 
-    def __init__(self, hass: HomeAssistant, runtime, store) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        # None during permanent removal; runtime attributes are read defensively.
+        runtime: Any,
+        store: Store[dict[str, Any]],
+    ) -> None:
         self._hass = hass
         self._runtime = runtime
         self._store = store
-        self._entries: dict[str, dict] = {}
+        self._entries: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self._start_lock = asyncio.Lock()
         self._remove_timer: CALLBACK_TYPE | None = None
         self._remove_bus: CALLBACK_TYPE | None = None
         self._remove_broker: CALLBACK_TYPE | None = None
-        self._refresh_task: asyncio.Task | None = None
+        self._refresh_task: asyncio.Task[None] | None = None
         self._refresh_pending = False
         self._loaded = False
         self._closed = False
@@ -254,10 +262,10 @@ class QuestionNotificationCoordinator:
             self._loaded = True
             return True
 
-    async def _on_tick(self, _now) -> None:
+    async def _on_tick(self, _now: datetime) -> None:
         await self.async_refresh()
 
-    async def _on_broker_event(self, event) -> None:
+    async def _on_broker_event(self, event: Any) -> None:
         if getattr(event, "event_type", None) in {
             "interaction.created",
             "interaction.resolved",
@@ -278,7 +286,7 @@ class QuestionNotificationCoordinator:
         self._refresh_task = task
         task.add_done_callback(self._refresh_done)
 
-    def _refresh_done(self, task: asyncio.Task) -> None:
+    def _refresh_done(self, task: asyncio.Task[None]) -> None:
         if self._refresh_task is task:
             self._refresh_task = None
         if task.cancelled():
@@ -292,7 +300,7 @@ class QuestionNotificationCoordinator:
             self._schedule_refresh()
 
     @staticmethod
-    def _normalise_ledger(saved: object) -> dict[str, dict] | None:
+    def _normalise_ledger(saved: object) -> dict[str, dict[str, Any]] | None:
         if saved is None:
             return {}
         if (
@@ -463,8 +471,8 @@ class QuestionNotificationCoordinator:
                     continue
                 question = _question(item)
                 question_id = question["question_id"] if question is not None else "__open_chat_only__"
-                entry = self._entries.get(interaction_id)
-                if entry is None:
+                existing = self._entries.get(interaction_id)
+                if existing is None:
                     entry = {
                         "interaction_id": interaction_id,
                         "thread_id": item["thread_id"],
@@ -477,8 +485,8 @@ class QuestionNotificationCoordinator:
                         "open_chat_only": question is None,
                     }
                     self._entries[interaction_id] = entry
-                elif entry.get("open_chat_only") is not (question is None):
-                    await self._clear_entry(entry)
+                elif existing.get("open_chat_only") is not (question is None):
+                    await self._clear_entry(existing)
                     self._entries.pop(interaction_id, None)
                     entry = {
                         "interaction_id": interaction_id,
@@ -492,6 +500,8 @@ class QuestionNotificationCoordinator:
                         "open_chat_only": question is None,
                     }
                     self._entries[interaction_id] = entry
+                else:
+                    entry = existing
                 if persistent and not entry["persistent"]:
                     entry["persistent"] = True
                     if await self._persist():
@@ -532,7 +542,7 @@ class QuestionNotificationCoordinator:
             await self._persist()
 
     @staticmethod
-    def _same_question(entry: Mapping, current: Mapping) -> bool:
+    def _same_question(entry: Mapping[str, Any], current: Mapping[str, Any]) -> bool:
         question = _question(current)
         if entry.get("open_chat_only") is True:
             return (
@@ -550,21 +560,23 @@ class QuestionNotificationCoordinator:
         )
 
     @staticmethod
-    def _destination(entry: Mapping, registration_id: str) -> dict | None:
+    def _destination(entry: Mapping[str, Any], registration_id: str) -> dict[str, Any] | None:
         return next(
             (d for d in entry.get("destinations", []) if d.get("registration_id") == registration_id),
             None,
         )
 
     @staticmethod
-    def _recipient_matches(saved: Mapping, recipient: QuestionNotificationRecipient) -> bool:
+    def _recipient_matches(saved: Mapping[str, Any], recipient: QuestionNotificationRecipient) -> bool:
         return recipient.inline_reply is (saved.get("inline_reply") is True) and all(
             saved.get(key) == getattr(recipient, key)
             for key in ("registration_id", "device_id", "user_id", "service")
         )
 
     @staticmethod
-    def _make_destination(recipient, question: Mapping, preview: bool) -> dict:
+    def _make_destination(
+        recipient: QuestionNotificationRecipient, question: Mapping[str, Any], preview: bool
+    ) -> dict[str, Any]:
         preview_requested = preview
         preview = preview and _safe_preview(question)
         sensitive_preview = preview_requested and not preview
@@ -590,7 +602,7 @@ class QuestionNotificationCoordinator:
             "attempted": False,
         }
 
-    async def _deliver_persistent(self, entry: Mapping) -> None:
+    async def _deliver_persistent(self, entry: Mapping[str, Any]) -> None:
         if not self._hass.services.has_service("persistent_notification", "create"):
             return
         path = self._chat_path(entry)
@@ -603,7 +615,14 @@ class QuestionNotificationCoordinator:
         except Exception:
             _LOGGER.warning("Persistent question notification delivery failed")
 
-    async def _deliver_mobile(self, entry, destination, item, question, preview) -> None:
+    async def _deliver_mobile(
+        self,
+        entry: dict[str, Any],
+        destination: dict[str, Any],
+        item: Mapping[str, Any],
+        question: Mapping[str, Any] | None,
+        preview: bool,
+    ) -> None:
         service = destination["service"]
         if not self._hass.services.has_service("notify", service):
             destination["attempted"] = True
@@ -644,17 +663,17 @@ class QuestionNotificationCoordinator:
             _LOGGER.warning("Question notification delivery failed for a selected device")
 
     @staticmethod
-    def _tag(entry: Mapping) -> str:
-        return "codex_bridge_question_" + entry["interaction_id"]
+    def _tag(entry: Mapping[str, Any]) -> str:
+        return f"codex_bridge_question_{entry['interaction_id']}"
 
     @staticmethod
-    def _chat_path(entry: Mapping) -> str:
+    def _chat_path(entry: Mapping[str, Any]) -> str:
         return (
             f"/{PANEL_URL_PATH}?thread={quote(entry['thread_id'], safe='')}"
             f"&interaction={quote(entry['interaction_id'], safe='')}"
         )
 
-    async def _clear_mobile(self, entry: Mapping, destination: Mapping) -> bool:
+    async def _clear_mobile(self, entry: Mapping[str, Any], destination: Mapping[str, Any]) -> bool:
         if not destination.get("attempted"):
             return True
         service = destination.get("service")
@@ -662,7 +681,7 @@ class QuestionNotificationCoordinator:
             return False
         try:
             recipients = await async_resolve_question_recipients(
-                self._hass, [destination.get("registration_id")]
+                self._hass, [destination["registration_id"]]
             )
         except Exception:
             return False
@@ -687,7 +706,7 @@ class QuestionNotificationCoordinator:
             return False
         return True
 
-    async def _clear_persistent(self, entry: Mapping) -> bool:
+    async def _clear_persistent(self, entry: Mapping[str, Any]) -> bool:
         if not self._hass.services.has_service("persistent_notification", "dismiss"):
             return False
         try:
@@ -699,7 +718,7 @@ class QuestionNotificationCoordinator:
             return False
         return True
 
-    async def _clear_entry(self, entry: Mapping) -> bool:
+    async def _clear_entry(self, entry: Mapping[str, Any]) -> bool:
         cleared = True
         for destination in entry.get("destinations", []):
             if not await self._clear_mobile(entry, destination):
@@ -742,7 +761,8 @@ class QuestionNotificationCoordinator:
             entry, destination, action = match
             if event.context.user_id != destination.get("user_id"):
                 return
-            if _expiry(entry.get("expires_at")) is None or _expiry(entry["expires_at"]) <= dt_util.utcnow():
+            expires = _expiry(entry.get("expires_at"))
+            if expires is None or expires <= dt_util.utcnow():
                 return
             settings = getattr(self._runtime, "question_notification_settings", {})
             mobile_targets = settings.get("mobile_targets", []) if isinstance(settings, Mapping) else []
@@ -827,8 +847,8 @@ class QuestionNotificationCoordinator:
                     or destination["registration_id"] not in mobile_targets
                     or not self._runtime.supports_capability("interactions_v2")
                     or event.context.user_id != destination.get("user_id")
-                    or _expiry(entry["expires_at"]) is None
-                    or _expiry(entry["expires_at"]) <= dt_util.utcnow()
+                    or (expires := _expiry(entry["expires_at"])) is None
+                    or expires <= dt_util.utcnow()
                 ):
                     return
                 try:
@@ -857,8 +877,8 @@ class QuestionNotificationCoordinator:
                     or not self._runtime.supports_capability("interactions_v2")
                     or destination["registration_id"] not in final_targets
                     or deadline <= dt_util.utcnow()
-                    or _expiry(entry["expires_at"]) is None
-                    or _expiry(entry["expires_at"]) <= dt_util.utcnow()
+                    or (expires := _expiry(entry["expires_at"])) is None
+                    or expires <= dt_util.utcnow()
                 ):
                     return
                 dispatch_started = True
@@ -877,7 +897,7 @@ class QuestionNotificationCoordinator:
                 if not dispatch_started:
                     await self._release_answer_claim(entry)
 
-    async def _release_answer_claim(self, entry: dict) -> None:
+    async def _release_answer_claim(self, entry: dict[str, Any]) -> None:
         """Reopen only a claim for which no answer API attempt began."""
         entry["attempted"] = False
         try:
@@ -891,7 +911,7 @@ class QuestionNotificationCoordinator:
             entry["attempted"] = True
 
     @staticmethod
-    def _answers(action: Mapping, question: Mapping, data: Mapping) -> list[dict] | None:
+    def _answers(action: Mapping[str, Any], question: Mapping[str, Any], data: Mapping[str, Any]) -> list[dict[str, Any]] | None:
         if action.get("kind") == "choice":
             labels = _choice_labels(question)
             index = action.get("index")
@@ -907,7 +927,9 @@ class QuestionNotificationCoordinator:
             return None
         return [{"question_id": question["question_id"], "values": values}]
 
-    def _find_action(self, token: str):
+    def _find_action(
+        self, token: str
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None:
         for entry in self._entries.values():
             for destination in entry["destinations"]:
                 for action in destination["actions"]:

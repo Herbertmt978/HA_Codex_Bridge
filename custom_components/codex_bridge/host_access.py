@@ -3,13 +3,16 @@
 from ipaddress import ip_address, ip_network
 import re
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.helpers.service_info.hassio import HassioServiceInfo
+
 from .protocol import EndpointError, validate_bridge_token
 
 HOST_WORKER_KEY = "host_access_worker"
 SUPERVISOR_SLUG_KEY = "supervisor_slug"
 
 
-def validate_host_discovery(info, entry) -> dict[str, object]:
+def validate_host_discovery(info: HassioServiceInfo, entry: ConfigEntry) -> dict[str, object]:
     if not isinstance(info.config, dict):
         raise EndpointError("payload_invalid")
     payload = dict(info.config)

@@ -17,6 +17,15 @@ screenshot or short redacted log excerpt when useful.
 Do not include tokens, device codes, cookies, credentials, private workspace
 contents or complete private paths.
 
+You can also attach the Integration's diagnostics download from **Settings** >
+**Devices & services** > **Codex Bridge** > **⋮** > **Download diagnostics**.
+It reports the connection type, App slug, whether Host Access is paired, which
+options are enabled, the App release, API version and capabilities, the live
+update stream state, the health of the status and saved-account refreshes, and
+each saved account's status flags under a numbered index. It never includes the
+Bridge token or address, Host Access connection details, account labels or IDs,
+Assist instructions, MCP server names or notification device IDs.
+
 ## Fast checks
 
 | Problem | What to check |

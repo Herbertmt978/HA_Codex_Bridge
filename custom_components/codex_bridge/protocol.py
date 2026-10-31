@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from ipaddress import ip_address, ip_network
 import re
-from typing import Any, Mapping
+from typing import Any, Mapping, TypeGuard, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from .const import (
@@ -317,7 +317,7 @@ class ApiIncompatibleError(ProtocolError):
     code = "api_incompatible"
 
 
-def _is_int(value: object) -> bool:
+def _is_int(value: object) -> TypeGuard[int]:
     return type(value) is int
 
 
@@ -383,7 +383,8 @@ class ApiRange:
     @classmethod
     def from_payload(cls, value: object) -> "ApiRange":
         payload = _mapping(value)
-        return cls(payload.get("minimum"), payload.get("maximum"))
+        # __post_init__ rejects anything other than a valid integer range.
+        return cls(cast(int, payload.get("minimum")), cast(int, payload.get("maximum")))
 
 
 def negotiate_api(api: ApiRange, *, allow_legacy_v0: bool = False) -> int:
@@ -632,14 +633,15 @@ class DiscoveryRecord:
     @classmethod
     def from_payload(cls, value: object) -> "DiscoveryRecord":
         payload = _mapping(value)
+        # __post_init__ validates every field's type and value.
         return cls(
-            source=payload.get("source"),
-            service=payload.get("service"),
-            slug=payload.get("slug"),
-            uuid=payload.get("uuid"),
-            host=payload.get("host"),
-            port=payload.get("port"),
-            token=payload.get("token"),
+            source=cast(str, payload.get("source")),
+            service=cast(str, payload.get("service")),
+            slug=cast(str, payload.get("slug")),
+            uuid=cast(str, payload.get("uuid")),
+            host=cast(str, payload.get("host")),
+            port=cast(int, payload.get("port")),
+            token=cast(str, payload.get("token")),
             api=ApiRange.from_payload(payload.get("api")),
         )
 

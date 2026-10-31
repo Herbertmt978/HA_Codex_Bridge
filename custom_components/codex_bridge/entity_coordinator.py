@@ -14,7 +14,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .bridge_api import BridgeApiError
 from .event_broker import EventBroker, EventRecord
-from .runtime import CodexBridgeRuntime
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
 
 
 UPDATE_INTERVAL = timedelta(seconds=60)
@@ -26,6 +26,7 @@ _TERMINAL_EVENTS = {
     "run.cancelled": "cancelled",
     "run.interrupted": "interrupted",
 }
+TERMINAL_OUTCOMES = tuple(_TERMINAL_EVENTS.values())
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +57,7 @@ def _time(value: object) -> datetime | None:
 
 
 def _percent(value: object) -> float | None:
-    if type(value) not in (int, float) or not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         return None
     return round(float(value), 1) if 0 <= value <= 100 else None
 
@@ -115,7 +116,7 @@ def project_status(
     return EntitySnapshot(
         authenticated=authenticated,
         task_running=running,
-        last_outcome=last_outcome if last_outcome in _TERMINAL_EVENTS.values() else None,
+        last_outcome=last_outcome if last_outcome in TERMINAL_OUTCOMES else None,
         usage_available=fresh,
         five_hour_used=primary[0],
         five_hour_reset=primary[1],
@@ -128,10 +129,18 @@ def project_status(
 class BridgeEntityCoordinator(DataUpdateCoordinator[EntitySnapshot]):
     """Share one status/threads refresh across all entities and broker events."""
 
-    def __init__(self, hass: HomeAssistant, runtime: CodexBridgeRuntime) -> None:
+    config_entry: CodexBridgeConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: CodexBridgeConfigEntry,
+        runtime: CodexBridgeRuntime,
+    ) -> None:
         super().__init__(
             hass,
             logger=_LOGGER,
+            config_entry=config_entry,
             name="Codex Bridge entities",
             update_interval=UPDATE_INTERVAL,
             always_update=False,

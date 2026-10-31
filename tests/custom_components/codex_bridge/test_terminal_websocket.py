@@ -6,16 +6,16 @@ from unittest.mock import AsyncMock
 import pytest
 from homeassistant.setup import async_setup_component
 
-from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
+from custom_components.codex_bridge.const import DOMAIN
 from custom_components.codex_bridge.websocket_api import async_register_websocket_commands
 
 
 @pytest.mark.parametrize("admin", [False, True])
-async def test_terminal_commands_are_admin_only(hass, hass_ws_client, hass_access_token, hass_read_only_access_token, admin):
+async def test_terminal_commands_are_admin_only(hass, hass_ws_client, hass_access_token, hass_read_only_access_token, install_runtime, admin):
     assert await async_setup_component(hass, "websocket_api", {})
     client = AsyncMock()
     client.async_terminal.return_value = {"state": "running"}
-    hass.data.setdefault(DOMAIN, {})[DATA_ENTRIES] = {"entry": SimpleNamespace(client=client)}
+    install_runtime(SimpleNamespace(client=client))
     async_register_websocket_commands(hass)
     connection = await hass_ws_client(hass, hass_access_token if admin else hass_read_only_access_token)
     for index, operation in enumerate(("open", "read", "write", "resize", "close"), 1):
@@ -28,10 +28,10 @@ async def test_terminal_commands_are_admin_only(hass, hass_ws_client, hass_acces
         client.async_terminal.assert_not_called()
 
 
-async def test_terminal_cannot_override_command_or_sandbox(hass, hass_ws_client, hass_access_token):
+async def test_terminal_cannot_override_command_or_sandbox(hass, hass_ws_client, hass_access_token, install_runtime):
     assert await async_setup_component(hass, "websocket_api", {})
     client = AsyncMock()
-    hass.data.setdefault(DOMAIN, {})[DATA_ENTRIES] = {"entry": SimpleNamespace(client=client)}
+    install_runtime(SimpleNamespace(client=client))
     async_register_websocket_commands(hass)
     connection = await hass_ws_client(hass, hass_access_token)
     await connection.send_json({"id": 1, "type": f"{DOMAIN}/terminal", "operation": "open", "thread_id": "chat", "command": "sh", "cwd": "/", "sandboxPolicy": {"type": "dangerFullAccess"}})

@@ -19,7 +19,6 @@ from custom_components.codex_bridge.const import (
     CONF_QUESTION_NOTIFICATIONS_TARGETS,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DOMAIN,
 )
 from custom_components.codex_bridge.question_notification_recipients import (
@@ -120,7 +119,7 @@ async def test_public_entry_reload_retains_claims_and_removal_clears_notices(has
     assert len(calls) == 2  # The retained claims must not deliver twice on reload.
     assert await hass.config_entries.async_remove(entry.entry_id) == {"require_restart": False}
     assert hass.config_entries.async_get_entry(entry.entry_id) is None
-    assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+    assert not hasattr(entry, "runtime_data")
     # A fresh owner must read the actual saved result, rather than the old
     # Store instance's cached load from before entry removal.
     saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
@@ -150,7 +149,7 @@ async def test_public_entry_removal_retains_cleanup_evidence_when_service_fails(
 
 async def _inflight_notification(hass, monkeypatch, *, source="timer"):
     entry, store, calls, _fail_clear = await _setup_connection(hass, monkeypatch, CONNECTION_TYPE_SUPERVISOR)
-    runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+    runtime = entry.runtime_data
     owner = runtime.question_notifications
     started, release = asyncio.Event(), asyncio.Event()
     second = {**_interaction(), "interaction_id": "question-2", "thread_id": "thread-2"}
@@ -188,7 +187,7 @@ async def test_public_entry_drains_inflight_delivery_before_removal(hass, monkey
     try:
         await asyncio.wait_for(_wait_for_close_fence(owner), timeout=2)
         assert not removal.done()
-        assert entry.entry_id in hass.data[DOMAIN][DATA_ENTRIES]
+        assert entry.runtime_data.question_notifications is owner
         assert not any(call[2].get("message") == "clear_notification" for call in calls)
         release.set()
         result = await asyncio.wait_for(removal, timeout=2)
@@ -199,7 +198,7 @@ async def test_public_entry_drains_inflight_delivery_before_removal(hass, monkey
             assert await hass.config_entries.async_remove(entry.entry_id) == {"require_restart": False}
         else:
             assert result == {"require_restart": False}
-        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        assert not hasattr(entry, "runtime_data")
         tag = "codex_bridge_question_question-2"
         matching = [(index, call[2]["message"]) for index, call in enumerate(calls)
                     if call[0] == "notify" and call[2].get("data", {}).get("tag") == tag]
@@ -225,7 +224,7 @@ async def test_cancelled_public_removal_keeps_owner_until_delivery_finishes(hass
         with pytest.raises(asyncio.CancelledError):
             await removal
         assert hass.config_entries.async_get_entry(entry.entry_id) is entry
-        assert hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].question_notifications is owner
+        assert entry.runtime_data.question_notifications is owner
         saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
         assert saved["interactions"]
         retry = asyncio.create_task(hass.config_entries.async_remove(entry.entry_id))
@@ -234,7 +233,6 @@ async def test_cancelled_public_removal_keeps_owner_until_delivery_finishes(hass
         assert not any(call[2].get("message") == "clear_notification" for call in calls)
         release.set()
         assert await asyncio.wait_for(retry, timeout=2) == {"require_restart": False}
-        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
         assert calls[-1][1] == "dismiss"
         saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
         assert saved == {"interactions": []}
@@ -247,8 +245,7 @@ async def test_cancelled_public_removal_keeps_owner_until_delivery_finishes(hass
 async def test_failed_public_platform_unload_still_drains_before_removal(hass, monkeypatch):
     entry, _store, calls, owner, release = await _inflight_notification(hass, monkeypatch)
     from homeassistant.components import sensor
-    allowances = hass.data[DOMAIN]["account_allowance_coordinators"]
-    allowance = allowances[entry.entry_id]
+    allowance = entry.runtime_data.account_allowance_coordinator
     close_allowance = AsyncMock(wraps=allowance.async_close)
     monkeypatch.setattr(allowance, "async_close", close_allowance)
 
@@ -257,7 +254,7 @@ async def test_failed_public_platform_unload_still_drains_before_removal(hass, m
     monkeypatch.setattr(sensor, "async_unload_entry", AsyncMock(return_value=False))
     assert await hass.config_entries.async_unload(entry.entry_id) is False
     assert entry.state is ConfigEntryState.FAILED_UNLOAD
-    assert hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].question_notifications is owner
+    assert entry.runtime_data.question_notifications is owner
     removal = asyncio.create_task(hass.config_entries.async_remove(entry.entry_id))
     try:
         await asyncio.wait_for(_wait_for_close_fence(owner), timeout=2)
@@ -267,9 +264,7 @@ async def test_failed_public_platform_unload_still_drains_before_removal(hass, m
         assert await asyncio.wait_for(removal, timeout=2) == {"require_restart": True}
         saved = await Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications").async_load()
         assert saved == {"interactions": []}
-        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
         close_allowance.assert_awaited_once()
-        assert entry.entry_id not in allowances
         matching = [call[2]["message"] for call in calls if call[0] == "notify"
                     and call[2].get("data", {}).get("tag") == "codex_bridge_question_question-2"]
         assert matching == ["A question needs your response.", "clear_notification"]

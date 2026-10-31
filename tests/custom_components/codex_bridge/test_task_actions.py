@@ -2,26 +2,29 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
+import probatio
 import pytest
 
 from homeassistant.auth.const import GROUP_ID_ADMIN, GROUP_ID_USER
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import Context
-from homeassistant.exceptions import ServiceValidationError, Unauthorized
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError, Unauthorized
 from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError, BridgeApiError
 from custom_components.codex_bridge.const import (
     CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
     CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DOMAIN,
 )
 from custom_components.codex_bridge.event_broker import EventBroker
@@ -149,7 +152,8 @@ async def test_task_service_requires_opt_in_for_automation_context_and_returns_r
         async_refresh_capabilities=AsyncMock(),
         web_search_payload=lambda: {},
     )
-    hass.data[DOMAIN] = {DATA_ENTRIES: {entry.entry_id: runtime}}
+    entry.runtime_data = runtime
+    entry.mock_state(hass, ConfigEntryState.LOADED)
     async_register_task_services(hass)
 
     with pytest.raises(Unauthorized):
@@ -336,4 +340,193 @@ async def test_task_action_refreshes_upgrade_capability_without_opening_panel(
             client.async_start_task.assert_not_awaited()
         client.async_refresh_ready.assert_awaited_once()
         assert hass.states.get(connection).state == "on"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_actions_exist_before_an_entry_loads_and_explain_why_they_fail(hass):
+    assert await async_setup_component(hass, "homeassistant", {})
+    with patch(
+        "homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)
+    ):
+        assert await async_setup_component(hass, DOMAIN, {})
+    for action in ("start_task", "continue_task", "cancel_task", "get_task"):
+        assert hass.services.has_service(DOMAIN, action)
+
+    with pytest.raises(ServiceValidationError) as raised:
+        await hass.services.async_call(
+            DOMAIN,
+            "get_task",
+            {"task_id": TASK_ID},
+            blocking=True,
+            return_response=True,
+        )
+    assert raised.value.translation_key == "not_loaded"
+    assert str(raised.value) == "Codex Bridge is not configured or loaded"
+
+
+@contextmanager
+def _loaded_task_entry(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        source="hassio",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: "a" * 48,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+        },
+        options={CONF_ALLOW_UNATTENDED_TASK_ACTIONS: True},
+        unique_id="task-error-test",
+    )
+    entry.add_to_hass(hass)
+
+    async def wait_events(*, after):
+        await asyncio.Event().wait()
+
+    client = Mock()
+    client.negotiated_api_version = 1
+    client.async_ready = AsyncMock(
+        return_value=Mock(capabilities=("api_v1", "task_actions_v1"))
+    )
+    client.async_get_status = AsyncMock(return_value={})
+    client.async_list_threads = AsyncMock(return_value=[])
+    client.async_replay_events = AsyncMock(side_effect=wait_events)
+    client.async_close = AsyncMock()
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
+    ):
+        yield entry, client
+
+
+@pytest.mark.parametrize(
+    ("error", "expected", "translation_key", "message"),
+    [
+        (
+            BridgeApiConnectionError(),
+            HomeAssistantError,
+            "cannot_connect",
+            "Home Assistant could not reach Codex Bridge",
+        ),
+        (
+            BridgeApiError("runtime_unavailable"),
+            HomeAssistantError,
+            "runtime_unavailable",
+            "The Codex Bridge App is unavailable",
+        ),
+        (
+            BridgeApiError("authentication_required"),
+            HomeAssistantError,
+            "authentication_required",
+            "Codex sign-in is required before running a task",
+        ),
+        (
+            BridgeApiError("unexpected_problem"),
+            HomeAssistantError,
+            "task_action_failed",
+            "Codex Bridge could not process this task action",
+        ),
+        (
+            BridgeApiError("task_target_not_found"),
+            ServiceValidationError,
+            "task_target_not_found",
+            "The selected Codex project or chat was not found",
+        ),
+        (
+            BridgeApiError("runtime_request_conflict"),
+            ServiceValidationError,
+            "task_retry_conflict",
+            "This task ID was already used for different work",
+        ),
+        # The Bridge's request validation answers without a specific code.
+        (
+            BridgeApiError("bridge_problem", status=422),
+            ServiceValidationError,
+            "task_action_invalid",
+            "Codex Bridge rejected the task action's data. "
+            "Check the project or chat ID, title and prompt",
+        ),
+        (
+            BridgeApiError("bad_request", status=400),
+            ServiceValidationError,
+            "task_action_invalid",
+            "Codex Bridge rejected the task action's data. "
+            "Check the project or chat ID, title and prompt",
+        ),
+    ],
+)
+async def test_app_outages_are_execution_errors_and_bad_targets_are_validation_errors(
+    hass, error, expected, translation_key, message
+):
+    assert await async_setup_component(hass, "homeassistant", {})
+    with _loaded_task_entry(hass) as (entry, client):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        client.async_start_task = AsyncMock(side_effect=error)
+        with pytest.raises(HomeAssistantError) as raised:
+            await hass.services.async_call(
+                DOMAIN,
+                "start_task",
+                {"project_id": "prj_home", "title": "Review", "prompt": "Check it."},
+                blocking=True,
+                return_response=True,
+                context=Context(),
+            )
+        assert type(raised.value) is expected
+        assert raised.value.translation_domain == DOMAIN
+        assert raised.value.translation_key == translation_key
+        # HA drops the translation's closing full stop from the message.
+        assert str(raised.value) == message
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+    # The actions stay registered for the next load.
+    assert hass.services.has_service(DOMAIN, "start_task")
+
+
+_VALID_TASK_DATA = {
+    "start_task": {"project_id": "prj_home-2", "title": "Review", "prompt": "Check it."},
+    "continue_task": {"thread_id": "thr_1", "prompt": "Check it."},
+}
+
+
+@pytest.mark.parametrize(
+    ("action", "data"),
+    [
+        ("start_task", {"project_id": "prj home", "title": "Review", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj.home", "title": "Review", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj_home ", "title": "Review", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj_home", "title": "   ", "prompt": "Check it."}),
+        ("start_task", {"project_id": "prj_home", "title": "Review", "prompt": " \n\t "}),
+        # Within 65,536 characters but over the Bridge's 65,536-byte limit.
+        ("start_task", {"project_id": "prj_home", "title": "Review", "prompt": "\u20ac" * 30_000}),
+        (
+            "start_task",
+            {"project_id": "prj_home", "title": "Review", "prompt": "Check it.",
+             "model_override": "  "},
+        ),
+        ("continue_task", {"thread_id": "thr/1", "prompt": "Check it."}),
+        ("continue_task", {"thread_id": "thr_1", "prompt": "   "}),
+    ],
+)
+async def test_actions_reject_data_the_bridge_would_refuse_before_any_request(
+    hass, action, data
+):
+    assert await async_setup_component(hass, "homeassistant", {})
+    with _loaded_task_entry(hass) as (entry, client):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        client.async_start_task = AsyncMock(return_value=TASK_REFERENCE)
+        client.async_continue_task = AsyncMock(return_value=TASK_REFERENCE)
+        with pytest.raises(probatio.Invalid):
+            await hass.services.async_call(
+                DOMAIN, action, data, blocking=True, return_response=True, context=Context()
+            )
+        client.async_start_task.assert_not_awaited()
+        client.async_continue_task.assert_not_awaited()
+
+        # The nearest valid request still reaches the App.
+        assert await hass.services.async_call(
+            DOMAIN, action, _VALID_TASK_DATA[action],
+            blocking=True, return_response=True, context=Context(),
+        ) == TASK_REFERENCE
         assert await hass.config_entries.async_unload(entry.entry_id)

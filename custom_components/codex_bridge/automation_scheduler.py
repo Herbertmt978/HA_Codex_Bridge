@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.helpers.event import async_call_later, async_track_point_in_time
 
-from .bridge_api import BridgeApiConnectionError, BridgeApiError
+from .bridge_api import BridgeApiClient, BridgeApiConnectionError, BridgeApiError
 from .const import CONNECTION_TYPE_EXTERNAL_LEGACY
 
 
@@ -18,7 +19,7 @@ class AutomationScheduler:
     def __init__(
         self,
         hass: HomeAssistant,
-        client,
+        client: BridgeApiClient,
         connection_type: str,
         *,
         web_search_mode: str | None = None,
@@ -100,7 +101,7 @@ class AutomationScheduler:
             return
         key = f"automation:{automation_id}:{revision}:{_iso(due)}"
         try:
-            claim = {
+            claim: dict[str, Any] = {
                 "due_at": _iso(due),
                 "idempotency_key": key,
                 "expected_revision": revision,

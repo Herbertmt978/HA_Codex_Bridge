@@ -1,0 +1,27 @@
+{
+  "entity": {
+    "conversation": {
+      "assist": {
+        "default": "mdi:robot-outline"
+      }
+    },
+    "sensor": {
+      "last_outcome": {
+        "default": "mdi:clipboard-check-outline",
+        "state": {
+          "failed": "mdi:alert-circle-outline",
+          "cancelled": "mdi:cancel",
+          "interrupted": "mdi:pause-circle-outline"
+        }
+      },
+      "allowance_status": {
+        "default": "mdi:gauge",
+        "state": {
+          "stale": "mdi:timer-sand",
+          "usage_unavailable": "mdi:gauge-empty",
+          "reauthentication_required": "mdi:account-key"
+        }
+      }
+    }
+  }
+}

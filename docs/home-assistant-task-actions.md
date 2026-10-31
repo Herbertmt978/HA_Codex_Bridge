@@ -36,6 +36,11 @@ multiple actions in the same script run. Supply the original ID explicitly
 when retrying a request. A changed request under an existing ID is rejected
 rather than run again.
 
+Project and chat IDs contain only letters, digits, underscores and hyphens, up
+to 128 characters. The title, prompt and any model or reasoning override must
+not be blank, and the prompt may not exceed 65,536 bytes. Home Assistant
+rejects other values before contacting the App.
+
 For example, an HA script may call:
 
 ```yaml
@@ -81,3 +86,12 @@ They cannot enable Home Assistant OS host access, including when continuing an
 existing host-access chat. An archived target, busy chat, unavailable provider
 or invalid model/effort fails without starting a second run. Configure the
 project and any permitted workspace access in the Bridge first.
+
+The actions are registered when Home Assistant loads the Integration, so they
+exist even while the App connection is not loaded. A call then fails with a
+validation error explaining that Codex Bridge is not configured or loaded. A
+problem the caller can correct, such as an unknown project or chat, a busy chat,
+a reused task ID, an unavailable model or data the App rejects, is also a
+validation error. An App
+outage, a Codex sign-in requirement or a full Codex queue is an ordinary action
+error, because the same request can succeed later.

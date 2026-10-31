@@ -34,6 +34,15 @@ Do not rely on selecting a prior App image through Supervisor: that rollback
 path is not yet validated. It becomes a supported recovery option only after a
 prior immutable tag and restore procedure are published and tested.
 
+## Changing an external Bridge's address or token
+
+If the external Bridge moves or its token changes, open **Settings** >
+**Devices & services** > **Codex Bridge** > **⋮** > **Reconfigure**. Enter
+the Bridge's current private address and token. Home Assistant checks the
+connection before saving it, keeps the same Integration entry and its entities,
+and reloads it. An App connection cannot be reconfigured this way: Supervisor
+discovery manages its address and token, so restart the App instead.
+
 ## Windows appendix
 
 A Windows VM is one optional legacy way to run an external Bridge. Keep it

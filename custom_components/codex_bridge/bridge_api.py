@@ -5,7 +5,7 @@ import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote, urlencode
 
 import aiohttp
@@ -207,6 +207,8 @@ def _task_answer_payload(value: object, expected_task_id: str) -> dict[str, Any]
     """Validate the App's bounded answer without passing through other run data."""
 
     reference = _task_action_payload(value, expected_task_id)
+    if not isinstance(value, dict):
+        raise BridgeApiEndpointError("task_payload_invalid")
     answer = value.get("answer")
     if answer is not None and (
         reference["status"] != "completed"
@@ -364,6 +366,7 @@ def _interaction_answers(value: object) -> list[dict[str, Any]]:
 class BridgeApiError(RuntimeError):
     code = "bridge_error"
     retryable = False
+    status: int | None
 
     def __init__(
         self,
@@ -572,7 +575,7 @@ class BridgeApiClient:
             raise BridgeApiCapabilityError()
 
     async def async_health(self) -> dict[str, Any]:
-        return await self._async_json("GET", "/health")
+        return await self._async_object("GET", "/health")
 
     async def async_ready(
         self,
@@ -624,24 +627,24 @@ class BridgeApiClient:
         return ready
 
     async def async_get_status(self) -> dict[str, Any]:
-        return await self._async_json("GET", "/status")
+        return await self._async_object("GET", "/status")
 
     async def async_consume_reset_credit(
         self, credit_id: str, idempotency_key: str,
     ) -> dict[str, Any]:
         self.require_capability("reset_credits_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST", "/account/reset-credits/consume",
             json_body={"credit_id": credit_id, "idempotency_key": idempotency_key},
         )
 
     async def async_get_auth_status(self) -> dict[str, Any]:
-        return await self._async_json("GET", "/auth/status")
+        return await self._async_object("GET", "/auth/status")
 
     async def async_start_auth_login(
         self, force_logout: bool = False
     ) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/auth/device-login",
             json_body={"force_logout": force_logout},
@@ -649,38 +652,38 @@ class BridgeApiClient:
         )
 
     async def async_logout_auth(self) -> dict[str, Any]:
-        return await self._async_json("POST", "/auth/logout")
+        return await self._async_object("POST", "/auth/logout")
 
     async def async_list_account_profiles(self) -> list[dict[str, Any]]:
         self.require_capability("account_profiles_v1")
-        return await self._async_json("GET", "/auth/profiles")
+        return await self._async_list("GET", "/auth/profiles")
 
     async def async_account_profile_details(self, profile_id: str) -> dict[str, Any]:
         self.require_capability("account_profile_details_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET", f"/auth/profiles/{_path_segment(profile_id)}/details",
         )
 
     async def async_account_profile_telemetry(self) -> dict[str, Any]:
         """Read cached allowances without refreshing or selecting an account."""
         self.require_capability("account_profile_telemetry_v1")
-        return await self._async_json("GET", "/auth/profiles/telemetry")
+        return await self._async_object("GET", "/auth/profiles/telemetry")
 
     async def async_save_account_profile(self, label: str) -> dict[str, Any]:
         self.require_capability("account_profiles_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST", "/auth/profiles", json_body={"label": label}
         )
 
     async def async_switch_account_profile(self, profile_id: str) -> dict[str, Any]:
         self.require_capability("account_profiles_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST", "/auth/profiles/switch", json_body={"profile_id": profile_id}
         )
 
     async def async_prepare_new_account_login(self) -> dict[str, Any]:
         self.require_capability("account_profiles_v1")
-        return await self._async_json("POST", "/auth/profiles/prepare-login")
+        return await self._async_object("POST", "/auth/profiles/prepare-login")
 
     async def async_remove_account_profile(self, profile_id: str) -> None:
         self.require_capability("account_profiles_v1")
@@ -689,7 +692,7 @@ class BridgeApiClient:
         )
 
     async def async_list_projects(self) -> list[dict[str, Any]]:
-        return await self._async_json("GET", "/projects")
+        return await self._async_list("GET", "/projects")
 
     async def async_create_project(
         self,
@@ -705,7 +708,7 @@ class BridgeApiClient:
             json_body["default_thinking_level"] = default_thinking_level
         if root_path:
             json_body["root_path"] = root_path
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/projects",
             json_body=json_body,
@@ -717,20 +720,20 @@ class BridgeApiClient:
         project_id: str,
         updates: dict[str, Any],
     ) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "PATCH",
             f"/projects/{_path_segment(project_id)}",
             json_body=updates,
         )
 
     async def async_archive_project(self, project_id: str) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/projects/{_path_segment(project_id)}/archive",
         )
 
     async def async_restore_project(self, project_id: str) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/projects/{_path_segment(project_id)}/restore",
         )
@@ -746,12 +749,12 @@ class BridgeApiClient:
         query = ""
         if path:
             query = f"?path={quote(path, safe='')}"
-        return await self._async_json("GET", f"/projects/browse{query}")
+        return await self._async_object("GET", f"/projects/browse{query}")
 
     async def async_create_folder(
         self, parent_path: str, folder_name: str
     ) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/projects/folders",
             json_body={
@@ -801,7 +804,7 @@ class BridgeApiClient:
         self, thread_id: str, sequence: int
     ) -> dict[str, Any]:
         self.require_capability("transcript_search_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"/threads/{_path_segment(thread_id)}/transcript/{sequence}",
         )
@@ -814,38 +817,38 @@ class BridgeApiClient:
         params: dict[str, str | int] = {"q": query, "limit": limit}
         if before_cursor is not None:
             params["before_cursor"] = before_cursor
-        return await self._async_json(
+        return await self._async_object(
             "GET", f"/threads/{_path_segment(thread_id)}/search?{urlencode(params)}",
         )
 
     async def async_get_goal(self, thread_id: str) -> dict[str, Any]:
         self.require_capability("durable_goals_v1")
-        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}/goal")
+        return await self._async_object("GET", f"/threads/{_path_segment(thread_id)}/goal")
 
     async def async_goal_action(self, thread_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("durable_goals_v1")
-        return await self._async_json("POST", f"/threads/{_path_segment(thread_id)}/goal/actions", json_body=payload)
+        return await self._async_object("POST", f"/threads/{_path_segment(thread_id)}/goal/actions", json_body=payload)
 
     async def async_attention_inbox(self) -> dict[str, Any]:
         self.require_capability("attention_inbox_v1")
-        return await self._async_json("GET", "/attention")
+        return await self._async_object("GET", "/attention")
 
     async def async_chat_context(self, thread_id: str, *, source_thread_id: str, before_sequence: int | None = None) -> dict[str, Any]:
         self.require_capability("chat_context_v1")
         params = {"before_sequence": before_sequence} if before_sequence is not None else {}
-        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}/chat-context/{_path_segment(source_thread_id)}?{urlencode(params)}")
+        return await self._async_object("GET", f"/threads/{_path_segment(thread_id)}/chat-context/{_path_segment(source_thread_id)}?{urlencode(params)}")
 
     async def async_read_chat_context(self, thread_id: str, *, source_thread_id: str, message_sequence: int | None = None, start_char: int | None = None, end_char: int | None = None) -> dict[str, Any]:
         self.require_capability("chat_context_v1")
-        payload = {"source_thread_id": source_thread_id}
+        payload: dict[str, Any] = {"source_thread_id": source_thread_id}
         for key, value in (("message_sequence", message_sequence), ("start_char", start_char), ("end_char", end_char)):
             if value is not None:
                 payload[key] = value
-        return await self._async_json("POST", f"/threads/{_path_segment(thread_id)}/chat-context/read", json_body=payload)
+        return await self._async_object("POST", f"/threads/{_path_segment(thread_id)}/chat-context/read", json_body=payload)
 
     async def async_child_agents(self, thread_id: str) -> dict[str, Any]:
         self.require_capability("subagents_v1")
-        return await self._async_json("GET", f"/threads/{_path_segment(thread_id)}/children")
+        return await self._async_object("GET", f"/threads/{_path_segment(thread_id)}/children")
 
     async def async_child_agent_action(
         self, thread_id: str, child_id: str, action: str, *,
@@ -857,7 +860,7 @@ class BridgeApiClient:
         payload = {} if action == "refresh" else {
             "revision": revision, "client_request_id": client_request_id,
         }
-        return await self._async_json(
+        return await self._async_object(
             "POST", f"/threads/{_path_segment(thread_id)}/children/{_path_segment(child_id)}/{action}",
             json_body=payload,
         )
@@ -870,13 +873,13 @@ class BridgeApiClient:
             params["thread_id"] = _path_segment(thread_id)
         if project_id is not None:
             params["project_id"] = _path_segment(project_id)
-        return await self._async_json("GET", f"/usage?{urlencode(params)}")
+        return await self._async_object("GET", f"/usage?{urlencode(params)}")
 
     async def async_workspace_context(
         self, thread_id: str, *, directory: str = ".",
     ) -> dict[str, Any]:
         self.require_capability("workspace_context_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET", f"/threads/{_path_segment(thread_id)}/workspace-context?{urlencode({'directory': directory})}",
         )
 
@@ -889,7 +892,7 @@ class BridgeApiClient:
         for key, value in (("start_line", start_line), ("end_line", end_line), ("expected_revision", expected_revision)):
             if value is not None:
                 payload[key] = value
-        return await self._async_json(
+        return await self._async_object(
             "POST", f"/threads/{_path_segment(thread_id)}/workspace-context/read",
             json_body=payload,
         )
@@ -987,15 +990,16 @@ class BridgeApiClient:
         payload = await self._async_json("GET", "/chat-sections")
         if not isinstance(payload, dict) or not isinstance(payload.get("sections"), list):
             raise BridgeApiEndpointError("chat_section_payload_invalid")
-        return payload["sections"]
+        sections: list[dict[str, Any]] = payload["sections"]
+        return sections
 
     async def async_create_chat_section(self, name: str) -> dict[str, Any]:
         self.require_capability("chat_operations_v1")
-        return await self._async_json("POST", "/chat-sections", json_body={"name": name}, expected_status={201})
+        return await self._async_object("POST", "/chat-sections", json_body={"name": name}, expected_status={201})
 
     async def async_update_chat_section(self, section_id: str, name: str, revision: int) -> dict[str, Any]:
         self.require_capability("chat_operations_v1")
-        return await self._async_json("PATCH", f"/chat-sections/{_path_segment(section_id)}", json_body={"name": name, "revision": revision})
+        return await self._async_object("PATCH", f"/chat-sections/{_path_segment(section_id)}", json_body={"name": name, "revision": revision})
 
     async def async_delete_chat_section(self, section_id: str, revision: int) -> None:
         self.require_capability("chat_operations_v1")
@@ -1097,7 +1101,7 @@ class BridgeApiClient:
             if not isinstance(workspace_context, list) or not 1 <= len(workspace_context) <= 8:
                 raise BridgeApiError("bad_request")
             payload["workspace_context"] = workspace_context
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/threads/{_path_segment(thread_id)}/prompts",
             json_body=payload,
@@ -1123,7 +1127,7 @@ class BridgeApiClient:
         expected_revision: int,
     ) -> dict[str, Any]:
         self.require_capability("prompt_queue_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PATCH",
             f"/threads/{_path_segment(thread_id)}/queue/{_path_segment(run_id)}",
             json_body={
@@ -1138,13 +1142,13 @@ class BridgeApiClient:
         run_id: str,
     ) -> dict[str, Any]:
         self.require_capability("prompt_queue_v1")
-        return await self._async_json(
+        return await self._async_object(
             "DELETE",
             f"/threads/{_path_segment(thread_id)}/queue/{_path_segment(run_id)}",
         )
 
     async def async_cancel_run(self, thread_id: str) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/threads/{_path_segment(thread_id)}/runs/current/cancel",
         )
@@ -1184,7 +1188,7 @@ class BridgeApiClient:
     ) -> list[dict[str, Any]]:
         self.require_legacy_v0()
         after = _nonnegative_cursor(after)
-        return await self._async_json(
+        return await self._async_list(
             "GET",
             f"/threads/{_path_segment(thread_id)}/events/replay?after={after}",
         )
@@ -1264,7 +1268,7 @@ class BridgeApiClient:
         query.append(("limit", limit))
         if endpoint == "/events/wait":
             query.append(("timeout_seconds", BRIDGE_EVENT_WAIT_SECONDS))
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"{endpoint}?{urlencode(query)}",
             maximum_bytes=BRIDGE_EVENT_BATCH_MAX_BYTES,
@@ -1272,7 +1276,7 @@ class BridgeApiClient:
 
     async def async_cancel_auth_login(self) -> dict[str, Any]:
         self.require_api_v1()
-        return await self._async_json("POST", "/auth/device-login/cancel")
+        return await self._async_object("POST", "/auth/device-login/cancel")
 
     async def async_list_pending_interactions(
         self, *, thread_id: str | None = None
@@ -1298,7 +1302,7 @@ class BridgeApiClient:
         self.require_capability("interactions_v2")
         if decision not in {"accept", "decline", "cancel"}:
             raise BridgeApiEndpointError("decision_invalid")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/interactions/{_path_segment(interaction_id)}/decision",
             json_body={
@@ -1318,7 +1322,7 @@ class BridgeApiClient:
     ) -> dict[str, Any]:
         self.require_capability("interactions_v2")
         normalized_answers = _interaction_answers(answers)
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/interactions/{_path_segment(interaction_id)}/answer",
             json_body={
@@ -1339,7 +1343,7 @@ class BridgeApiClient:
         self.require_capability("mcp_elicitation_v1")
         if not isinstance(content, dict) or len(content) > 16:
             raise BridgeApiEndpointError("mcp_form_invalid")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/interactions/{_path_segment(interaction_id)}/mcp-form",
             json_body={
@@ -1350,7 +1354,7 @@ class BridgeApiClient:
         )
 
     async def async_list_artifacts(self, thread_id: str) -> list[dict[str, Any]]:
-        return await self._async_json(
+        return await self._async_list(
             "GET",
             f"/threads/{_path_segment(thread_id)}/artifacts",
             maximum_bytes=_ARTIFACT_LIST_MAX_BYTES,
@@ -1358,14 +1362,14 @@ class BridgeApiClient:
 
     async def async_preview_artifact(self, thread_id: str, artifact_id: str) -> dict[str, Any]:
         self.require_capability("office_preview_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"/threads/{_path_segment(thread_id)}/artifacts/{_path_segment(artifact_id)}/preview",
             maximum_bytes=128 * 1024,
         )
 
     async def async_create_workspace_archive(self, thread_id: str) -> dict[str, Any]:
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/threads/{_path_segment(thread_id)}/artifacts/workspace-archive",
             expected_status={201},
@@ -1384,7 +1388,7 @@ class BridgeApiClient:
         """Create one API v1 resumable upload session."""
 
         self.require_api_v1()
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/threads/{_path_segment(thread_id)}/uploads",
             json_body={
@@ -1408,7 +1412,7 @@ class BridgeApiClient:
         """Return resumable upload status without touching its payload."""
 
         self.require_api_v1()
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"/threads/{_path_segment(thread_id)}/uploads/{_path_segment(upload_id)}",
             maximum_bytes=_FILE_METADATA_MAX_BYTES,
@@ -1432,7 +1436,7 @@ class BridgeApiClient:
         chunk_offset = _upload_index(offset)
         chunk_length = _upload_size(content_length, maximum=_UPLOAD_CHUNK_MAX_BYTES)
         digest = _upload_sha256(sha256)
-        return await self._async_json(
+        return await self._async_object(
             "PUT",
             (
                 f"/threads/{_path_segment(thread_id)}/uploads/"
@@ -1456,7 +1460,7 @@ class BridgeApiClient:
         """Publish a checksum-verified upload session exactly once."""
 
         self.require_api_v1()
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             (
                 f"/threads/{_path_segment(thread_id)}/uploads/"
@@ -1474,7 +1478,7 @@ class BridgeApiClient:
         """Cancel a resumable upload; the Bridge operation is idempotent."""
 
         self.require_api_v1()
-        return await self._async_json(
+        return await self._async_object(
             "DELETE",
             f"/threads/{_path_segment(thread_id)}/uploads/{_path_segment(upload_id)}",
             maximum_bytes=_FILE_METADATA_MAX_BYTES,
@@ -1551,7 +1555,7 @@ class BridgeApiClient:
         )
         if relative_path:
             form_data.add_field("relative_path", relative_path)
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/threads/{_path_segment(thread_id)}/attachments",
             data=form_data,
@@ -1570,10 +1574,12 @@ class BridgeApiClient:
 
         self.require_legacy_v0()
         media_type = _upload_text(content_type, maximum_bytes=512)
-        if not media_type.lower().startswith("multipart/form-data; boundary="):
+        if media_type is None or not media_type.lower().startswith(
+            "multipart/form-data; boundary="
+        ):
             raise BridgeApiEndpointError("content_type_invalid")
         length = _upload_size(content_length)
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/threads/{_path_segment(thread_id)}/attachments",
             data=content,
@@ -1613,36 +1619,36 @@ class BridgeApiClient:
 
     async def async_host_access(self) -> dict[str, Any]:
         self.require_capability("host_access_v1")
-        return await self._async_json("GET", "/host-access")
+        return await self._async_object("GET", "/host-access")
 
     async def async_terminal(self, operation: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("workspace_terminal_v1")
         if operation not in {"open", "read", "write", "resize", "close"}:
             raise ValueError("Invalid terminal operation")
-        return await self._async_json("POST", f"/terminal/{operation}", json_body=payload)
+        return await self._async_object("POST", f"/terminal/{operation}", json_body=payload)
 
     async def async_pair_host_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("host_access_v1")
-        return await self._async_json("PUT", "/host-access/worker", json_body=payload)
+        return await self._async_object("PUT", "/host-access/worker", json_body=payload)
 
     async def async_enable_host_access(self, revision: str, acknowledged: bool) -> dict[str, Any]:
         self.require_capability("host_access_v1")
-        return await self._async_json("POST", "/host-access/enable", json_body={
+        return await self._async_object("POST", "/host-access/enable", json_body={
             "scope_revision": revision, "acknowledged": acknowledged,
         })
 
     async def async_revoke_host_access(self) -> dict[str, Any]:
         self.require_capability("host_access_v1")
-        return await self._async_json("POST", "/host-access/revoke", json_body={})
+        return await self._async_object("POST", "/host-access/revoke", json_body={})
 
     # Home Assistant-owned Automations -------------------------------------------------
     async def async_list_automations(self) -> list[dict[str, Any]]:
         self.require_capability("automations_v1")
-        return await self._async_json("GET", "/automations")
+        return await self._async_list("GET", "/automations")
 
     async def async_get_automation(self, automation_id: str) -> dict[str, Any]:
         self.require_capability("automations_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET", f"/automations/{_path_segment(automation_id)}"
         )
 
@@ -1654,7 +1660,7 @@ class BridgeApiClient:
             self.require_capability("automation_proposals_v1")
         if payload.get("mode") == "haos-full-access" or payload.get("host_access_grant") is not None:
             self.require_capability("host_access_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/automations",
             json_body=_bounded_mapping(payload),
@@ -1663,7 +1669,7 @@ class BridgeApiClient:
 
     async def async_preview_automation_schedule(self, schedule: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("automation_proposals_v1")
-        return await self._async_json("POST", "/automations/preview", json_body={"schedule": _bounded_mapping(schedule)})
+        return await self._async_object("POST", "/automations/preview", json_body={"schedule": _bounded_mapping(schedule)})
 
     async def async_update_automation(
         self, automation_id: str, payload: dict[str, Any]
@@ -1673,7 +1679,7 @@ class BridgeApiClient:
             self.require_capability("automation_notifications_v1")
         if payload.get("mode") == "haos-full-access" or "host_access_grant" in payload:
             self.require_capability("host_access_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PATCH",
             f"/automations/{_path_segment(automation_id)}",
             json_body=_bounded_mapping(payload),
@@ -1683,7 +1689,7 @@ class BridgeApiClient:
         self, automation_id: str, expected_revision: int
     ) -> dict[str, Any]:
         self.require_capability("automations_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/automations/{_path_segment(automation_id)}/pause",
             json_body={"expected_revision": _positive_int(expected_revision)},
@@ -1693,7 +1699,7 @@ class BridgeApiClient:
         self, automation_id: str, expected_revision: int
     ) -> dict[str, Any]:
         self.require_capability("automations_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/automations/{_path_segment(automation_id)}/resume",
             json_body={"expected_revision": _positive_int(expected_revision)},
@@ -1717,7 +1723,7 @@ class BridgeApiClient:
         payload: dict[str, Any] = {"source": "manual"}
         if web_search is not None and "web_search_v1" in self._capabilities:
             payload["web_search"] = _web_search_mode(web_search)
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/automations/{_path_segment(automation_id)}/runs",
             json_body=payload,
@@ -1742,7 +1748,7 @@ class BridgeApiClient:
         }
         if web_search is not None and "web_search_v1" in self._capabilities:
             payload["web_search"] = _web_search_mode(web_search)
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/automations/{_path_segment(automation_id)}/runs",
             json_body=payload,
@@ -1755,7 +1761,7 @@ class BridgeApiClient:
         self.require_capability("automations_v1")
         if type(limit) is not int or not 1 <= limit <= 200:
             raise BridgeApiEndpointError("automation_limit_invalid")
-        return await self._async_json(
+        return await self._async_list(
             "GET", f"/automations/{_path_segment(automation_id)}/runs?limit={limit}"
         )
 
@@ -1769,27 +1775,27 @@ class BridgeApiClient:
 
     async def async_scheduler_automations(self) -> dict[str, Any]:
         self.require_capability("automations_v1")
-        return await self._async_json("GET", "/automations/scheduler")
+        return await self._async_object("GET", "/automations/scheduler")
 
     # Capability and AGENTS.md proxy ----------------------------------------------------
     async def async_list_skills(
         self, workspace_path: str, *, force_reload: bool = False
     ) -> dict[str, Any]:
         self.require_capability("skills_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"/capabilities/skills?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}&force_reload={'true' if force_reload else 'false'}",
         )
 
     async def async_set_skill(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("skills_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PATCH", "/capabilities/skills", json_body=_bounded_mapping(payload)
         )
 
     async def async_create_skill(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("skills_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/capabilities/skills",
             json_body=_bounded_mapping(payload),
@@ -1820,7 +1826,7 @@ class BridgeApiClient:
         self, workspace_path: str, *, installed_only: bool = False
     ) -> dict[str, Any]:
         self.require_capability("plugins_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"/capabilities/plugins?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}&installed_only={'true' if installed_only else 'false'}",
             maximum_bytes=BRIDGE_PLUGIN_LIST_MAX_BYTES,
@@ -1834,7 +1840,7 @@ class BridgeApiClient:
         payload: dict[str, Any] = {"plugin_name": _bounded_text(plugin_name, 128)}
         if marketplace_name is not None:
             payload["marketplace_name"] = _bounded_text(marketplace_name, 128)
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/capabilities/plugins/install",
             json_body=payload,
@@ -1853,7 +1859,7 @@ class BridgeApiClient:
         self, workspace_path: str = "."
     ) -> dict[str, Any]:
         self.require_capability("plugins_v1")
-        return await self._async_json(
+        return await self._async_object(
             "GET",
             f"/capabilities/marketplaces?workspace_path={quote(_bounded_text(workspace_path, 4096), safe='')}",
             maximum_bytes=BRIDGE_PLUGIN_LIST_MAX_BYTES,
@@ -1862,7 +1868,7 @@ class BridgeApiClient:
 
     async def async_add_marketplace(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("plugins_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/capabilities/marketplaces",
             json_body=_bounded_mapping(payload),
@@ -1879,19 +1885,19 @@ class BridgeApiClient:
 
     async def async_upgrade_marketplace(self, marketplace_name: str) -> dict[str, Any]:
         self.require_capability("plugins_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             f"/capabilities/marketplaces/{_capability_name_path_segment(marketplace_name)}/upgrade",
         )
 
     async def async_list_mcp(self) -> list[dict[str, Any]]:
         self._require_mcp_capability()
-        return await self._async_json("GET", "/mcp/servers")
+        return await self._async_list("GET", "/mcp/servers")
 
     async def async_list_stdio_packages(self) -> list[dict[str, Any]]:
         self._require_mcp_capability()
         self.require_capability("mcp_stdio_v1")
-        return await self._async_json("GET", "/mcp/stdio/packages")
+        return await self._async_list("GET", "/mcp/stdio/packages")
 
     async def async_add_stdio_mcp(self, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_mcp_capability()
@@ -1900,7 +1906,7 @@ class BridgeApiClient:
         self.require_capability("mcp_tool_permissions_v1")
         if payload.get("acknowledged") is not True:
             raise ValueError("Stdio package approval is required")
-        return await self._async_json(
+        return await self._async_object(
             "POST", "/mcp/stdio/servers", json_body=_bounded_mapping(payload),
             expected_status={201}, request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
@@ -1911,7 +1917,7 @@ class BridgeApiClient:
         self.require_capability("mcp_management_v1")
         if payload.get("acknowledged") is not True:
             raise ValueError("Stdio package approval is required")
-        return await self._async_json(
+        return await self._async_object(
             "POST", f"/mcp/stdio/servers/{_path_segment(name)}/update",
             json_body=_bounded_mapping(payload), request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
@@ -1920,7 +1926,7 @@ class BridgeApiClient:
         self._require_mcp_capability()
         self.require_capability("mcp_stdio_v1")
         self.require_capability("mcp_management_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST", f"/mcp/stdio/servers/{_path_segment(name)}/rollback",
             json_body={"expected_revision": expected_revision},
             request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
@@ -1930,7 +1936,7 @@ class BridgeApiClient:
         """Submit a privately discovered community endpoint; never return its URL."""
         self._require_mcp_capability()
         self.require_capability("community_mcp_quick_connect_v1")
-        return await self._async_json("POST", "/mcp/community/connection",
+        return await self._async_object("POST", "/mcp/community/connection",
             json_body={"name": name, "url": url, "connect": connect, "acknowledged": connect},
             request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT)
 
@@ -1942,7 +1948,7 @@ class BridgeApiClient:
             self.require_capability("mcp_local_v1")
         if "authentication" in payload or "auth_acknowledged" in payload:
             self.require_capability("mcp_credentials_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST",
             "/mcp/servers",
             json_body=_bounded_mapping(payload),
@@ -1960,7 +1966,7 @@ class BridgeApiClient:
         self.require_capability("mcp_credentials_v1")
         if payload is not None and any(key in payload for key in ("expected_url", "expected_token_sha256")):
             self.require_capability("mcp_credential_binding_v1")
-        return await self._async_json(
+        return await self._async_object(
             "DELETE" if payload is None else "PUT",
             f"/mcp/servers/{_path_segment(name)}/credential",
             json_body=_bounded_mapping(payload) if payload is not None else None,
@@ -1979,7 +1985,7 @@ class BridgeApiClient:
     async def async_manage_mcp(self, name: str, payload: dict[str, Any], *, state: bool = False) -> dict[str, Any]:
         self._require_mcp_capability()
         self.require_capability("mcp_management_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PUT", f"/mcp/servers/{_path_segment(name)}" + ("/state" if state else ""),
             json_body=_bounded_mapping(payload),
             request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
@@ -1990,7 +1996,7 @@ class BridgeApiClient:
         self.require_capability("mcp_tool_permissions_v1")
         # The Bridge caps at 512 tools and 512 description characters each;
         # non-BMP characters can expand to 12 bytes in escaped JSON.
-        return await self._async_json("POST", f"/mcp/servers/{_path_segment(name)}/tools/discover",
+        return await self._async_object("POST", f"/mcp/servers/{_path_segment(name)}/tools/discover",
                                       maximum_bytes=4 * 1024 * 1024)
 
     async def async_set_mcp_tools(self, name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1998,7 +2004,7 @@ class BridgeApiClient:
         self.require_capability("mcp_tool_permissions_v1")
         if "approval_mode" in payload:
             self.require_capability("mcp_tool_approval_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PUT", f"/mcp/servers/{_path_segment(name)}/tools",
             json_body=_bounded_mapping(payload), request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
@@ -2006,14 +2012,14 @@ class BridgeApiClient:
     async def async_lock_down_mcp_tools(self, name: str, revision: str) -> dict[str, Any]:
         self._require_mcp_capability()
         self.require_capability("mcp_tool_approval_v1")
-        return await self._async_json(
+        return await self._async_object(
             "POST", f"/mcp/servers/{_path_segment(name)}/tools/lockdown",
             json_body={"revision": revision}, request_timeout=MCP_MANAGEMENT_REQUEST_TIMEOUT,
         )
 
     async def async_login_mcp(self, name: str) -> dict[str, Any]:
         self._require_mcp_capability()
-        return await self._async_json(
+        return await self._async_object(
             "POST", f"/mcp/servers/{_path_segment(name)}/oauth/login"
         )
 
@@ -2024,27 +2030,27 @@ class BridgeApiClient:
 
     async def async_get_agents(self, project_id: str | None = None) -> dict[str, Any]:
         self.require_capability("agents_v1")
-        return await self._async_json("GET", _agents_path(project_id))
+        return await self._async_object("GET", _agents_path(project_id))
 
     async def async_get_discord_config(self) -> dict[str, Any]:
         self.require_capability("discord_channel_v1")
-        return await self._async_json("GET", "/discord/config", maximum_bytes=16 * 1024)
+        return await self._async_object("GET", "/discord/config", maximum_bytes=16 * 1024)
 
     async def async_set_discord_config(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.require_capability("discord_channel_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PUT", "/discord/config", json_body=payload, maximum_bytes=16 * 1024
         )
 
     async def async_revoke_discord(self) -> dict[str, Any]:
         self.require_capability("discord_channel_v1")
-        return await self._async_json("POST", "/discord/revoke", maximum_bytes=16 * 1024)
+        return await self._async_object("POST", "/discord/revoke", maximum_bytes=16 * 1024)
 
     async def async_update_agents(
         self, project_id: str | None, content: str
     ) -> dict[str, Any]:
         self.require_capability("agents_v1")
-        return await self._async_json(
+        return await self._async_object(
             "PUT",
             _agents_path(project_id),
             json_body={"content": _bounded_content(content, 256 * 1024)},
@@ -2055,6 +2061,16 @@ class BridgeApiClient:
         await self._async_no_content(
             "DELETE", _agents_path(project_id), expected_status={204}
         )
+
+    async def _async_object(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        """Return a JSON object response; the App's API contract defines its shape."""
+
+        return cast(dict[str, Any], await self._async_json(method, path, **kwargs))
+
+    async def _async_list(self, method: str, path: str, **kwargs: Any) -> list[dict[str, Any]]:
+        """Return a JSON array response; the App's API contract defines its shape."""
+
+        return cast(list[dict[str, Any]], await self._async_json(method, path, **kwargs))
 
     async def _async_json(
         self,

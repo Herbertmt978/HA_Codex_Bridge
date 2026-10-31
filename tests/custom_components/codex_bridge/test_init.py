@@ -36,12 +36,11 @@ from custom_components.codex_bridge.const import (
     CONF_DISCOVERY_UUID,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DATA_VIEWS_REGISTERED,
     DATA_WS_REGISTERED,
     DOMAIN,
 )
-from custom_components.codex_bridge.runtime import normalize_web_search_mode
+from custom_components.codex_bridge.runtime import async_get_runtime, normalize_web_search_mode
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 
@@ -96,7 +95,6 @@ async def test_setup_and_reload_keep_views_and_websocket_registration_process_li
         patch("custom_components.codex_bridge.async_remove_panel") as remove_panel,
     ):
         assert await _setup_entry(hass, entry)
-        assert hass.services.has_service(DOMAIN, "start_task")
         assert await async_unload_entry(hass, entry)
         assert await _setup_entry(hass, entry)
 
@@ -106,9 +104,8 @@ async def test_setup_and_reload_keep_views_and_websocket_registration_process_li
     assert remove_panel.call_count == 1
     assert hass.data[DOMAIN][DATA_VIEWS_REGISTERED]
     assert hass.data[DOMAIN][DATA_WS_REGISTERED]
-    assert entry.entry_id in hass.data[DOMAIN][DATA_ENTRIES]
     client.async_close.assert_awaited_once()
-    runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+    runtime = entry.runtime_data
     assert runtime.connection_type == CONNECTION_TYPE_SUPERVISOR
     assert runtime.discovery_uuid == entry.unique_id
     assert runtime.api_version == 1
@@ -143,7 +140,7 @@ async def test_external_entry_requires_the_explicit_legacy_capability(hass):
         assert await _setup_entry(hass, entry)
 
     client.require_legacy_v0.assert_called_once_with()
-    runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+    runtime = entry.runtime_data
     assert runtime.connection_type == CONNECTION_TYPE_EXTERNAL_LEGACY
     assert runtime.discovery_uuid is None
     assert runtime.api_version == 0
@@ -166,7 +163,7 @@ async def test_supervisor_runtime_defaults_live_web_search_when_advertised(hass)
         patch("custom_components.codex_bridge.async_remove_panel"),
     ):
         assert await _setup_entry(hass, entry)
-        runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+        runtime = entry.runtime_data
         assert runtime.web_search_mode == "live"
         assert runtime.web_search_payload() == {"web_search": "live"}
         assert await async_unload_entry(hass, entry)
@@ -197,6 +194,8 @@ def test_web_search_mode_is_normalized_to_supported_supervisor_values(
 
 
 async def test_setup_refuses_a_second_active_connection(hass):
+    # The conversation dependency needs HA's exposed-entity registry.
+    assert await async_setup_component(hass, "homeassistant", {})
     first = _entry(hass)
     second = MockConfigEntry(
         domain=DOMAIN,
@@ -210,23 +209,96 @@ async def test_setup_refuses_a_second_active_connection(hass):
         source="hassio",
         unique_id="f" * 32,
     )
-    second.add_to_hass(hass)
     client = Mock()
     client.async_ready = AsyncMock(return_value=object())
+    client.async_close = AsyncMock()
     client.require_api_v1 = Mock()
     client.negotiated_api_version = 1
+    client.async_get_status = AsyncMock(return_value={})
+    client.async_list_threads = AsyncMock(return_value=[])
+
+    async def wait_for_events(*, after: int) -> None:
+        await asyncio.Event().wait()
+
+    client.async_replay_events = AsyncMock(side_effect=wait_for_events)
     with (
         patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
         patch("custom_components.codex_bridge.async_register_http_views"),
         patch("custom_components.codex_bridge.async_register_websocket_commands"),
         patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
     ):
-        assert await _setup_entry(hass, first)
-        with pytest.raises(ConfigEntryNotReady):
-            await _setup_entry(hass, second)
+        assert await hass.config_entries.async_setup(first.entry_id)
+        second.add_to_hass(hass)
+        assert not await hass.config_entries.async_setup(second.entry_id)
 
-    assert set(hass.data[DOMAIN][DATA_ENTRIES]) == {first.entry_id}
-    assert await async_unload_entry(hass, first)
+        assert first.state is ConfigEntryState.LOADED
+        assert second.state is ConfigEntryState.SETUP_RETRY
+        assert second.error_reason_translation_key == "connection_already_active"
+        assert await hass.config_entries.async_unload(first.entry_id)
+
+
+async def test_a_failed_unload_keeps_its_live_runtime_exclusive(hass, monkeypatch):
+    # The conversation dependency needs HA's exposed-entity registry.
+    assert await async_setup_component(hass, "homeassistant", {})
+    first = _entry(hass)
+    second = MockConfigEntry(
+        domain=DOMAIN,
+        title="Second Codex Bridge",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.2:8766",
+            CONF_BRIDGE_TOKEN: "b" * 48,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+            CONF_DISCOVERY_UUID: "f" * 32,
+        },
+        source="hassio",
+        unique_id="f" * 32,
+    )
+    client = Mock()
+    client.async_ready = AsyncMock(return_value=Mock(capabilities=()))
+    client.async_close = AsyncMock()
+    client.require_api_v1 = Mock()
+    client.negotiated_api_version = 1
+    client.async_get_status = AsyncMock(return_value={})
+    client.async_list_threads = AsyncMock(return_value=[])
+
+    async def wait_for_events(*, after: int) -> None:
+        await asyncio.Event().wait()
+
+    client.async_replay_events = AsyncMock(side_effect=wait_for_events)
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_http_views"),
+        patch("custom_components.codex_bridge.async_register_websocket_commands"),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel") as remove_panel,
+        patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
+    ):
+        assert await hass.config_entries.async_setup(first.entry_id)
+        live = first.runtime_data
+        # Fail only HA's sensor platform unload; the first runtime stays open.
+        from homeassistant.components import sensor
+
+        monkeypatch.setattr(sensor, "async_unload_entry", AsyncMock(return_value=False))
+        assert not await hass.config_entries.async_unload(first.entry_id)
+        assert first.state is ConfigEntryState.FAILED_UNLOAD
+        assert not live.closed
+        remove_panel.assert_not_called()
+        monkeypatch.undo()
+
+        second.add_to_hass(hass)
+        assert not await hass.config_entries.async_setup(second.entry_id)
+        assert second.state is ConfigEntryState.SETUP_RETRY
+        assert second.error_reason_translation_key == "connection_already_active"
+
+        # Removal drains the surviving runtime, which frees the connection.
+        await hass.config_entries.async_remove(first.entry_id)
+        assert live.closed
+        assert await hass.config_entries.async_reload(second.entry_id)
+        assert second.state is ConfigEntryState.LOADED
+        assert await hass.config_entries.async_unload(second.entry_id)
+        remove_panel.assert_called_once()
 
 
 async def test_partial_setup_closes_runtime_and_preserves_permanent_registrations(hass):
@@ -247,7 +319,7 @@ async def test_partial_setup_closes_runtime_and_preserves_permanent_registration
     ):
         with pytest.raises(RuntimeError, match="panel failed"):
             await _setup_entry(hass, entry)
-        assert not hass.data[DOMAIN][DATA_ENTRIES]
+        client.async_close.assert_awaited_once()
         assert await _setup_entry(hass, entry)
 
     assert http_views.call_count == 1
@@ -282,7 +354,7 @@ async def test_v1_event_consumer_is_config_entry_owned_and_cancelled_on_unload(h
     ):
         assert await _setup_entry(hass, entry)
         await asyncio.wait_for(started.wait(), 1)
-        runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+        runtime = entry.runtime_data
         broker_task = runtime.event_broker._task
         assert broker_task is not None
         assert broker_task in entry._background_tasks
@@ -430,7 +502,9 @@ async def test_bridge_error_after_readiness_retries_setup_until_it_loads(
         assert entry.state is ConfigEntryState.SETUP_RETRY
         assert entry.error_reason_translation_key == "not_ready"
         assert entry.reason == "Codex Bridge is not ready yet"
-        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        # Domain-wide views and actions cannot reach the closed runtime.
+        with pytest.raises(RuntimeError):
+            async_get_runtime(hass)
         client.async_close.assert_awaited_once()
         # Platforms were never forwarded, so cleanup must not try to unload them.
         assert "Ignored unload request" not in caplog.text
@@ -462,7 +536,8 @@ async def test_token_rejected_after_readiness_starts_reauthentication(hass):
         "Codex Bridge rejected the saved Home Assistant connection token"
     )
     assert list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
-    assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+    with pytest.raises(RuntimeError):
+        async_get_runtime(hass)
     client.async_close.assert_awaited_once()
 
 
@@ -479,7 +554,7 @@ async def test_live_update_token_rejection_starts_reauthentication(hass):
         assert entry.state is ConfigEntryState.LOADED
         [flow] = entry.async_get_active_flows(hass, {SOURCE_REAUTH})
         assert flow["step_id"] == "reauth_confirm"
-        runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+        runtime = entry.runtime_data
         assert runtime.event_broker.connection_status["state"] == "authentication_failed"
         assert await hass.config_entries.async_unload(entry.entry_id)
 
@@ -510,7 +585,7 @@ async def test_app_reauth_restarts_live_updates_stopped_by_a_rejected_token(hass
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
-        stopped = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].event_broker
+        stopped = entry.runtime_data.event_broker
         assert stopped.connection_status["state"] == "authentication_failed"
         [flow] = entry.async_get_active_flows(hass, {SOURCE_REAUTH})
 
@@ -521,7 +596,7 @@ async def test_app_reauth_restarts_live_updates_stopped_by_a_rejected_token(hass
         assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "reauth_successful"
         assert entry.state is ConfigEntryState.LOADED
-        restarted = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].event_broker
+        restarted = entry.runtime_data.event_broker
         assert restarted is not stopped
         assert restarted.connection_status["state"] == "connecting"
         assert replays == 2
@@ -590,5 +665,6 @@ async def test_setup_cancelled_while_forwarding_unloads_the_platforms(hass):
         await _setup_entry(hass, entry)
 
     unload_platforms.assert_awaited_once_with(entry, PLATFORMS)
-    assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+    with pytest.raises(RuntimeError):
+        async_get_runtime(hass)
     client.async_close.assert_awaited_once()

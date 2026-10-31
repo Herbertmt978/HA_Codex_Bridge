@@ -9,7 +9,7 @@ import re
 
 from aiohttp import web
 
-from homeassistant.components.http import HomeAssistantView
+from homeassistant.helpers.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import Unauthorized
 
@@ -280,8 +280,9 @@ class CodexBridgeArtifactDownloadView(HomeAssistantView):
                         "Content-Disposition": attachment_disposition(
                             artifact.get("filename")
                         ),
-                        "Content-Length": upstream.headers.get("Content-Length"),
                     }
+                    if (length := upstream.headers.get("Content-Length")) is not None:
+                        upstream_headers["Content-Length"] = length
                 headers = safe_download_headers(upstream.status, upstream_headers)
                 response = web.StreamResponse(status=upstream.status, headers=headers)
                 await response.prepare(request)

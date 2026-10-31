@@ -9,10 +9,9 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from homeassistant.setup import async_setup_component
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.codex_bridge import async_setup_entry, async_unload_entry
 from custom_components.codex_bridge.const import (
     CONF_BRIDGE_TOKEN,
     CONF_BRIDGE_URL,
@@ -22,14 +21,9 @@ from custom_components.codex_bridge.const import (
 )
 from custom_components.codex_bridge.entity_coordinator import BridgeEntityCoordinator, project_status
 from custom_components.codex_bridge.event_broker import EventBroker
-from custom_components.codex_bridge.runtime import async_get_runtime
+from custom_components.codex_bridge.host_access import SUPERVISOR_SLUG_KEY
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
-
-
-async def _setup_entry(hass, entry):
-    async with entry.setup_lock:
-        return await async_setup_entry(hass, entry)
 
 
 NOW = datetime(2026, 9, 23, 12, tzinfo=UTC)
@@ -145,7 +139,7 @@ async def test_event_during_refresh_triggers_follow_up(hass):
 
     client.async_list_threads = AsyncMock(side_effect=list_threads)
     broker = EventBroker(AsyncMock(), initial_cursor=0)
-    coordinator = BridgeEntityCoordinator(hass, Mock(client=client, event_broker=broker))
+    coordinator = BridgeEntityCoordinator(hass, None, Mock(client=client, event_broker=broker))
 
     async def emit(cursor, event_type):
         await broker._consume({
@@ -186,7 +180,7 @@ async def test_auth_change_clears_usage_while_the_new_snapshot_is_pending(hass):
     client.async_get_status = AsyncMock(side_effect=status_after_switch)
     client.async_list_threads = AsyncMock(return_value=[])
     broker = EventBroker(AsyncMock(), initial_cursor=0)
-    coordinator = BridgeEntityCoordinator(hass, Mock(client=client, event_broker=broker))
+    coordinator = BridgeEntityCoordinator(hass, None, Mock(client=client, event_broker=broker))
     coordinator.async_set_updated_data(project_status(
         _status(at=datetime.now(UTC)), [], now=datetime.now(UTC), last_outcome="completed",
     ))
@@ -259,7 +253,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         patch("custom_components.codex_bridge.async_remove_panel"),
         patch("homeassistant.components.frontend.async_setup", new=AsyncMock(return_value=True)),
     ):
-        assert await _setup_entry(hass, entry)
+        assert await hass.config_entries.async_setup(entry.entry_id)
         registry = er.async_get(hass)
         first = {
             (item.domain, item.unique_id): item.entity_id
@@ -271,7 +265,7 @@ async def test_registry_ids_and_availability_survive_reload(hass):
         assert hass.states.get(first[("sensor", f"{entry.entry_id}_five_hour_used")]).state == "27.5"
 
         client.async_list_threads.return_value = [{"status": "running", "title": "private prompt"}]
-        broker = async_get_runtime(hass).event_broker
+        broker = entry.runtime_data.event_broker
         await broker._consume({
             "events": [{
                 "cursor": 1, "event_id": "evt_1", "scope": "thread",
@@ -304,37 +298,40 @@ async def test_registry_ids_and_availability_survive_reload(hass):
             "next_cursor": 3, "minimum_cursor": 0, "has_more": False, "heartbeat": False,
         })
         await hass.async_block_till_done()
-        assert hass.states.get(first[("sensor", f"{entry.entry_id}_last_outcome")]).state == "unavailable"
+        assert hass.states.get(first[("sensor", f"{entry.entry_id}_last_outcome")]).state == "unknown"
 
         # A lost App makes the connection off and the remaining entities unavailable.
         from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError
         client.async_get_status.side_effect = BridgeApiConnectionError()
-        await async_get_runtime(hass).entity_coordinator.async_refresh()
+        await entry.runtime_data.entity_coordinator.async_refresh()
         assert hass.states.get(first[("binary_sensor", f"{entry.entry_id}_connection")]).state == "off"
         assert hass.states.get(first[("binary_sensor", f"{entry.entry_id}_task_running")]).state == "unavailable"
 
-        assert await async_unload_entry(hass, entry)
+        assert await hass.config_entries.async_unload(entry.entry_id)
         client.async_get_status.side_effect = None
-        assert await _setup_entry(hass, entry)
+        assert await hass.config_entries.async_setup(entry.entry_id)
         second = {
             (item.domain, item.unique_id): item.entity_id
             for item in registry.entities.values()
             if item.config_entry_id == entry.entry_id
         }
         assert second == first
-        assert await async_unload_entry(hass, entry)
+        assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 @asynccontextmanager
-async def _loaded_usage_entities(hass, *, weekly_only=False, customise=None):
+async def _loaded_usage_entities(hass, *, weekly_only=False, customise=None, slug=None):
     assert await async_setup_component(hass, "homeassistant", {})
+    data = {
+        CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+        CONF_BRIDGE_TOKEN: "a" * 48,
+        CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+    }
+    if slug is not None:
+        data[SUPERVISOR_SLUG_KEY] = slug
     entry = MockConfigEntry(
         domain=DOMAIN, title="Codex Bridge App", source="hassio",
-        data={
-            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
-            CONF_BRIDGE_TOKEN: "a" * 48,
-            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
-        },
+        data=data,
         unique_id="bridge-usage-visibility-test",
     )
     entry.add_to_hass(hass)
@@ -342,7 +339,9 @@ async def _loaded_usage_entities(hass, *, weekly_only=False, customise=None):
     if customise is not None:
         customise(registry, entry)
     client = Mock()
-    client.async_ready = AsyncMock(return_value=Mock(capabilities=("api_v1",)))
+    client.async_ready = AsyncMock(
+        return_value=Mock(capabilities=("api_v1",), app_version="1.13.22")
+    )
     client.require_api_v1 = Mock()
     client.negotiated_api_version = 1
     status = _weekly_status if weekly_only else _status
@@ -384,7 +383,7 @@ async def test_five_hour_visibility_tracks_allowance_without_replacing_entities(
     async with _loaded_usage_entities(hass, weekly_only=weekly_only) as (entry, client, registry, ids):
         unrelated = registry.async_get_or_create("sensor", DOMAIN, "unrelated-allowance")
         client.async_get_status.return_value = _weekly_status(at=datetime.now(UTC))
-        coordinator = async_get_runtime(hass).entity_coordinator
+        coordinator = entry.runtime_data.entity_coordinator
         await coordinator.async_refresh()
         await hass.async_block_till_done()
         for key in ("five_hour_used", "five_hour_reset"):
@@ -392,7 +391,7 @@ async def test_five_hour_visibility_tracks_allowance_without_replacing_entities(
             assert item.hidden_by is er.RegistryEntryHider.INTEGRATION
             assert item.disabled_by is None
             assert item.unique_id == f"{entry.entry_id}_{key}"
-            assert hass.states.get(ids[key]).state == "unavailable"
+            assert hass.states.get(ids[key]).state == "unknown"
         assert registry.async_get(ids["weekly_used"]).hidden_by is None
         assert float(hass.states.get(ids["weekly_used"]).state) == 80
         assert registry.async_get(unrelated.entity_id).hidden_by is None
@@ -428,10 +427,10 @@ async def test_allowance_visibility_preserves_user_hidden_and_disabled_choices(h
         registry.async_update_entity(usage.entity_id, name="My five-hour diagnostic")
         registry.async_update_entity_options(reset.entity_id, "sensor", {"precision": 1})
 
-    async with _loaded_usage_entities(hass, customise=customise) as (_, client, registry, ids):
+    async with _loaded_usage_entities(hass, customise=customise) as (entry, client, registry, ids):
         for status in (_weekly_status, _status):
             client.async_get_status.return_value = status(at=datetime.now(UTC))
-            await async_get_runtime(hass).entity_coordinator.async_refresh()
+            await entry.runtime_data.entity_coordinator.async_refresh()
             await hass.async_block_till_done()
             assert registry.async_get(ids["five_hour_used"]).hidden_by is er.RegistryEntryHider.USER
             assert registry.async_get(ids["five_hour_used"]).name == "My five-hour diagnostic"
@@ -448,11 +447,11 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
         assert registry.async_get(ids["five_hour_used"]).options[DOMAIN] == {
             "retained_option": True, "five_hour_visibility": "manual",
         }
-        await async_get_runtime(hass).entity_coordinator.async_refresh()
+        await entry.runtime_data.entity_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(ids["five_hour_used"]).hidden_by is None
 
-        old_coordinator = async_get_runtime(hass).entity_coordinator
+        old_coordinator = entry.runtime_data.entity_coordinator
         assert await hass.config_entries.async_unload(entry.entry_id)
         await hass.async_block_till_done()
         unloaded_listener_count = hass.bus.async_listeners().get(er.EVENT_ENTITY_REGISTRY_UPDATED, 0)
@@ -474,6 +473,72 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
             assert registry.async_get(ids[key]).options[DOMAIN]["five_hour_visibility"] == "manual"
             assert registry.async_get_entity_id("sensor", DOMAIN, f"{entry.entry_id}_{key}") == ids[key]
         client.async_get_status.return_value = _status(at=datetime.now(UTC))
-        await async_get_runtime(hass).entity_coordinator.async_refresh()
+        await entry.runtime_data.entity_coordinator.async_refresh()
         await hass.async_block_till_done()
         assert registry.async_get(ids["five_hour_used"]).options[DOMAIN]["five_hour_visibility"] == "manual"
+
+
+async def test_entities_use_translated_names_on_one_service_device(hass):
+    async with _loaded_usage_entities(hass) as (entry, client, registry, ids):
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
+        assert device is not None
+        assert device.entry_type is dr.DeviceEntryType.SERVICE
+        assert device.name == "Codex Bridge App"
+        assert device.model == "Home Assistant App"
+        assert device.sw_version == "1.13.22"
+        # No Supervisor App device is known for this connection.
+        assert device.via_device_id is None
+        entities = [
+            item for item in registry.entities.values()
+            if item.config_entry_id == entry.entry_id
+        ]
+        assert {item.device_id for item in entities} == {device.id}
+        assert all(item.has_entity_name for item in entities)
+        assert all(item.translation_key for item in entities)
+
+        connection = registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{entry.entry_id}_connection"
+        )
+        assert hass.states.get(connection).name == "Codex Bridge App Connection"
+        assert hass.states.get(ids["weekly_used"]).name == "Codex Bridge App Weekly usage"
+        outcome = hass.states.get(registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_last_outcome"
+        ))
+        # The App answered, but no run has finished since setup.
+        assert outcome.state == "unknown"
+        assert outcome.name == "Codex Bridge App Last task outcome"
+        assert outcome.attributes["options"] == [
+            "completed", "failed", "cancelled", "interrupted",
+        ]
+
+        # An App update reconnects without reloading the entry; the device and
+        # diagnostics follow the new release.
+        client.async_refresh_ready = AsyncMock(
+            return_value=Mock(capabilities=("api_v1",), app_version="1.13.23")
+        )
+        assert await entry.runtime_data.async_refresh_capabilities(force=True)
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
+        assert device.sw_version == "1.13.23"
+        assert entry.runtime_data.device_info["sw_version"] == "1.13.23"
+
+
+async def test_app_connection_device_is_shown_under_its_supervisor_app(hass, caplog):
+    supervisor = MockConfigEntry(domain="hassio")
+    supervisor.add_to_hass(hass)
+    app = dr.async_get(hass).async_get_or_create(
+        config_entry_id=supervisor.entry_id,
+        identifiers={("hassio", "local_codex_bridge")},
+        name="Codex Bridge",
+        entry_type=dr.DeviceEntryType.SERVICE,
+    )
+    async with _loaded_usage_entities(hass, slug="local_codex_bridge") as (entry, *_):
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
+        assert device.via_device_id == app.id
+        assert device.config_entry_id == entry.entry_id
+    assert "deprecated" not in caplog.text

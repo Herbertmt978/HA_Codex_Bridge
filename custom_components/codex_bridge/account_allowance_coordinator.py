@@ -2,18 +2,25 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .bridge_api import BridgeApiError
-from .runtime import CodexBridgeRuntime
+from .const import DOMAIN
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
+
+if TYPE_CHECKING:
+    from .sensor import AccountAllowanceEntityManager
 
 
 UPDATE_INTERVAL = timedelta(seconds=60)
@@ -24,6 +31,7 @@ _EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE)
 _BEARER = re.compile(r"\bbearer\s+[A-Z0-9._~+/-]+=*", re.IGNORECASE)
 _SECRET = re.compile(r"\b(token|api[_ -]?key|password|secret)\s*[:=]\s*[^\s,;]+", re.IGNORECASE)
 _PATH = re.compile(r"(?:[A-Za-z]:\\|\\\\|/(?:data|config|share|home|root|Users)/)[^\s,;]+")
+_REAUTHENTICATION_ISSUE = "account_reauthentication"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,7 +94,12 @@ def _timestamp(value: object) -> datetime | None:
 
 
 def _percent(value: object) -> float | None:
-    if type(value) not in (int, float) or not 0 <= value <= 100 or not math.isfinite(value):
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not 0 <= value <= 100
+        or not math.isfinite(value)
+    ):
         return None
     return round(float(value), 1)
 
@@ -120,8 +133,12 @@ def _profile(row: object, now: datetime) -> AccountAllowance:
         if not isinstance(item, Mapping):
             raise ValueError("account telemetry window is invalid")
         name = item.get("name")
-        expected_minutes = _WINDOW_MINUTES.get(name) if isinstance(name, str) else None
-        if expected_minutes is None or item.get("window_minutes") != expected_minutes or name in windows:
+        if (
+            not isinstance(name, str)
+            or (expected_minutes := _WINDOW_MINUTES.get(name)) is None
+            or item.get("window_minutes") != expected_minutes
+            or name in windows
+        ):
             continue
         reset = _timestamp(item.get("resets_at"))
         windows[name] = AllowanceWindow(_percent(item.get("remaining_percent")), reset)
@@ -179,27 +196,100 @@ def project_account_telemetry(payload: object, *, now: datetime | None = None) -
 class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot]):
     """Poll one cached Bridge projection; native profile refresh stays App-owned."""
 
-    def __init__(self, hass: HomeAssistant, runtime: CodexBridgeRuntime) -> None:
+    config_entry: CodexBridgeConfigEntry
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        config_entry: CodexBridgeConfigEntry,
+        runtime: CodexBridgeRuntime,
+    ) -> None:
         super().__init__(
             hass,
             logger=logging.getLogger(__name__),
+            config_entry=config_entry,
             name="Codex Bridge account allowances",
             update_interval=UPDATE_INTERVAL,
             always_update=False,
         )
         self.runtime = runtime
+        # The sensor platform owns the account entities; closing ends its sync.
+        self.manager: AccountAllowanceEntityManager | None = None
 
     async def _async_update_data(self) -> AccountAllowanceSnapshot:
         if not self.runtime.supports_capability("account_profile_telemetry_v1"):
             raise UpdateFailed("Saved-account usage telemetry is unavailable")
         try:
             payload = await self.runtime.client.async_account_profile_telemetry()
-            return project_account_telemetry(payload)
+            snapshot = project_account_telemetry(payload)
         except (BridgeApiError, TypeError, ValueError) as error:
             raise UpdateFailed("Saved-account usage telemetry is unavailable") from error
+        self._sync_reauthentication_issues(snapshot)
+        return snapshot
+
+    @callback
+    def _sync_reauthentication_issues(self, snapshot: AccountAllowanceSnapshot) -> None:
+        """Raise one repair per signed-out account and close it on proof of sign-in.
+
+        A stale or unreported account proves nothing about its sign-in: after an
+        App restart every account is unreported until the App checks it again.
+        Keeping its repair also keeps an administrator's Ignore.
+        """
+
+        entry_id = self.config_entry.entry_id
+        prefix = _reauthentication_issue_prefix(entry_id)
+        keep: set[str] = set()
+        present: set[str] = set()
+        for profile in snapshot.profiles.values():
+            issue_id = _reauthentication_issue_id(entry_id, profile.profile_id)
+            present.add(issue_id)
+            if profile.status == "available" and not profile.reauthentication_required:
+                continue
+            keep.add(issue_id)
+            if not (
+                profile.reauthentication_required
+                or profile.status == "reauthentication_required"
+            ):
+                continue
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="account_reauthentication_required",
+                translation_placeholders={"account": profile.label},
+            )
+        for domain, issue_id in tuple(ir.async_get(self.hass).issues):
+            if domain != DOMAIN or not issue_id.startswith(prefix) or issue_id in keep:
+                continue
+            # A signed-in account closes its own repair. A missing account's
+            # repair closes only when a complete inventory proves its removal.
+            if issue_id in present or snapshot.inventory_complete:
+                ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def async_close(self) -> None:
-        manager = getattr(self, "manager", None)
-        if manager is not None:
-            await manager.async_close()
+        if self.manager is not None:
+            await self.manager.async_close()
         await self.async_shutdown()
+
+
+def _reauthentication_issue_prefix(entry_id: str) -> str:
+    return f"{_REAUTHENTICATION_ISSUE}_{entry_id}_"
+
+
+def _reauthentication_issue_id(entry_id: str, profile_id: str) -> str:
+    # Issue IDs appear in diagnostics downloads, so keep the App's account
+    # identifier out of them while staying stable for each account.
+    digest = hashlib.sha256(f"{entry_id}:{profile_id}".encode()).hexdigest()[:16]
+    return f"{_reauthentication_issue_prefix(entry_id)}{digest}"
+
+
+@callback
+def async_delete_reauthentication_issues(hass: HomeAssistant, entry_id: str) -> None:
+    """Remove a deleted entry's account repairs; unloading keeps them."""
+
+    prefix = _reauthentication_issue_prefix(entry_id)
+    for domain, issue_id in tuple(ir.async_get(hass).issues):
+        if domain == DOMAIN and issue_id.startswith(prefix):
+            ir.async_delete_issue(hass, DOMAIN, issue_id)

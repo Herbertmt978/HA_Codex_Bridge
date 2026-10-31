@@ -4,64 +4,64 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .account_allowance_coordinator import MAX_USAGE_AGE, AccountAllowance, AccountAllowanceCoordinator, AccountAllowanceSnapshot
 from .entity import BridgeEntity
 from .const import DOMAIN
-from .runtime import async_get_runtime
+from .entity_coordinator import TERMINAL_OUTCOMES, BridgeEntityCoordinator
+from .runtime import CodexBridgeConfigEntry, CodexBridgeRuntime
+
+# Two coordinators refresh every entity; these entities make no requests.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: CodexBridgeConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    runtime = async_get_runtime(hass)
+    runtime = entry.runtime_data
     coordinator = runtime.entity_coordinator
     if coordinator is None:
         return
     async_add_entities(
         [
             BridgeLastOutcomeSensor(coordinator, runtime, "last_outcome"),
-            BridgeUsageSensor(coordinator, runtime, "five_hour_used", "5-hour usage"),
-            BridgeUsageSensor(coordinator, runtime, "weekly_used", "Weekly usage"),
-            BridgeResetSensor(coordinator, runtime, "five_hour_reset", "5-hour reset"),
-            BridgeResetSensor(coordinator, runtime, "weekly_reset", "Weekly reset"),
+            BridgeUsageSensor(coordinator, runtime, "five_hour_used"),
+            BridgeUsageSensor(coordinator, runtime, "weekly_used"),
+            BridgeResetSensor(coordinator, runtime, "five_hour_reset"),
+            BridgeResetSensor(coordinator, runtime, "weekly_reset"),
         ]
     )
-    await _async_setup_account_allowance_sensors(hass, entry, runtime, async_add_entities)
-
-
-async def _async_setup_account_allowance_sensors(
-    hass: HomeAssistant, entry: ConfigEntry, runtime, async_add_entities: AddEntitiesCallback,
-) -> None:
-    coordinator = AccountAllowanceCoordinator(hass, runtime)
-    coordinators = hass.data.setdefault(DOMAIN, {}).setdefault("account_allowance_coordinators", {})
-    coordinators[entry.entry_id] = coordinator
-    if runtime.supports_capability("account_profile_telemetry_v1"):
-        # An account telemetry outage must not prevent the other platforms
-        # loading. Retain registered profiles and retry through this coordinator.
-        await coordinator.async_refresh()
-    manager = AccountAllowanceEntityManager(hass, entry, runtime, coordinator, async_add_entities)
-    coordinator.manager = manager
+    allowance_coordinator = runtime.account_allowance_coordinator
+    if allowance_coordinator is None:
+        return
+    manager = AccountAllowanceEntityManager(
+        hass, entry, runtime, allowance_coordinator, async_add_entities
+    )
+    allowance_coordinator.manager = manager
     await manager.async_sync()
-    manager.remove_listener = coordinator.async_add_listener(manager.coordinator_updated)
+    manager.remove_listener = allowance_coordinator.async_add_listener(
+        manager.coordinator_updated
+    )
 
 
 class BridgeLastOutcomeSensor(BridgeEntity, SensorEntity):
-    _attr_name = "Last task outcome"
+    """Report the latest terminal run outcome; unknown until one is observed."""
 
-    @property
-    def available(self) -> bool:
-        return super().available and self.coordinator.data.last_outcome is not None
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(TERMINAL_OUTCOMES)
 
     @property
     def native_value(self) -> str | None:
@@ -72,10 +72,11 @@ class BridgeLastOutcomeSensor(BridgeEntity, SensorEntity):
 class _BridgeAllowanceSensor(BridgeEntity, SensorEntity):
     """Reversibly hide unused five-hour diagnostics without disabling them."""
 
-    def __init__(self, coordinator, runtime, key: str, name: str) -> None:
+    def __init__(
+        self, coordinator: BridgeEntityCoordinator, runtime: CodexBridgeRuntime, key: str
+    ) -> None:
         super().__init__(coordinator, runtime, key)
         self._key = key
-        self._attr_name = name
         self._visibility_entry_id = runtime.entry_id
         self._visibility_changes: deque[er.RegistryEntryHider | None] = deque()
         if key in ("five_hour_used", "five_hour_reset"):
@@ -94,14 +95,17 @@ class _BridgeAllowanceSensor(BridgeEntity, SensorEntity):
         self._reconcile_visibility()
 
     @callback
-    def _visibility_registry_updated(self, event: Event) -> None:
+    def _visibility_registry_updated(
+        self, event: Event[er.EventEntityRegistryUpdatedData]
+    ) -> None:
+        data: Mapping[str, Any] = event.data
         if (
-            event.data.get("action") != "update"
-            or event.data.get("entity_id") != self.entity_id
-            or "hidden_by" not in event.data.get("changes", {})
+            data.get("action") != "update"
+            or data.get("entity_id") != self.entity_id
+            or "hidden_by" not in data.get("changes", {})
         ):
             return
-        old_hidden_by = event.data["changes"]["hidden_by"]
+        old_hidden_by = data["changes"]["hidden_by"]
         if self._visibility_changes and old_hidden_by == self._visibility_changes[0]:
             self._visibility_changes.popleft()
             return
@@ -112,7 +116,9 @@ class _BridgeAllowanceSensor(BridgeEntity, SensorEntity):
             self._save_visibility_policy(registry, entry, "manual")
 
     @callback
-    def _save_visibility_policy(self, registry, entry, policy: str) -> None:
+    def _save_visibility_policy(
+        self, registry: er.EntityRegistry, entry: er.RegistryEntry, policy: str
+    ) -> None:
         options = dict(entry.options.get(DOMAIN, {}))
         if options.get("five_hour_visibility") != policy:
             options["five_hour_visibility"] = policy
@@ -131,7 +137,8 @@ class _BridgeAllowanceSensor(BridgeEntity, SensorEntity):
             or entry.hidden_by is er.RegistryEntryHider.USER
         ):
             return
-        policy = entry.options.get(DOMAIN, {}).get("five_hour_visibility")
+        saved: Mapping[str, Any] = entry.options.get(DOMAIN, {})
+        policy = saved.get("five_hour_visibility")
         if policy == "manual":
             return
         if policy == "automatic_hidden" and entry.hidden_by is None:
@@ -162,14 +169,10 @@ class BridgeUsageSensor(_BridgeAllowanceSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def available(self) -> bool:
-        data = self.coordinator.data
-        return super().available and data is not None and getattr(data, self._key) is not None
-
-    @property
     def native_value(self) -> float | None:
         data = self.coordinator.data
-        return getattr(data, self._key) if data is not None else None
+        value: float | None = getattr(data, self._key) if data is not None else None
+        return value
 
 
 class BridgeResetSensor(_BridgeAllowanceSensor):
@@ -177,54 +180,84 @@ class BridgeResetSensor(_BridgeAllowanceSensor):
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def available(self) -> bool:
-        data = self.coordinator.data
-        return super().available and data is not None and getattr(data, self._key) is not None
-
-    @property
     def native_value(self) -> datetime | None:
         data = self.coordinator.data
-        return getattr(data, self._key) if data is not None else None
+        value: datetime | None = getattr(data, self._key) if data is not None else None
+        return value
 
 
-_ACCOUNT_SENSOR_LABELS = {
-    "status": "allowance status",
-    "five_hour_used": "5-hour usage",
-    "five_hour_remaining": "5-hour remaining",
-    "five_hour_reset": "5-hour reset",
-    "weekly_used": "weekly usage",
-    "weekly_remaining": "weekly remaining",
-    "weekly_reset": "weekly reset",
-    "reset_credits": "available reset credits",
-    "next_reset_expiry": "next known reset credit expiry",
+# Registry keys and their entity translation keys. The keys stay stable because
+# they form part of each entity's unique ID.
+_ACCOUNT_SENSOR_KEYS = {
+    "status": "allowance_status",
+    "five_hour_used": "five_hour_used",
+    "five_hour_remaining": "five_hour_remaining",
+    "five_hour_reset": "five_hour_reset",
+    "weekly_used": "weekly_used",
+    "weekly_remaining": "weekly_remaining",
+    "weekly_reset": "weekly_reset",
+    "reset_credits": "reset_credits",
+    "next_reset_expiry": "next_reset_expiry",
 }
 _ACCOUNT_FIVE_HOUR_KEYS = {"five_hour_used", "five_hour_remaining", "five_hour_reset"}
+# The App's "unavailable" profile status means it has no usage for that account.
+# It is a known status, not HA's unavailable state.
+_ACCOUNT_STATUS_STATES = {
+    "available": "available",
+    "stale": "stale",
+    "unavailable": "usage_unavailable",
+    "reauthentication_required": "reauthentication_required",
+}
+
+
+def account_device_identifier(entry_id: str, profile_id: str) -> tuple[str, str]:
+    return (DOMAIN, f"{entry_id}_profile_{profile_id}")
 
 
 class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], SensorEntity):
     """One stable, privacy-safe sensor for a saved account profile."""
 
-    _attr_has_entity_name = False
+    _attr_has_entity_name = True
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_state_class: SensorStateClass | None = SensorStateClass.MEASUREMENT
 
-    def __init__(self, coordinator, runtime, profile_id: str, key: str) -> None:
+    def __init__(
+        self,
+        coordinator: AccountAllowanceCoordinator,
+        runtime: CodexBridgeRuntime,
+        profile_id: str,
+        key: str,
+    ) -> None:
         super().__init__(coordinator)
         self._runtime = runtime
         self._profile_id = profile_id
         self._key = key
         self._attr_unique_id = f"{runtime.entry_id}_profile_allowance_{profile_id}_{key}"
+        self._attr_translation_key = _ACCOUNT_SENSOR_KEYS[key]
+        profile = self._profile
+        # Each saved account is its own service device, named by its label.
+        device_info = DeviceInfo(
+            identifiers={account_device_identifier(runtime.entry_id, profile_id)},
+            name=profile.label if profile is not None else "Saved account",
+            manufacturer="Codex Bridge",
+            model="Saved ChatGPT account",
+            entry_type=DeviceEntryType.SERVICE,
+        )
+        if runtime.device_id is not None:
+            device_info["via_device_id"] = runtime.device_id
+        self._attr_device_info = device_info
         self._visibility_entry_id = runtime.entry_id
         self._visibility_changes: deque[er.RegistryEntryHider | None] = deque()
         if key == "status":
             self._attr_state_class = None
+            self._attr_device_class = SensorDeviceClass.ENUM
+            self._attr_options = list(_ACCOUNT_STATUS_STATES.values())
         if key.endswith("_used") or key.endswith("_remaining"):
             self._attr_native_unit_of_measurement = PERCENTAGE
         if key.endswith("_reset") or key == "next_reset_expiry":
             self._attr_device_class = SensorDeviceClass.TIMESTAMP
             self._attr_state_class = None
         if key in _ACCOUNT_FIVE_HOUR_KEYS:
-            profile = self._profile
             self._attr_entity_registry_visible_default = not (
                 profile is not None and profile.status == "available" and profile.five_hour_enabled is False
             )
@@ -235,24 +268,10 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
         return data.profiles.get(self._profile_id) if data is not None else None
 
     @property
-    def name(self) -> str:
+    def telemetry_status(self) -> str | None:
         profile = self._profile
-        label = profile.label if profile is not None else "Saved account"
-        return f"{label} {_ACCOUNT_SENSOR_LABELS[self._key]}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._runtime.discovery_uuid or self._runtime.entry_id)},
-            name=self._runtime.title,
-            manufacturer="Codex Bridge",
-        )
-
-    @property
-    def telemetry_status(self) -> str:
-        profile = self._profile
-        if not self.coordinator.last_update_success or profile is None:
-            return "unavailable"
+        if profile is None:
+            return None
         if profile.reauthentication_required:
             return "reauthentication_required"
         if profile.status == "available" and (
@@ -260,37 +279,35 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
             or not 0 <= (datetime.now(UTC) - profile.updated_at).total_seconds() <= MAX_USAGE_AGE.total_seconds()
         ):
             return "stale"
-        return profile.status
+        return _ACCOUNT_STATUS_STATES[profile.status]
 
     @property
     def available(self) -> bool:
-        profile = self._profile
-        if profile is None:
-            return False
-        if self._key == "status":
-            # Status reports a source outage and the age of retained data even
-            # when HA omits attributes from unavailable allowance entities.
-            return True
-        return super().available and self.telemetry_status == "available" and self._value(profile) is not None
+        # The App answered. A stale, signed-out or unreported account has an
+        # unknown value rather than an unavailable entity.
+        return super().available and self._profile is not None
 
     def _value(self, profile: AccountAllowance) -> str | float | int | datetime | None:
-        windows = profile.windows
         if self._key == "status":
             return self.telemetry_status
+        if self.telemetry_status != "available":
+            return None
         if self._key in _ACCOUNT_FIVE_HOUR_KEYS and profile.five_hour_enabled is False:
             return None
+        five_hour = profile.windows.get("5 hours")
+        weekly = profile.windows.get("Weekly")
         if self._key == "five_hour_used":
-            return windows.get("5 hours").used_percent if windows.get("5 hours") else None
+            return five_hour.used_percent if five_hour else None
         if self._key == "five_hour_remaining":
-            return windows.get("5 hours").remaining_percent if windows.get("5 hours") else None
+            return five_hour.remaining_percent if five_hour else None
         if self._key == "five_hour_reset":
-            return windows.get("5 hours").resets_at if windows.get("5 hours") else None
+            return five_hour.resets_at if five_hour else None
         if self._key == "weekly_used":
-            return windows.get("Weekly").used_percent if windows.get("Weekly") else None
+            return weekly.used_percent if weekly else None
         if self._key == "weekly_remaining":
-            return windows.get("Weekly").remaining_percent if windows.get("Weekly") else None
+            return weekly.remaining_percent if weekly else None
         if self._key == "weekly_reset":
-            return windows.get("Weekly").resets_at if windows.get("Weekly") else None
+            return weekly.resets_at if weekly else None
         if self._key == "reset_credits":
             return profile.available_resets
         if self._key == "next_reset_expiry":
@@ -298,15 +315,15 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
         return None
 
     @property
-    def native_value(self):
+    def native_value(self) -> str | float | int | datetime | None:
         profile = self._profile
         return self._value(profile) if profile is not None else None
 
     @property
-    def extra_state_attributes(self) -> dict[str, object]:
+    def extra_state_attributes(self) -> dict[str, object] | None:
         profile = self._profile
         if profile is None:
-            return {"telemetry_status": "unavailable"}
+            return None
         age = None
         if profile.updated_at is not None:
             age = max(0, int((datetime.now(UTC) - profile.updated_at).total_seconds()))
@@ -314,8 +331,9 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
             "account": profile.label,
             "active_account": profile.active,
             "telemetry_status": self.telemetry_status,
-            "source_available": self.coordinator.last_update_success,
-            "last_refresh": self.coordinator.data.refreshed_at.isoformat(),
+            "last_refresh": self.coordinator.data.refreshed_at.isoformat()
+            if self.coordinator.data is not None
+            else None,
             "reauthentication_required": profile.reauthentication_required,
             "last_updated": profile.updated_at.isoformat() if profile.updated_at else None,
             "data_age_seconds": age,
@@ -341,14 +359,17 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
         self._reconcile_visibility()
 
     @callback
-    def _visibility_registry_updated(self, event: Event) -> None:
+    def _visibility_registry_updated(
+        self, event: Event[er.EventEntityRegistryUpdatedData]
+    ) -> None:
+        data: Mapping[str, Any] = event.data
         if (
-            event.data.get("action") != "update"
-            or event.data.get("entity_id") != self.entity_id
-            or "hidden_by" not in event.data.get("changes", {})
+            data.get("action") != "update"
+            or data.get("entity_id") != self.entity_id
+            or "hidden_by" not in data.get("changes", {})
         ):
             return
-        old_hidden_by = event.data["changes"]["hidden_by"]
+        old_hidden_by = data["changes"]["hidden_by"]
         if self._visibility_changes and old_hidden_by == self._visibility_changes[0]:
             self._visibility_changes.popleft()
             return
@@ -358,7 +379,9 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
             self._save_visibility_policy(registry, entry, "manual")
 
     @callback
-    def _save_visibility_policy(self, registry, entry, policy: str) -> None:
+    def _save_visibility_policy(
+        self, registry: er.EntityRegistry, entry: er.RegistryEntry, policy: str
+    ) -> None:
         options = dict(entry.options.get(DOMAIN, {}))
         if options.get("five_hour_visibility") != policy:
             options["five_hour_visibility"] = policy
@@ -377,14 +400,20 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
             or entry.hidden_by is er.RegistryEntryHider.USER
         ):
             return
-        policy = entry.options.get(DOMAIN, {}).get("five_hour_visibility")
+        saved: Mapping[str, Any] = entry.options.get(DOMAIN, {})
+        policy = saved.get("five_hour_visibility")
         if policy == "manual":
             return
         if policy == "automatic_hidden" and entry.hidden_by is None:
             self._save_visibility_policy(registry, entry, "manual")
             return
         profile = self._profile
-        if profile is None or self.telemetry_status != "available" or profile.five_hour_enabled is None:
+        if (
+            profile is None
+            or not self.coordinator.last_update_success
+            or self.telemetry_status != "available"
+            or profile.five_hour_enabled is None
+        ):
             return
         hidden_by = None if profile.five_hour_enabled else er.RegistryEntryHider.INTEGRATION
         if entry.hidden_by != hidden_by:
@@ -396,9 +425,6 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
 
     @callback
     def _handle_coordinator_update(self) -> None:
-        profile = self._profile
-        if profile is not None:
-            self._attr_name = f"{profile.label} {_ACCOUNT_SENSOR_LABELS[self._key]}"
         self._reconcile_visibility()
         super()._handle_coordinator_update()
 
@@ -406,15 +432,22 @@ class AccountAllowanceSensor(CoordinatorEntity[AccountAllowanceCoordinator], Sen
 class AccountAllowanceEntityManager:
     """Dynamically add profiles and remove them only after a complete inventory."""
 
-    def __init__(self, hass, entry, runtime, coordinator, async_add_entities) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: CodexBridgeConfigEntry,
+        runtime: CodexBridgeRuntime,
+        coordinator: AccountAllowanceCoordinator,
+        async_add_entities: AddConfigEntryEntitiesCallback,
+    ) -> None:
         self.hass = hass
         self.entry = entry
         self.runtime = runtime
         self.coordinator = coordinator
         self.async_add_entities = async_add_entities
         self._entities: dict[str, list[AccountAllowanceSensor]] = {}
-        self._sync_task = None
-        self.remove_listener = None
+        self._sync_task: asyncio.Task[None] | None = None
+        self.remove_listener: Callable[[], None] | None = None
 
     def coordinator_updated(self) -> None:
         if not self.coordinator.last_update_success:
@@ -427,14 +460,18 @@ class AccountAllowanceEntityManager:
         registry = er.async_get(self.hass)
         registered = self._registered_profile_ids(registry)
         complete = data is not None and data.inventory_complete and self.coordinator.last_update_success
-        current = set(data.profiles) if complete else registered | set(self._entities)
+        current = (
+            set(data.profiles)
+            if complete and data is not None
+            else registered | set(self._entities)
+        )
         if complete:
             # Registry removal owns platform teardown, including disabled entities.
             # Do not add removed profiles on reload or remove unattached objects.
             prefix = f"{self.entry.entry_id}_profile_allowance_"
             expected = {
                 f"{prefix}{profile_id}_{key}"
-                for profile_id in current for key in _ACCOUNT_SENSOR_LABELS
+                for profile_id in current for key in _ACCOUNT_SENSOR_KEYS
             }
             for item in tuple(registry.entities.values()):
                 if (
@@ -446,11 +483,14 @@ class AccountAllowanceEntityManager:
                     registry.async_remove(item.entity_id)
             for profile_id in set(self._entities) - current:
                 self._entities.pop(profile_id)
+            self._remove_stale_account_devices(current)
+        if data is not None and self.coordinator.last_update_success:
+            self._rename_account_devices(data)
         add: list[AccountAllowanceSensor] = []
         for profile_id in sorted(current - set(self._entities)):
             sensors = [
                 AccountAllowanceSensor(self.coordinator, self.runtime, profile_id, key)
-                for key in _ACCOUNT_SENSOR_LABELS
+                for key in _ACCOUNT_SENSOR_KEYS
             ]
             self._entities[profile_id] = sensors
             add.extend(sensors)
@@ -469,15 +509,46 @@ class AccountAllowanceEntityManager:
             except asyncio.CancelledError:
                 pass
 
-    def _registered_profile_ids(self, registry) -> set[str]:
+    @callback
+    def _rename_account_devices(self, data: AccountAllowanceSnapshot) -> None:
+        """Follow a label change; a name chosen in HA still takes precedence."""
+
+        registry = dr.async_get(self.hass)
+        for profile_id, profile in data.profiles.items():
+            device = registry.async_get_device_by_identifier(
+                account_device_identifier(self.entry.entry_id, profile_id),
+                self.entry.entry_id,
+            )
+            if device is not None and device.name != profile.label:
+                registry.async_update_device(device.id, name=profile.label)
+
+    @callback
+    def _remove_stale_account_devices(self, current: set[str]) -> None:
+        """Remove account devices that a complete inventory no longer lists."""
+
+        registry = dr.async_get(self.hass)
+        expected = {
+            account_device_identifier(self.entry.entry_id, profile_id)
+            for profile_id in current
+        }
+        prefix = f"{self.entry.entry_id}_profile_"
+        for device in dr.async_entries_for_config_entry(registry, self.entry.entry_id):
+            accounts = {
+                identifier for identifier in device.identifiers
+                if identifier[0] == DOMAIN and identifier[1].startswith(prefix)
+            }
+            if accounts and not accounts & expected:
+                registry.async_remove_device(device.id)
+
+    def _registered_profile_ids(self, registry: er.EntityRegistry) -> set[str]:
         prefix = f"{self.entry.entry_id}_profile_allowance_"
-        ids = set()
+        ids: set[str] = set()
         for item in registry.entities.values():
             if item.config_entry_id != self.entry.entry_id or item.domain != "sensor":
                 continue
             if not item.unique_id.startswith(prefix):
                 continue
-            for key in _ACCOUNT_SENSOR_LABELS:
+            for key in _ACCOUNT_SENSOR_KEYS:
                 suffix = f"_{key}"
                 identity = item.unique_id[len(prefix):]
                 if identity.endswith(suffix) and identity[:-len(suffix)]:

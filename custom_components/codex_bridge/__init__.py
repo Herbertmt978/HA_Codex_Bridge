@@ -1,13 +1,15 @@
 from inspect import iscoroutinefunction
 import logging
 
-from homeassistant.config_entries import ConfigEntry, ConfigEntryState
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv, device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.typing import ConfigType
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -23,7 +25,6 @@ from .const import (
     CONF_DISCOVERY_UUID,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DATA_PANEL_REGISTERED,
     DATA_VIEWS_REGISTERED,
     DATA_WS_REGISTERED,
@@ -32,7 +33,12 @@ from .const import (
     CONF_WEB_SEARCH_MODE,
     CONF_ASSIST_MCP_SERVERS,
 )
+from .account_allowance_coordinator import (
+    AccountAllowanceCoordinator,
+    async_delete_reauthentication_issues,
+)
 from .event_broker import EventBroker
+from .entity import bridge_device_info
 from .entity_coordinator import BridgeEntityCoordinator
 from .automation_scheduler import AutomationScheduler
 from .automation_notifications import AutomationNotificationCoordinator
@@ -43,26 +49,37 @@ from .ha_mcp_shortcut import HaMcpShortcut
 from .assist_settings import assist_mcp_selection
 from .panel import async_register_panel, async_remove_panel
 from .protocol import EndpointError, validate_bridge_token, validate_bridge_url
-from .runtime import CodexBridgeRuntime, normalize_web_search_mode
+from .runtime import (
+    CodexBridgeConfigEntry,
+    CodexBridgeRuntime,
+    normalize_web_search_mode,
+)
 from .task_services import async_register_task_services
 from .task_events import TaskEventForwarder
 from .websocket_api import async_register_websocket_commands
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.CONVERSATION]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the task actions, which resolve the loaded entry when called."""
+
+    async_register_task_services(hass)
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> bool:
     domain_data = hass.data.setdefault(
         DOMAIN,
         {
-            DATA_ENTRIES: {},
             DATA_PANEL_REGISTERED: False,
             DATA_VIEWS_REGISTERED: False,
             DATA_WS_REGISTERED: False,
         },
     )
-    if domain_data[DATA_ENTRIES] and entry.entry_id not in domain_data[DATA_ENTRIES]:
+    if _other_live_runtime(hass, entry.entry_id):
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN, translation_key="connection_already_active"
         )
@@ -141,6 +158,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             capabilities=tuple(getattr(ready, "capabilities", ())),
         ),
     )
+    device_info = bridge_device_info(
+        hass, entry, runtime, sw_version=_ready_version(ready)
+    )
+    runtime.device_info = device_info
+    # Saved-account devices are shown under this device, so register it first.
+    runtime.device_id = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, **device_info
+    ).id
+
+    @callback
+    def sync_software_version(refreshed: object) -> None:
+        # An App update reconnects without reloading this entry.
+        version = _ready_version(refreshed)
+        if version == device_info.get("sw_version") or runtime.device_id is None:
+            return
+        device_info["sw_version"] = version
+        dr.async_get(hass).async_update_device(runtime.device_id, sw_version=version)
+
+    runtime.on_ready_refreshed = sync_software_version
+
     @callback
     def async_start_reauth() -> None:
         # A rejection racing a reload must not outlive the reload it raced.
@@ -194,8 +231,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 hass, runtime,
                 Store(hass, 1, f"{DOMAIN}.{entry.entry_id}.question_notifications"),
             )
-        runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
-    domain_data[DATA_ENTRIES][entry.entry_id] = runtime
+        runtime.entity_coordinator = BridgeEntityCoordinator(hass, entry, runtime)
+        runtime.account_allowance_coordinator = AccountAllowanceCoordinator(
+            hass, entry, runtime
+        )
+    entry.runtime_data = runtime
     platforms_forwarded = False
     try:
         if connection_type == CONNECTION_TYPE_SUPERVISOR:
@@ -221,8 +261,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 selection_callback=select_owned_mcp,
             )
             await runtime.ha_mcp_shortcut.async_setup()
-        if not hass.services.has_service(DOMAIN, "start_task"):
-            async_register_task_services(hass)
         if not domain_data[DATA_VIEWS_REGISTERED]:
             async_register_http_views(hass)
             domain_data[DATA_VIEWS_REGISTERED] = True
@@ -249,12 +287,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await runtime.question_notifications.async_start()
         if runtime.entity_coordinator is not None:
             await runtime.entity_coordinator.async_refresh()
+        if (
+            runtime.account_allowance_coordinator is not None
+            and runtime.supports_capability("account_profile_telemetry_v1")
+        ):
+            # An account telemetry outage must not prevent the platforms
+            # loading. Retain registered profiles and retry through this coordinator.
+            await runtime.account_allowance_coordinator.async_refresh()
+        if runtime.entity_coordinator is not None:
             platforms_forwarded = True
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except BaseException as error:
         if platforms_forwarded:
             await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-        domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
         await runtime.async_close()
         # The App answered readiness but failed a later setup call. Let HA
         # retry or re-authenticate rather than leave the entry in setup error.
@@ -271,24 +316,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _other_live_runtime(hass: HomeAssistant, entry_id: str) -> bool:
+    """Return whether another entry still owns an open runtime.
+
+    HA keeps runtime data after a failed or interrupted unload, so such an
+    entry's broker, scheduler and notifications may still be running.
+    """
+
+    for other in hass.config_entries.async_entries(DOMAIN):
+        runtime: CodexBridgeRuntime | None = getattr(other, "runtime_data", None)
+        if other.entry_id != entry_id and runtime is not None and not runtime.closed:
+            return True
+    return False
+
+
+def _ready_version(ready: object) -> str | None:
+    """Return the App release, or the Bridge release for an external Bridge."""
+
+    for field in ("app_version", "bridge_version"):
+        version = getattr(ready, field, None)
+        if isinstance(version, str) and version:
+            return version
+    return None
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> None:
     """Clear this entry's question notices and revoke its managed MCP grant."""
+
     async def clear_questions() -> None:
-        domain_data = hass.data.get(DOMAIN)
-        entries = domain_data.get(DATA_ENTRIES) if isinstance(domain_data, dict) else None
-        runtime = entries.get(entry.entry_id) if isinstance(entries, dict) else None
-        allowances = domain_data.get("account_allowance_coordinators", {}) if isinstance(domain_data, dict) else {}
-        allowance_coordinator = allowances.get(entry.entry_id)
-        if allowance_coordinator is not None:
-            await allowance_coordinator.async_close()
-            if allowances.get(entry.entry_id) is allowance_coordinator:
-                allowances.pop(entry.entry_id, None)
+        # HA keeps runtime data only after a cancelled/failed unload. That owner
+        # may still hold an admitted delivery, and HA can proceed to remove
+        # without another unload, so drain it before a fresh coordinator takes
+        # its saved ledger.
+        runtime: CodexBridgeRuntime | None = getattr(entry, "runtime_data", None)
         if runtime is not None:
-            # A cancelled/failed unload may still own an admitted delivery. HA
-            # can proceed to remove without another unload, so drain that owner
-            # before a fresh coordinator takes its saved ledger.
             await runtime.async_close()
-            entries.pop(entry.entry_id, None)
+        # Only after that owner stops can no refresh raise a repair again.
+        async_delete_reauthentication_issues(hass, entry.entry_id)
         # Normal unload preserves delivery claims for restart. Permanent removal
         # has no runtime to reconcile them, including on an external connection.
         coordinator = QuestionNotificationCoordinator(
@@ -343,28 +407,17 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
             await close()
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    domain_data = hass.data.get(DOMAIN)
-    if not domain_data:
-        return True
-
-    runtime = domain_data[DATA_ENTRIES].get(entry.entry_id)
-    if runtime is not None and runtime.entity_coordinator is not None:
+async def async_unload_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> bool:
+    runtime = entry.runtime_data
+    if runtime.entity_coordinator is not None:
         if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
             return False
-    if runtime is not None:
-        allowances = domain_data.get("account_allowance_coordinators", {})
-        allowance_coordinator = allowances.get(entry.entry_id)
-        if allowance_coordinator is not None:
-            await allowance_coordinator.async_close()
-            if allowances.get(entry.entry_id) is allowance_coordinator:
-                allowances.pop(entry.entry_id, None)
-        await runtime.async_close()
-        # Preserve the draining owner on cancellation/error, so permanent
-        # removal cannot race a still-admitted timer or mobile action.
-        domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
-    if not domain_data[DATA_ENTRIES]:
+    # HA discards runtime data only after this returns. A cancelled or failed
+    # close keeps the draining owner, so permanent removal cannot race a
+    # still-admitted timer or mobile action.
+    await runtime.async_close()
+    if not _other_live_runtime(hass, entry.entry_id):
         async_remove_panel(hass)
-        domain_data[DATA_PANEL_REGISTERED] = False
+        hass.data.setdefault(DOMAIN, {})[DATA_PANEL_REGISTERED] = False
 
     return True

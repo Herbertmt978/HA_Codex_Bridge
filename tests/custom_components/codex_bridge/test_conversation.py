@@ -10,6 +10,7 @@ from homeassistant.components.conversation import (
     ConversationInput,
 )
 from homeassistant.core import Context
+from homeassistant.helpers.device_registry import DeviceInfo
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.codex_bridge.conversation import (
@@ -85,8 +86,7 @@ def _agent(hass, *, allow_voice=False, settings=None, mcp_capability=False):
     })
     runtime = SimpleNamespace(
         client=client,
-        discovery_uuid="app_discovery",
-        title="Codex Bridge App",
+        device_info=DeviceInfo(identifiers={(DOMAIN, "app_discovery")}, name="Codex Bridge App"),
         supports_capability=lambda capability: capability == "assist_conversation_v1"
         or (mcp_capability and capability == "assist_mcp_selection_v1"),
     )
@@ -123,8 +123,8 @@ async def test_conversation_platform_requires_explicit_supervisor_opt_in(hass):
             CONF_ASSIST_PROJECT_ID: "prj_assist",
         },
     )
-    with patch("custom_components.codex_bridge.conversation.async_get_runtime", return_value=Mock()):
-        await async_setup_entry(hass, entry, added)
+    entry.runtime_data = Mock()
+    await async_setup_entry(hass, entry, added)
     assert isinstance(added.call_args.args[0][0], CodexAssistConversation)
 
 
@@ -337,7 +337,8 @@ async def test_assist_entity_keeps_identity_and_attaches_to_bridge_device(hass):
     agent, _client = _agent(hass)
     assert agent.unique_id == f"{agent._entry.entry_id}_assist"
     assert agent.device_info["identifiers"] == {(DOMAIN, "app_discovery")}
-    assert agent.device_info["name"] == "Codex Bridge App"
+    assert agent.has_entity_name is True
+    assert agent.translation_key == "assist"
 
 
 async def test_explicit_model_reasoning_and_plain_instructions_are_used(hass):

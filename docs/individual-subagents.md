@@ -37,7 +37,7 @@ threads, including `turn/steer` and `turn/start`. Transcript operation names suc
 as `followupTask` are not client RPC methods. The Bridge does not simulate
 follow-up through a parent prompt, desktop orchestration or creation of another
 child. An experimental direct-input flag is absent from the stable committed
-protocol projection; its absence does not grant permission. See the pinned
+protocol projection; its absence does not grant permission. See the Codex 0.157.1
 [input guard](https://github.com/openai/codex/blob/rust-v0.157.1/codex-rs/app-server/src/request_processors/thread_input.rs)
 and [turn processor](https://github.com/openai/codex/blob/rust-v0.157.1/codex-rs/app-server/src/request_processors/turn_processor.rs).
 This limitation means the full requested follow-up outcome is not delivered.

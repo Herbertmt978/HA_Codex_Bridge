@@ -63,7 +63,7 @@ def default_reconnect_delay(attempt: int) -> float:
     """Return a capped exponential delay without unbounded integer growth."""
 
     bounded_attempt = max(1, min(attempt, 7))
-    return min(30.0, 0.5 * (2 ** (bounded_attempt - 1)))
+    return min(30.0, 0.5 * 2.0 ** (bounded_attempt - 1))
 
 
 def default_failure_retry_delay(attempt: int) -> float:
@@ -295,6 +295,7 @@ class EventSubscription:
             self.closed = True
             raise asyncio.CancelledError
         assert isinstance(item, tuple)
+        envelope: dict[str, Any]
         envelope, size = item
         self._queued_bytes = max(0, self._queued_bytes - size)
         if self._close_after_delivery:

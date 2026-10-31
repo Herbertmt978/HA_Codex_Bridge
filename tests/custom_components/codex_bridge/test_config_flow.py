@@ -803,6 +803,11 @@ async def mock_setup_entry(
             "custom_components.codex_bridge.async_setup_entry",
             new=AsyncMock(return_value=True),
         ) as setup_entry,
+        # The replaced setup creates no runtime data for the real unload.
+        patch(
+            "custom_components.codex_bridge.async_unload_entry",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         yield setup_entry
 
@@ -981,4 +986,116 @@ async def test_reinstalled_app_identity_is_not_merged_into_the_old_entry(
     assert entry.unique_id == "e" * 32
     assert entry.data[CONF_BRIDGE_TOKEN] == TOKEN
     assert list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
+    mock_setup_entry.assert_not_awaited()
+
+
+def _external_entry(hass: HomeAssistant) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        version=1,
+        minor_version=1,
+        domain=DOMAIN,
+        title="External Codex Bridge",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: TOKEN,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_EXTERNAL_LEGACY,
+        },
+        source="user",
+        unique_id=f"{DOMAIN}:external",
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+@pytest.mark.parametrize(
+    ("user_input", "error", "expected"),
+    [
+        ({CONF_BRIDGE_URL: "http://example.com:8766", CONF_BRIDGE_TOKEN: "b" * 48},
+         None, "invalid_endpoint"),
+        ({CONF_BRIDGE_URL: "http://127.0.0.1:8767", CONF_BRIDGE_TOKEN: "short"},
+         None, "invalid_endpoint"),
+        ({CONF_BRIDGE_URL: "http://127.0.0.1:8767", CONF_BRIDGE_TOKEN: "b" * 48},
+         BridgeApiAuthError(), "invalid_auth"),
+        ({CONF_BRIDGE_URL: "http://127.0.0.1:8767", CONF_BRIDGE_TOKEN: "b" * 48},
+         BridgeApiConnectionError(), "cannot_connect"),
+        ({CONF_BRIDGE_URL: "http://127.0.0.1:8767", CONF_BRIDGE_TOKEN: "b" * 48},
+         BridgeApiIncompatibleError(), "incompatible_api"),
+    ],
+)
+async def test_external_reconfigure_recovers_from_errors_and_reloads(
+    hass, mock_setup_entry, user_input, error, expected
+):
+    entry = _external_entry(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    mock_setup_entry.reset_mock()
+    saved = dict(entry.data)
+    client = AsyncMock()
+    client.negotiated_api_version = 0
+    client.async_ready.side_effect = error
+    with patch(
+        "custom_components.codex_bridge.config_flow.BridgeApiClient",
+        return_value=client,
+    ) as client_class:
+        result = await entry.start_reconfigure_flow(hass)
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+        # The endpoint is suggested; the saved token is never shown.
+        suggested = {
+            str(key): (key.description or {}).get("suggested_value")
+            for key in result["data_schema"].schema
+        }
+        assert suggested == {CONF_BRIDGE_URL: "http://127.0.0.1:8766", CONF_BRIDGE_TOKEN: None}
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], user_input
+        )
+        assert result["type"] is FlowResultType.FORM
+        assert result["errors"] == {"base": expected}
+        assert entry.data == saved
+        mock_setup_entry.assert_not_awaited()
+
+        client.async_ready.side_effect = None
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_BRIDGE_URL: "http://127.0.0.1:8767", CONF_BRIDGE_TOKEN: "c" * 48},
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.data == {
+        **saved,
+        CONF_BRIDGE_URL: "http://127.0.0.1:8767",
+        CONF_BRIDGE_TOKEN: "c" * 48,
+    }
+    assert entry.unique_id == f"{DOMAIN}:external"
+    assert len(hass.config_entries.async_entries(DOMAIN)) == 1
+    assert client_class.call_args.args[1:] == ("http://127.0.0.1:8767", "c" * 48)
+    assert client_class.call_args.kwargs == {"allow_legacy_v0": True}
+    mock_setup_entry.assert_awaited_once()
+
+
+async def test_app_reconfigure_explains_that_supervisor_owns_the_endpoint(
+    hass, mock_setup_entry
+):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Codex Bridge App",
+        data={
+            CONF_BRIDGE_URL: "http://127.0.0.1:8766",
+            CONF_BRIDGE_TOKEN: TOKEN,
+            CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
+            CONF_DISCOVERY_UUID: UUID,
+        },
+        source="hassio",
+        unique_id=UUID,
+    )
+    entry.add_to_hass(hass)
+    saved = dict(entry.data)
+
+    result = await entry.start_reconfigure_flow(hass)
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_app_managed"
+    assert entry.data == saved
     mock_setup_entry.assert_not_awaited()

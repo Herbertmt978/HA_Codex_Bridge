@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 import re
+from typing import Any
 
 from .const import (
     CONF_QUESTION_NOTIFICATIONS_ENABLED,
@@ -13,7 +14,7 @@ from .const import (
 _ENTRY_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
 
 
-def question_notification_settings(options: object) -> dict:
+def question_notification_settings(options: object) -> dict[str, Any]:
     """Invalid saved values disable delivery; old configurations remain opt-out."""
 
     default = {

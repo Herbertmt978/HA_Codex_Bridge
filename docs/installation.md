@@ -3,8 +3,8 @@
 ## Status before you start
 
 You need both the HACS Integration and the Supervisor App. The Integration
-adds the panel; the App runs Codex. This release pairs App `1.13.5`, Integration
-and panel `1.13.4`, with Bridge `0.20.0` and Codex `0.158.0`.
+adds the panel; the App runs Codex. This release pairs App `1.13.25`, Integration
+and panel `1.13.25`, with Bridge `0.20.1` and Codex `0.166.0`.
 
 Install versions available on the
 [Releases page](https://github.com/Herbertmt978/HA_Codex_Bridge/releases/latest).
@@ -165,8 +165,10 @@ credentials. Remove this customisation when HACS provides the local icon itself.
 ## Reconnect after a rejected token
 
 When the App or an external Bridge rejects the Integration's saved connection
-token, Home Assistant raises an **Authentication expired for Codex Bridge**
-repair in **Settings → Repairs**, and **Settings → Devices & services** shows a
+token, Home Assistant raises a repair in **Settings → Repairs** named after the
+entry: **Authentication expired for Codex Bridge** for the App, or
+**Authentication expired for External Codex Bridge** for an external Bridge (a
+renamed entry shows its own name). **Settings → Devices & services** shows a
 highlighted Codex Bridge card with a **Reconfigure** button. Either opens the
 request. This is separate from **Sign in with ChatGPT**, which you manage in the
 panel.

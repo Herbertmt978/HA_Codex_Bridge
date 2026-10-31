@@ -17,7 +17,9 @@ from aiohttp import web
 import psutil
 import pytest
 
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.setup import async_setup_component
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.codex_bridge.bridge_api import (
     BridgeApiClient,
@@ -28,8 +30,9 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiRedirectError,
     BridgeApiTimeoutError,
 )
-from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
+from custom_components.codex_bridge.const import DOMAIN
 from custom_components.codex_bridge.http import async_register_http_views
+from custom_components.codex_bridge.runtime import async_get_runtime
 from custom_components.codex_bridge.http_streaming import (
     DOWNLOAD_STREAM_CHUNK_BYTES,
     UPLOAD_CHUNK_MAX_BYTES,
@@ -68,9 +71,10 @@ class _FakeStream:
 
 async def _install_runtime(hass, client, *, api_version: int = 1) -> None:
     assert await async_setup_component(hass, "http", {})
-    hass.data.setdefault(DOMAIN, {})[DATA_ENTRIES] = {
-        "entry": SimpleNamespace(client=client, api_version=api_version)
-    }
+    entry = MockConfigEntry(domain=DOMAIN, title="Codex Bridge")
+    entry.add_to_hass(hass)
+    entry.runtime_data = SimpleNamespace(client=client, api_version=api_version)
+    entry.mock_state(hass, ConfigEntryState.LOADED)
     async_register_http_views(hass)
 
 
@@ -1330,7 +1334,7 @@ async def test_mcp_credentials_require_admin_and_do_not_reflect_provider_data(ha
 
 async def test_ha_mcp_shortcut_uses_ha_admin_boundary(hass, hass_client, hass_client_no_auth, hass_read_only_access_token):
     await _install_runtime(hass, SimpleNamespace())
-    runtime = hass.data[DOMAIN][DATA_ENTRIES]["entry"]
+    runtime = async_get_runtime(hass)
     runtime.async_refresh_capabilities = AsyncMock()
     result = {"state": "paused", "available": False, "configured": True,
               "requires_tool_selection": True, "server_name": "ha-assist-0123456789ab"}
@@ -1375,7 +1379,7 @@ async def ha_mcp_http_grant(hass, hass_admin_user, monkeypatch):
     assert len(created) == 1
     token_id = created.pop()
     await _install_runtime(hass, bridge)
-    runtime = hass.data[DOMAIN][DATA_ENTRIES]["entry"]
+    runtime = async_get_runtime(hass)
     runtime.ha_mcp_shortcut = helper
     runtime.async_refresh_capabilities = AsyncMock()
     yield SimpleNamespace(helper=helper, runtime=runtime, bridge=bridge,

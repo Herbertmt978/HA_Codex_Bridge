@@ -57,7 +57,7 @@ import { buildSchedule } from "./scheduled-tasks.js";
 import { ChatContextMenu, chatMenuCss } from "./chat-context-menu.js";
 import { ChildAgentsView, childAgentsCss } from "./child-agents.js";
 
-const PANEL_VERSION = "1.13.12";
+const PANEL_VERSION = "1.13.25";
 const STREAMING_RENDER_INTERVAL_MS = 200;
 const ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 const DOWNLOAD_HANDOFF_GRACE_MS = 60_000;

@@ -28,7 +28,7 @@ def _fixture(monkeypatch):
     device = SimpleNamespace(
         id="registry-device",
         disabled_by=None,
-        config_entries={entry.entry_id},
+        config_entry_id=entry.entry_id,
         name_by_user="My phone",
         name="Phone",
     )
@@ -96,7 +96,7 @@ async def test_revoked_or_unverified_binding_is_not_a_recipient(
     elif revocation == "registration_unloaded":
         entry.state = ConfigEntryState.NOT_LOADED
     elif revocation == "device_not_registered":
-        device.config_entries = set()
+        device.config_entry_id = "another-entry"
     else:
         hass.config_entries.async_get_entry = lambda _entry_id: None
     assert await async_resolve_question_recipients(hass, [entry.entry_id]) == ()

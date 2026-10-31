@@ -9,6 +9,10 @@ gazetteer-matcher==1.2.0
 hassil==3.12.1
 home-assistant-intents==2026.10.6
 
+# The Integration is checked with mypy --strict against the fixture's Home
+# Assistant release, matching the Platinum strict-typing rule.
+mypy==2.4.1
+
 # Install the Bridge package and its test dependencies in the same environment.
 # Its suite has a separate pytest lifecycle because the Home Assistant plugin's
 # global leak checks are intentionally stricter than the legacy worker tests.

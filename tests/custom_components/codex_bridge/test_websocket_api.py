@@ -21,7 +21,7 @@ from custom_components.codex_bridge.bridge_api import (
     BridgeApiMcpDisabledError,
     BridgeApiProblemError,
 )
-from custom_components.codex_bridge.const import DATA_ENTRIES, DOMAIN
+from custom_components.codex_bridge.const import DOMAIN
 from custom_components.codex_bridge.event_broker import EventBroker, EventRecord
 from custom_components.codex_bridge.runtime import CodexBridgeRuntime
 from custom_components.codex_bridge.protocol import ProblemRecord
@@ -116,7 +116,8 @@ class _Connection:
 
 class _Hass:
     def __init__(self, runtime: CodexBridgeRuntime) -> None:
-        self.data = {DOMAIN: {DATA_ENTRIES: {runtime.entry_id: runtime}}}
+        loaded = [SimpleNamespace(runtime_data=runtime)]
+        self.config_entries = SimpleNamespace(async_loaded_entries=lambda _domain: loaded)
         self.tasks: list[asyncio.Task[None]] = []
 
     def async_create_task(self, target) -> asyncio.Task[None]:

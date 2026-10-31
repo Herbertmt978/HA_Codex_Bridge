@@ -15,7 +15,6 @@ from custom_components.codex_bridge.const import (
     CONF_CONNECTION_TYPE,
     CONNECTION_TYPE_EXTERNAL_LEGACY,
     CONNECTION_TYPE_SUPERVISOR,
-    DATA_ENTRIES,
     DATA_PANEL_REGISTERED,
     DOMAIN,
 )
@@ -43,6 +42,8 @@ async def _prepare_removal(case, monkeypatch):
     monkeypatch.setattr(integration, "Store", lambda *_args: SimpleNamespace(
         async_load=AsyncMock(return_value=None), async_save=AsyncMock(),
     ))
+    # Account repairs are covered through real HA entries; this hass has no registry.
+    monkeypatch.setattr(integration, "async_delete_reauthentication_issues", Mock())
     entry = SimpleNamespace(entry_id="entry-owned", data={
         CONF_CONNECTION_TYPE: CONNECTION_TYPE_SUPERVISOR,
         CONF_BRIDGE_URL: "http://127.0.0.1:8766",
@@ -158,9 +159,9 @@ async def test_real_home_assistant_lifecycle_cancels_shortcut_renewal_timer(tmp_
         connection_type=CONNECTION_TYPE_SUPERVISOR, discovery_uuid=None,
         api_version=1, ha_mcp_shortcut=helper,
     )
-    hass.data[DOMAIN] = {
-        DATA_ENTRIES: {runtime.entry_id: runtime}, DATA_PANEL_REGISTERED: False,
-    }
+    hass.data[DOMAIN] = {DATA_PANEL_REGISTERED: False}
+    # A bare instance has no entry manager; this entry is the only connection.
+    hass.config_entries = Mock(async_entries=Mock(return_value=[]))
     try:
         await helper.async_setup()
         # Capture the actual HA interval handle; no scheduler/event seam is mocked.
@@ -170,9 +171,8 @@ async def test_real_home_assistant_lifecycle_cancels_shortcut_renewal_timer(tmp_
             await hass.async_stop(force=True)
         else:
             assert await integration.async_unload_entry(
-                hass, SimpleNamespace(entry_id=runtime.entry_id),
+                hass, SimpleNamespace(entry_id=runtime.entry_id, runtime_data=runtime),
             )
-            assert runtime.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
             client.async_close.assert_awaited_once()
         assert handle.cancelled()
     finally:

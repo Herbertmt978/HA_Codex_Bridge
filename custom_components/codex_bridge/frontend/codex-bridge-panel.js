@@ -54152,7 +54152,7 @@ var ChildAgentsView = class {
 };
 
 // frontend/src/codex-bridge-panel.js
-var PANEL_VERSION = "1.13.12";
+var PANEL_VERSION = "1.13.25";
 var STREAMING_RENDER_INTERVAL_MS = 200;
 var ASSIST_PROMPT_MESSAGE = "This chat is managed by Home Assistant Assist and cannot be messaged here. Continue in Assist, or start a new chat.";
 var DOWNLOAD_HANDOFF_GRACE_MS = 6e4;
