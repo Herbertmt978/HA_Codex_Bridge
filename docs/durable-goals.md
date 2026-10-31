@@ -46,7 +46,7 @@ They do not silently replay the earlier conversation to a different account.
 
 ## Runtime support and boundaries
 
-The pinned Codex 0.157.1 protocol includes `thread/goal/get`, `thread/goal/set`,
+The pinned Codex protocol, first verified at 0.157.1, includes `thread/goal/get`, `thread/goal/set`,
 `thread/goal/clear` and goal update/clear notifications. Its stable goals feature
 is enabled by default. Activating a native goal can immediately launch idle
 turns, and native idle continuation can create further turns outside the

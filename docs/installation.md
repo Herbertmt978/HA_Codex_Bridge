@@ -165,8 +165,10 @@ credentials. Remove this customisation when HACS provides the local icon itself.
 ## Reconnect after a rejected token
 
 When the App or an external Bridge rejects the Integration's saved connection
-token, Home Assistant raises an **Authentication expired for Codex Bridge**
-repair in **Settings → Repairs**, and **Settings → Devices & services** shows a
+token, Home Assistant raises a repair in **Settings → Repairs** named after the
+entry: **Authentication expired for Codex Bridge** for the App, or
+**Authentication expired for External Codex Bridge** for an external Bridge (a
+renamed entry shows its own name). **Settings → Devices & services** shows a
 highlighted Codex Bridge card with a **Reconfigure** button. Either opens the
 request. This is separate from **Sign in with ChatGPT**, which you manage in the
 panel.

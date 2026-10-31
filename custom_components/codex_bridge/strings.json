@@ -326,7 +326,7 @@
   "issues": {
     "account_reauthentication_required": {
       "title": "Saved ChatGPT account {account} needs a fresh sign-in",
-      "description": "Codex Bridge can no longer read usage for the saved ChatGPT account **{account}** because its sign-in has expired or been revoked. Its allowance sensors stay unknown until it is signed in again.\n\nOpen Codex Bridge from the sidebar and open the account menu. Choose **Add another account**, sign in to this account, then save it again. This issue closes automatically once Codex Bridge reports the account as signed in."
+      "description": "Codex Bridge can no longer read usage for the saved ChatGPT account **{account}** because its sign-in has expired or been revoked. Its usage and reset sensors stay unknown, and its allowance status shows **Sign-in required**, until it is signed in again.\n\nOpen Codex Bridge from the sidebar and open the account menu. Choose **Add another account**, sign in to this account, then save it again. This issue closes automatically once Codex Bridge reports the account as signed in."
     }
   }
 }
