@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
-from unittest.mock import AsyncMock
+import logging
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -18,6 +19,7 @@ from custom_components.codex_bridge.event_broker import (
     EventBroker,
     EventRecord,
     MAX_MESSAGE_TEXT_BYTES,
+    default_failure_retry_delay,
     default_reconnect_delay,
 )
 from custom_components.codex_bridge.protocol import EndpointError, ProblemRecord
@@ -401,23 +403,113 @@ async def test_retryable_failures_reconnect_and_expose_only_safe_status() -> Non
     await broker.async_close()
 
 
-@pytest.mark.parametrize(
-    ("error", "state"),
-    [
-        (BridgeApiAuthError(), "authentication_failed"),
-        (BridgeApiError("not_retryable"), "upstream_error"),
-    ],
-)
-async def test_nonretryable_upstream_failures_stop_with_safe_status(error, state) -> None:
-    client = _ScriptedClient(replay=[error])
-    broker = EventBroker(client, initial_cursor=0)
+def test_default_failure_retry_delay_is_slow_and_capped() -> None:
+    assert [default_failure_retry_delay(attempt) for attempt in range(1, 8)] == [
+        60.0,
+        120.0,
+        240.0,
+        480.0,
+        600.0,
+        600.0,
+        600.0,
+    ]
+
+
+async def test_rejected_token_stops_the_stream_and_requests_reauthentication() -> None:
+    client = _ScriptedClient(replay=[BridgeApiAuthError(), _batch()])
+    reauthenticate = Mock()
+    broker = EventBroker(
+        client,
+        initial_cursor=0,
+        failure_retry_delay=lambda _: 0,
+        on_authentication_failed=reauthenticate,
+    )
     subscription = broker.subscribe(after=0)
 
     await broker.async_start()
+    status = await subscription.get()
+    await asyncio.wait_for(broker._task, 1)
 
-    assert (await subscription.get())["state"] == state
-    assert broker.connection_status["state"] == state
+    assert status["state"] == "authentication_failed"
+    assert broker.connection_status["state"] == "authentication_failed"
+    reauthenticate.assert_called_once_with()
+    # Only re-authentication can recover, so the stream does not retry.
     assert client.replay_after == [0]
+    await broker.async_close()
+
+
+@pytest.mark.parametrize(
+    ("failure", "state"),
+    [
+        (BridgeApiError("not_retryable"), "upstream_error"),
+        ({"events": "invalid"}, "protocol_error"),
+        (BridgeApiGoneError(problem=None), "protocol_error"),
+        (RuntimeError("unexpected"), "failed"),
+    ],
+)
+async def test_hard_failures_retry_slowly_until_the_stream_recovers(
+    failure, state, caplog
+) -> None:
+    caplog.set_level(logging.INFO, logger="custom_components.codex_bridge.event_broker")
+    delays: list[int] = []
+    # Two outages: one during replay, then another after a recovery.
+    client = _ScriptedClient(
+        replay=[failure, failure, _batch(_event(1))],
+        wait=[_batch(_event(2)), failure],
+    )
+    reauthenticate = Mock()
+    broker = EventBroker(
+        client,
+        initial_cursor=0,
+        failure_retry_delay=lambda attempt: delays.append(attempt) or 0.01,
+        on_authentication_failed=reauthenticate,
+    )
+    subscription = broker.subscribe(after=0)
+
+    await broker.async_start()
+    first = await asyncio.wait_for(subscription.get(), 1)
+    # Panels resubscribe while the broker backs off.
+    during_backoff = broker.subscribe(after=0)
+    second = await asyncio.wait_for(during_backoff.get(), 1)
+    recovering = broker.subscribe(after=0)
+    recovered_event = await asyncio.wait_for(recovering.get(), 1)
+    recovered_status = await asyncio.wait_for(recovering.get(), 1)
+    await asyncio.wait_for(client.blocked.wait(), 1)
+
+    for status in (first, second):
+        assert status["type"] == "stream_status"
+        assert status["state"] == state
+        assert status["phase"] == "backoff"
+    assert recovered_event["event"].cursor == 1
+    assert recovered_status == {
+        "type": "stream_status",
+        "state": "connected",
+        "phase": "wait",
+        "retry_count": 0,
+        "cursor": 1,
+    }
+    # The second outage starts the slow back-off again from its first step.
+    assert delays == [1, 2, 1]
+    assert client.replay_after == [0, 0, 0, 2]
+    assert client.wait_after == [1, 2]
+    assert broker.connection_status == {
+        "state": state,
+        "phase": "backoff",
+        "retry_count": 1,
+        "cursor": 2,
+    }
+    reauthenticate.assert_not_called()
+    # One message per outage and one per recovery, not one per attempt.
+    stopped = [
+        record
+        for record in caplog.records
+        if "live updates stopped" in record.getMessage()
+    ]
+    assert len(stopped) == 2
+    for record in stopped:
+        assert record.levelno == logging.INFO
+        assert bool(record.exc_info) is (state == "failed")
+    assert sum("live updates recovered" in r.getMessage() for r in caplog.records) == 1
     await broker.async_close()
 
 

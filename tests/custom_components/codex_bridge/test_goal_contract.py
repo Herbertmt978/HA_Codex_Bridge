@@ -2,7 +2,7 @@
 
 import pytest
 import aiohttp
-import voluptuous as vol
+import probatio
 from unittest.mock import create_autospec
 from aiohttp import web
 
@@ -41,7 +41,7 @@ async def test_goal_websocket_uses_only_local_chat_and_reviewed_action():
     {"completion_criteria": ["criterion"] * 17}, {"progress": "x" * 8193},
 ])
 def test_goal_websocket_rejects_unreviewed_scope_and_limits(change):
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_goal_action._ws_schema({"id": 403, "type": f"{DOMAIN}/goal_action", "thread_id": "local-chat",
                                    "action": "resume", "expected_revision": 1, "client_request_id": "resume-reviewed", **change})
 

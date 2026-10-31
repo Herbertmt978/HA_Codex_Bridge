@@ -24,6 +24,20 @@
       "hassio_confirm": {
         "title": "Connect the discovered Codex Bridge App",
         "description": "Home Assistant discovered {name}. Confirm to validate its private endpoint and add the Integration; retry if the App is temporarily unavailable."
+      },
+      "reauth_confirm": {
+        "title": "Reconnect the Codex Bridge App",
+        "description": "The Codex Bridge App rejected Home Assistant's saved connection details. Restart the App from Settings > Apps so it publishes fresh details; Home Assistant then reconnects and closes this request. If this request stays open, submit to check the connection again. A reinstalled App has a new identity: delete this Codex Bridge entry, restart the App, then confirm the newly discovered App."
+      },
+      "reauth_external": {
+        "title": "Update the external Bridge token",
+        "description": "The external Bridge rejected its saved token. Enter its current token; the saved endpoint is unchanged.",
+        "data": {
+          "bridge_token": "Bridge token"
+        },
+        "data_description": {
+          "bridge_token": "The token configured in your external Bridge. It replaces the saved token."
+        }
       }
     },
     "error": {
@@ -32,6 +46,7 @@
       "invalid_endpoint": "Enter a valid private Bridge endpoint and token.",
       "incompatible_api": "This Bridge API is not compatible with the selected setup.",
       "app_not_discovered": "The App has not been discovered yet. Confirm that it is installed and running, then retry.",
+      "app_restart_required": "The App still rejects the saved connection details. Restart the Codex Bridge App, wait for it to start, then submit again. If you reinstalled the App, delete this entry and add the rediscovered App instead.",
       "unknown": "Unexpected error while validating the bridge connection."
     },
     "abort": {
@@ -42,6 +57,7 @@
       "incompatible_api": "The App API is not compatible with this integration.",
       "unknown": "The App could not be validated safely.",
       "reconfigure_successful": "The App connection was updated.",
+      "reauth_successful": "The Codex Bridge connection is working again.",
       "host_bridge_required": "Set up the normal Codex Bridge App first, then restart Codex Host Access.",
       "host_pairing_failed": "Host Access could not pair. Update and restart Codex Bridge, then restart the Host Access App.",
       "host_paired": "Host Access is paired. Review the warning in Codex Bridge to enable it; pairing alone grants no access."
@@ -79,6 +95,26 @@
     "abort": {
       "supervisor_only": "Native web search settings are available only for the Home Assistant App connection.",
       "web_search_unavailable": "Native web search is unavailable in the connected App. Update or restart the App, then try again."
+    }
+  },
+  "exceptions": {
+    "connection_already_active": {
+      "message": "Another Codex Bridge connection is already active."
+    },
+    "invalid_configuration": {
+      "message": "The saved Codex Bridge connection settings are invalid."
+    },
+    "authentication_failed": {
+      "message": "Codex Bridge rejected the saved Home Assistant connection token."
+    },
+    "cannot_connect": {
+      "message": "Home Assistant could not reach Codex Bridge."
+    },
+    "incompatible_api": {
+      "message": "The Codex Bridge API is not compatible with this Integration version."
+    },
+    "not_ready": {
+      "message": "Codex Bridge is not ready yet."
     }
   }
 }

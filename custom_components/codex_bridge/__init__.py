@@ -1,9 +1,9 @@
 from inspect import iscoroutinefunction
 import logging
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
@@ -63,7 +63,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         },
     )
     if domain_data[DATA_ENTRIES] and entry.entry_id not in domain_data[DATA_ENTRIES]:
-        raise ConfigEntryNotReady("another Codex Bridge connection is already active")
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="connection_already_active"
+        )
 
     connection_type = entry.data.get(
         CONF_CONNECTION_TYPE, CONNECTION_TYPE_EXTERNAL_LEGACY
@@ -72,12 +74,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         CONNECTION_TYPE_EXTERNAL_LEGACY,
         CONNECTION_TYPE_SUPERVISOR,
     }:
-        raise ConfigEntryNotReady("bridge configuration is invalid")
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="invalid_configuration"
+        )
     try:
         bridge_url = validate_bridge_url(entry.data[CONF_BRIDGE_URL])
         bridge_token = validate_bridge_token(entry.data[CONF_BRIDGE_TOKEN])
     except (EndpointError, KeyError) as exc:
-        raise ConfigEntryNotReady("bridge configuration is invalid") from exc
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="invalid_configuration"
+        ) from exc
     client = BridgeApiClient(
         async_get_clientsession(hass),
         bridge_url,
@@ -91,13 +97,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             client.require_legacy_v0()
     except BridgeApiAuthError as exc:
-        raise ConfigEntryAuthFailed("bridge token rejected") from exc
+        raise ConfigEntryAuthFailed(
+            translation_domain=DOMAIN, translation_key="authentication_failed"
+        ) from exc
     except BridgeApiConnectionError as exc:
-        raise ConfigEntryNotReady("bridge service is unavailable") from exc
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="cannot_connect"
+        ) from exc
     except BridgeApiIncompatibleError as exc:
-        raise ConfigEntryNotReady("bridge service API is incompatible") from exc
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="incompatible_api"
+        ) from exc
     except BridgeApiError as exc:
-        raise ConfigEntryNotReady("bridge service is not ready") from exc
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN, translation_key="not_ready"
+        ) from exc
 
     from .host_access import HOST_WORKER_KEY
     if (
@@ -127,6 +141,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             capabilities=tuple(getattr(ready, "capabilities", ())),
         ),
     )
+    @callback
+    def async_start_reauth() -> None:
+        # A rejection racing a reload must not outlive the reload it raced.
+        if entry.state is not ConfigEntryState.UNLOAD_IN_PROGRESS:
+            entry.async_start_reauth(hass)
+
     if runtime.api_version == 1:
         runtime.event_broker = EventBroker(
             client,
@@ -138,6 +158,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             task_factory=lambda target, name: entry.async_create_background_task(
                 hass, target, name
             ),
+            on_authentication_failed=async_start_reauth,
         )
         # Capabilities can refresh after setup when an App is upgraded.
         runtime.task_event_forwarder = TaskEventForwarder(
@@ -175,6 +196,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
         runtime.entity_coordinator = BridgeEntityCoordinator(hass, runtime)
     domain_data[DATA_ENTRIES][entry.entry_id] = runtime
+    platforms_forwarded = False
     try:
         if connection_type == CONNECTION_TYPE_SUPERVISOR:
             async def select_owned_mcp(name: str, selected: bool) -> None:
@@ -227,12 +249,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await runtime.question_notifications.async_start()
         if runtime.entity_coordinator is not None:
             await runtime.entity_coordinator.async_refresh()
+            platforms_forwarded = True
             await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    except BaseException:
-        if runtime.entity_coordinator is not None:
+    except BaseException as error:
+        if platforms_forwarded:
             await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
         domain_data[DATA_ENTRIES].pop(entry.entry_id, None)
         await runtime.async_close()
+        # The App answered readiness but failed a later setup call. Let HA
+        # retry or re-authenticate rather than leave the entry in setup error.
+        if isinstance(error, BridgeApiAuthError):
+            raise ConfigEntryAuthFailed(
+                translation_domain=DOMAIN, translation_key="authentication_failed"
+            ) from error
+        if isinstance(error, BridgeApiError):
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN, translation_key="not_ready"
+            ) from error
         raise
 
     return True
