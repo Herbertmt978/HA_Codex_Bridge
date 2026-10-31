@@ -479,49 +479,75 @@ async def test_each_saved_account_is_a_service_device_that_follows_its_label(has
         assert account_device(PROFILE_A).id == primary.id
 
 
+def _repair(issues, label):
+    """Find an account repair by its visible account label."""
+    matches = [
+        issue for (domain, _), issue in issues.issues.items()
+        if domain == DOMAIN and issue.translation_placeholders == {"account": label}
+    ]
+    assert len(matches) <= 1
+    return matches[0] if matches else None
+
+
 async def test_signed_out_account_raises_a_repair_until_it_signs_in_again(hass):
     issues = ir.async_get(hass)
     async with _loaded_account_entities(hass) as (entry, client, payload, coordinator, _registry):
-        spare_issue = f"account_reauthentication_{entry.entry_id}_{PROFILE_B}"
-        primary_issue = f"account_reauthentication_{entry.entry_id}_{PROFILE_A}"
-        assert issues.async_get_issue(DOMAIN, spare_issue) is None
+        assert _repair(issues, "Spare") is None
 
         spare = payload["profiles"][1]
         spare["status"] = "reauthentication_required"
         spare["reauthentication_required"] = True
         await coordinator.async_refresh()
-        issue = issues.async_get_issue(DOMAIN, spare_issue)
+        issue = _repair(issues, "Spare")
         assert issue is not None
         assert issue.translation_key == "account_reauthentication_required"
-        assert issue.translation_placeholders == {"account": "Spare"}
         assert issue.severity is ir.IssueSeverity.WARNING
         assert issue.is_fixable is False
-        assert issues.async_get_issue(DOMAIN, primary_issue) is None
+        # The issue ID appears in diagnostics downloads, so it hides the account ID.
+        assert issue.issue_id.startswith(f"account_reauthentication_{entry.entry_id}_")
+        assert PROFILE_B not in issue.issue_id
+        assert _repair(issues, "Primary") is None
 
         # An outage proves nothing about the sign-in, so the repair stays.
         client.async_account_profile_telemetry.side_effect = BridgeApiConnectionError()
         await coordinator.async_refresh()
-        assert issues.async_get_issue(DOMAIN, spare_issue) is not None
+        assert _repair(issues, "Spare") is not None
 
+        # After an App restart the account is unreported until the App checks it
+        # again. The repair, and an administrator's Ignore, must survive that.
+        ir.async_ignore_issue(hass, DOMAIN, issue.issue_id, True)
         client.async_account_profile_telemetry.side_effect = lambda: payload
+        spare["reauthentication_required"] = False
+        for status in ("stale", "unavailable"):
+            spare["status"] = status
+            await coordinator.async_refresh()
+            kept = _repair(issues, "Spare")
+            assert kept is not None and kept.issue_id == issue.issue_id
+            assert kept.dismissed_version is not None
+        spare["status"] = "reauthentication_required"
+        spare["reauthentication_required"] = True
+        await coordinator.async_refresh()
+        assert _repair(issues, "Spare").dismissed_version is not None
+
+        # A fresh signed-in reading closes it.
         spare["status"] = "available"
         spare["reauthentication_required"] = False
         spare["updated_at"] = datetime.now(UTC).isoformat()
         await coordinator.async_refresh()
-        assert issues.async_get_issue(DOMAIN, spare_issue) is None
+        assert _repair(issues, "Spare") is None
 
         # A complete inventory without the account also clears its repair.
         spare["reauthentication_required"] = True
         await coordinator.async_refresh()
-        assert issues.async_get_issue(DOMAIN, spare_issue) is not None
+        assert _repair(issues, "Spare") is not None
         payload["profiles"] = payload["profiles"][:1]
         payload["profiles"][0]["reauthentication_required"] = True
         await coordinator.async_refresh()
-        assert issues.async_get_issue(DOMAIN, spare_issue) is None
-        assert issues.async_get_issue(DOMAIN, primary_issue) is not None
+        assert _repair(issues, "Spare") is None
+        assert _repair(issues, "Primary") is not None
 
     # Unloading keeps the repair; removing the entry deletes it.
-    assert issues.async_get_issue(DOMAIN, primary_issue) is not None
+    assert _repair(issues, "Primary") is not None
     with patch("custom_components.codex_bridge.BridgeApiClient", return_value=client):
         await hass.config_entries.async_remove(entry.entry_id)
-    assert issues.async_get_issue(DOMAIN, primary_issue) is None
+    assert _repair(issues, "Primary") is None

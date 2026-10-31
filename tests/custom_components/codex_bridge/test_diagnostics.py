@@ -10,9 +10,6 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.components.diagnostics import (
-    get_diagnostics_for_config_entry,
-)
 
 from custom_components.codex_bridge.bridge_api import BridgeApiConnectionError
 from custom_components.codex_bridge.const import (
@@ -116,10 +113,18 @@ async def test_diagnostics_explain_health_without_credentials_or_accounts(
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
-        diagnostics = await get_diagnostics_for_config_entry(hass, hass_client, entry)
+        # Fetch the complete file a user attaches, including HA's issues section.
+        assert await async_setup_component(hass, "diagnostics", {})
+        client_session = await hass_client()
+        response = await client_session.get(f"/api/diagnostics/config_entry/{entry.entry_id}")
+        assert response.status == 200
+        download = await response.json()
         assert await hass.config_entries.async_unload(entry.entry_id)
 
-    text = json.dumps(diagnostics)
+    diagnostics = download["data"]
+    # The signed-out saved account raised one repair, which the download lists.
+    assert [issue["domain"] for issue in download["issues"]] == [DOMAIN]
+    text = json.dumps(download)
     for private in (
         TOKEN, URL, "172.30.33", WORKER["token"], PROFILE_A, PROFILE_B, "private@example",
         "Work", "Private household", "home-tools", "phone_device_id", "d" * 32,

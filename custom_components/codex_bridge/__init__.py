@@ -331,7 +331,6 @@ def _ready_version(ready: object) -> str | None:
 
 async def async_remove_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry) -> None:
     """Clear this entry's question notices and revoke its managed MCP grant."""
-    async_delete_reauthentication_issues(hass, entry.entry_id)
 
     async def clear_questions() -> None:
         # HA keeps runtime data only after a cancelled/failed unload. That owner
@@ -341,6 +340,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: CodexBridgeConfigEntry)
         runtime: CodexBridgeRuntime | None = getattr(entry, "runtime_data", None)
         if runtime is not None:
             await runtime.async_close()
+        # Only after that owner stops can no refresh raise a repair again.
+        async_delete_reauthentication_issues(hass, entry.entry_id)
         # Normal unload preserves delivery claims for restart. Permanent removal
         # has no runtime to reconcile them, including on an external connection.
         coordinator = QuestionNotificationCoordinator(

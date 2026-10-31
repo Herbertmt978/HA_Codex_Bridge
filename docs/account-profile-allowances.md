@@ -34,9 +34,10 @@ and their five-hour visibility choice remain unchanged.
 When the App reports that a saved account needs a fresh sign-in, Home Assistant
 raises a Repairs issue named after the account. To fix it, open the account
 menu in Codex Bridge, choose **Add another account**, sign in to that account
-and save it again. The issue closes on the next refresh that reports the account
-as signed in, or when the account is removed. A temporary App outage leaves it
-open, and removing the Integration deletes it.
+and save it again. The issue closes on the next fresh reading that reports the
+account as signed in, or when the account is removed. An App outage or restart,
+or a stale or unreported reading, leaves it open, and keeps it ignored if you
+chose to ignore it. Removing the Integration deletes it.
 
 Account entities keep a stable Home Assistant registry identity when an
 account is renamed, reordered or selected as active. A complete profile

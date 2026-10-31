@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import re
@@ -228,18 +229,26 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
 
     @callback
     def _sync_reauthentication_issues(self, snapshot: AccountAllowanceSnapshot) -> None:
-        """Raise one repair per signed-out account; a complete inventory clears the rest."""
+        """Raise one repair per signed-out account and close it on proof of sign-in.
 
-        prefix = _reauthentication_issue_prefix(self.config_entry.entry_id)
-        current: set[str] = set()
+        A stale or unreported account proves nothing about its sign-in: after an
+        App restart every account is unreported until the App checks it again.
+        Keeping its repair also keeps an administrator's Ignore.
+        """
+
+        entry_id = self.config_entry.entry_id
+        prefix = _reauthentication_issue_prefix(entry_id)
+        keep: set[str] = set()
         for profile in snapshot.profiles.values():
+            issue_id = _reauthentication_issue_id(entry_id, profile.profile_id)
+            if profile.status == "available" and not profile.reauthentication_required:
+                continue
+            keep.add(issue_id)
             if not (
                 profile.reauthentication_required
                 or profile.status == "reauthentication_required"
             ):
                 continue
-            issue_id = f"{prefix}{profile.profile_id}"
-            current.add(issue_id)
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
@@ -249,8 +258,9 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
                 translation_key="account_reauthentication_required",
                 translation_placeholders={"account": profile.label},
             )
+        # A complete inventory without the account also closes its repair.
         for domain, issue_id in tuple(ir.async_get(self.hass).issues):
-            if domain == DOMAIN and issue_id.startswith(prefix) and issue_id not in current:
+            if domain == DOMAIN and issue_id.startswith(prefix) and issue_id not in keep:
                 ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def async_close(self) -> None:
@@ -261,6 +271,13 @@ class AccountAllowanceCoordinator(DataUpdateCoordinator[AccountAllowanceSnapshot
 
 def _reauthentication_issue_prefix(entry_id: str) -> str:
     return f"{_REAUTHENTICATION_ISSUE}_{entry_id}_"
+
+
+def _reauthentication_issue_id(entry_id: str, profile_id: str) -> str:
+    # Issue IDs appear in diagnostics downloads, so keep the App's account
+    # identifier out of them while staying stable for each account.
+    digest = hashlib.sha256(f"{entry_id}:{profile_id}".encode()).hexdigest()[:16]
+    return f"{_reauthentication_issue_prefix(entry_id)}{digest}"
 
 
 @callback
