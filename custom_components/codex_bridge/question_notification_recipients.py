@@ -87,7 +87,7 @@ async def async_resolve_question_recipients(
         if (
             device is None
             or device.disabled_by is not None
-            or registration_id not in device.config_entries
+            or device.config_entry_id != registration_id
         ):
             continue
         user = await hass.auth.async_get_user(user_id)

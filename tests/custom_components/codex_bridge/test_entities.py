@@ -480,7 +480,9 @@ async def test_manual_unhide_persists_across_updates_reload_and_listener_cleanup
 
 async def test_entities_use_translated_names_on_one_service_device(hass):
     async with _loaded_usage_entities(hass) as (entry, _client, registry, ids):
-        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
         assert device is not None
         assert device.entry_type is dr.DeviceEntryType.SERVICE
         assert device.name == "Codex Bridge App"
@@ -512,7 +514,7 @@ async def test_entities_use_translated_names_on_one_service_device(hass):
         ]
 
 
-async def test_app_connection_device_is_shown_under_its_supervisor_app(hass):
+async def test_app_connection_device_is_shown_under_its_supervisor_app(hass, caplog):
     supervisor = MockConfigEntry(domain="hassio")
     supervisor.add_to_hass(hass)
     app = dr.async_get(hass).async_get_or_create(
@@ -522,7 +524,9 @@ async def test_app_connection_device_is_shown_under_its_supervisor_app(hass):
         entry_type=dr.DeviceEntryType.SERVICE,
     )
     async with _loaded_usage_entities(hass, slug="local_codex_bridge") as (entry, *_):
-        device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+        device = dr.async_get(hass).async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        )
         assert device.via_device_id == app.id
-        assert entry.entry_id in device.config_entries
-        assert supervisor.entry_id not in device.config_entries
+        assert device.config_entry_id == entry.entry_id
+    assert "deprecated" not in caplog.text

@@ -515,15 +515,16 @@ class AccountAllowanceEntityManager:
 
         registry = dr.async_get(self.hass)
         for profile_id, profile in data.profiles.items():
-            device = registry.async_get_device(
-                identifiers={account_device_identifier(self.entry.entry_id, profile_id)}
+            device = registry.async_get_device_by_identifier(
+                account_device_identifier(self.entry.entry_id, profile_id),
+                self.entry.entry_id,
             )
             if device is not None and device.name != profile.label:
                 registry.async_update_device(device.id, name=profile.label)
 
     @callback
     def _remove_stale_account_devices(self, current: set[str]) -> None:
-        """Detach accounts that a complete inventory no longer lists."""
+        """Remove account devices that a complete inventory no longer lists."""
 
         registry = dr.async_get(self.hass)
         expected = {
@@ -537,9 +538,7 @@ class AccountAllowanceEntityManager:
                 if identifier[0] == DOMAIN and identifier[1].startswith(prefix)
             }
             if accounts and not accounts & expected:
-                registry.async_update_device(
-                    device.id, remove_config_entry_id=self.entry.entry_id
-                )
+                registry.async_remove_device(device.id)
 
     def _registered_profile_ids(self, registry: er.EntityRegistry) -> set[str]:
         prefix = f"{self.entry.entry_id}_profile_allowance_"

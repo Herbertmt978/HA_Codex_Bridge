@@ -422,13 +422,13 @@ def test_invalid_credit_counts_are_unknown(value):
     assert profile.expiry_complete is False
 
 
-async def test_each_saved_account_is_a_service_device_that_follows_its_label(hass):
+async def test_each_saved_account_is_a_service_device_that_follows_its_label(hass, caplog):
     async with _loaded_account_entities(hass) as (entry, client, payload, coordinator, registry):
         devices = dr.async_get(hass)
 
         def account_device(profile_id):
-            return devices.async_get_device(
-                identifiers={(DOMAIN, f"{entry.entry_id}_profile_{profile_id}")}
+            return devices.async_get_device_by_identifier(
+                (DOMAIN, f"{entry.entry_id}_profile_{profile_id}"), entry.entry_id
             )
 
         primary = account_device(PROFILE_A)
@@ -437,7 +437,7 @@ async def test_each_saved_account_is_a_service_device_that_follows_its_label(has
         assert spare.name == "Spare"
         assert primary.entry_type is dr.DeviceEntryType.SERVICE
         assert primary.model == "Saved ChatGPT account"
-        bridge = devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+        bridge = devices.async_get_device_by_identifier((DOMAIN, entry.entry_id), entry.entry_id)
         assert primary.via_device_id == bridge.id
         assert spare.via_device_id == bridge.id
         usage = registry.async_get_entity_id(
@@ -477,6 +477,8 @@ async def test_each_saved_account_is_a_service_device_that_follows_its_label(has
         await hass.async_block_till_done()
         assert account_device(PROFILE_B) is None
         assert account_device(PROFILE_A).id == primary.id
+        # Renames and removals use the device registry's current API.
+        assert "deprecated" not in caplog.text
 
 
 def _repair(issues, label):

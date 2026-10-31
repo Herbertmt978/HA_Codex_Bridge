@@ -45,9 +45,11 @@ def bridge_device_info(
     if runtime.connection_type == CONNECTION_TYPE_SUPERVISOR and isinstance(slug, str):
         # Show the connection under the App that serves it. An App device that
         # Supervisor has not registered yet is linked on the next setup.
-        app = dr.async_get(hass).async_get_device(identifiers={(SUPERVISOR_DOMAIN, slug)})
-        if app is not None:
-            info["via_device_id"] = app.id
+        apps = dr.async_get(hass).async_get_devices(
+            identifiers={(SUPERVISOR_DOMAIN, slug)}
+        )
+        if apps:
+            info["via_device_id"] = apps[0].id
     return info
 
 
