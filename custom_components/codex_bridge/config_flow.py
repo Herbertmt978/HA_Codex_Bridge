@@ -1,3 +1,6 @@
+from collections.abc import Mapping
+from typing import Any
+
 import voluptuous as vol
 
 from .host_access import HOST_WORKER_KEY, SUPERVISOR_SLUG_KEY, validate_host_discovery
@@ -114,14 +117,29 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_hassio_ready_error(self, discovery: DiscoveryRecord) -> str | None:
         """Return a stable error code after authenticated v1 readiness validation."""
 
+        return await self._async_ready_error(
+            discovery.base_url, discovery.token, legacy=False, discovery=discovery
+        )
+
+    async def _async_ready_error(
+        self,
+        bridge_url: str,
+        bridge_token: str,
+        *,
+        legacy: bool,
+        discovery: DiscoveryRecord | None = None,
+    ) -> str | None:
+        """Return a stable error code after authenticated readiness validation."""
+
         try:
             client = BridgeApiClient(
                 async_get_clientsession(self.hass),
-                discovery.base_url,
-                discovery.token,
+                bridge_url,
+                bridge_token,
+                allow_legacy_v0=legacy,
             )
             await client.async_ready(discovery=discovery)
-            if client.negotiated_api_version != API_CURRENT:
+            if client.negotiated_api_version != (0 if legacy else API_CURRENT):
                 raise BridgeApiIncompatibleError()
         except BridgeApiAuthError:
             return "invalid_auth"
@@ -336,6 +354,69 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 reason="reconfigure_successful",
             )
         return self.async_create_entry(title=self._hassio_title, data=data)
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> config_entries.ConfigFlowResult:
+        """Recover from a rejected Bridge token without displaying it."""
+
+        if entry_data.get(CONF_CONNECTION_TYPE) == CONNECTION_TYPE_SUPERVISOR:
+            return await self.async_step_reauth_confirm()
+        return await self.async_step_reauth_external()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Recheck App credentials, which only Supervisor discovery can replace."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entry = self._get_reauth_entry()
+            error = await self._async_ready_error(
+                entry.data[CONF_BRIDGE_URL], entry.data[CONF_BRIDGE_TOKEN], legacy=False
+            )
+            if error is None:
+                # Reload even when loaded: a rejected token stops live updates.
+                return self.async_update_reload_and_abort(entry)
+            errors["base"] = "app_restart_required" if error == "invalid_auth" else error
+        return self.async_show_form(
+            step_id="reauth_confirm", data_schema=vol.Schema({}), errors=errors
+        )
+
+    async def async_step_reauth_external(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Replace the token of an external Bridge while keeping its endpoint."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            entry = self._get_reauth_entry()
+            try:
+                bridge_token = validate_bridge_token(user_input[CONF_BRIDGE_TOKEN])
+            except EndpointError:
+                errors["base"] = "invalid_endpoint"
+            else:
+                error = await self._async_ready_error(
+                    entry.data[CONF_BRIDGE_URL], bridge_token, legacy=True
+                )
+                if error is None:
+                    return self.async_update_reload_and_abort(
+                        entry, data_updates={CONF_BRIDGE_TOKEN: bridge_token}
+                    )
+                errors["base"] = error
+        return self.async_show_form(
+            step_id="reauth_external",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_BRIDGE_TOKEN): selector.TextSelector(
+                        selector.TextSelectorConfig(
+                            type=selector.TextSelectorType.PASSWORD
+                        )
+                    )
+                }
+            ),
+            errors=errors,
+        )
 
 
 class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):

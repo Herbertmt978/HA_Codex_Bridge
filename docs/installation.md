@@ -162,6 +162,33 @@ Validate the configuration, reload **Core configuration**, then refresh the
 HACS repository information. The image is public branding and contains no
 credentials. Remove this customisation when HACS provides the local icon itself.
 
+## Reconnect after a rejected token
+
+When the App or an external Bridge rejects the Integration's saved connection
+token, Home Assistant raises an **Authentication expired for Codex Bridge**
+repair in **Settings → Repairs**, and **Settings → Devices & services** shows a
+highlighted Codex Bridge card with a **Reconfigure** button. Either opens the
+request. This is separate from **Sign in with ChatGPT**, which you manage in the
+panel.
+
+- **App connection:** restart the Codex Bridge App in **Settings → Apps**. It
+  publishes fresh connection details; Home Assistant then reconnects and closes
+  the request. If the request stays open, submit it to check the connection
+  again.
+- **Reinstalled App:** reinstalling gives the App a new identity, so the old
+  entry cannot reconnect. Delete the Codex Bridge entry in
+  **Settings → Devices & services**, restart the App, then confirm the newly
+  discovered Codex Bridge App. Settings saved in the Integration's options
+  must be chosen again.
+- **External Bridge:** enter the Bridge's current token. The saved endpoint is
+  unchanged. Home Assistant notices a changed external token only when it
+  starts or reloads the Integration, so reload Codex Bridge after changing it.
+
+You do not need to act when the App is briefly unavailable or fails part-way
+through startup: Home Assistant retries the Integration automatically. Live
+chat updates also retry in the background after an App error, so a reload is
+not needed once the App recovers.
+
 ## After installation
 
 Read [Remote access](remote-access.md) before using the panel away from home.

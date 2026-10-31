@@ -1,16 +1,29 @@
 """Integration lifecycle tests for Codex Bridge."""
 
 import asyncio
+from collections.abc import Iterator
+from contextlib import contextmanager
+from datetime import timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.setup import async_setup_component
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_fire_time_changed,
+)
 
-from custom_components.codex_bridge import async_setup_entry, async_unload_entry
+from custom_components.codex_bridge import (
+    PLATFORMS,
+    async_setup_entry,
+    async_unload_entry,
+)
 from custom_components.codex_bridge.bridge_api import (
     BridgeApiAuthError,
     BridgeApiConnectionError,
@@ -339,3 +352,243 @@ async def test_setup_maps_safe_connection_failures(hass, error, expected):
     with patch("custom_components.codex_bridge.BridgeApiClient", return_value=client):
         with pytest.raises(expected):
             await _setup_entry(hass, entry)
+
+@pytest.fixture
+async def core_components(hass: HomeAssistant) -> None:
+    """Initialise the exposed-entity registry the conversation dependency needs."""
+
+    assert await async_setup_component(hass, "homeassistant", {})
+
+
+@contextmanager
+def _setup_boundary(client: Mock) -> Iterator[None]:
+    """Replace the Bridge client and process-wide panel registration only."""
+
+    with (
+        patch("custom_components.codex_bridge.BridgeApiClient", return_value=client),
+        patch("custom_components.codex_bridge.async_register_http_views"),
+        patch("custom_components.codex_bridge.async_register_websocket_commands"),
+        patch("custom_components.codex_bridge.async_register_panel", new=AsyncMock()),
+        patch("custom_components.codex_bridge.async_remove_panel"),
+        patch(
+            "homeassistant.components.frontend.async_setup",
+            new=AsyncMock(return_value=True),
+        ),
+    ):
+        yield
+
+
+def _app_client(*capabilities: str) -> Mock:
+    async def wait_for_events(*, after: int) -> None:
+        await asyncio.Event().wait()
+
+    client = Mock()
+    client.async_ready = AsyncMock(
+        return_value=Mock(capabilities=("api_v1", *capabilities))
+    )
+    client.require_api_v1 = Mock()
+    client.negotiated_api_version = 1
+    client.async_get_status = AsyncMock(side_effect=BridgeApiConnectionError())
+    client.async_list_threads = AsyncMock(return_value=[])
+    client.async_replay_events = AsyncMock(side_effect=wait_for_events)
+    client.async_wait_events = AsyncMock(side_effect=wait_for_events)
+    client.async_scheduler_automations = AsyncMock(return_value={"automations": []})
+    client.async_close = AsyncMock()
+    return client
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_rejected_token_during_setup_starts_reauthentication(hass):
+    entry = _entry(hass)
+    client = _app_client()
+    client.async_ready.side_effect = BridgeApiAuthError()
+
+    with _setup_boundary(client):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    [flow] = entry.async_get_active_flows(hass, {SOURCE_REAUTH})
+    assert flow["step_id"] == "reauth_confirm"
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_bridge_error_after_readiness_retries_setup_until_it_loads(
+    hass, caplog
+):
+    entry = _entry(hass)
+    client = _app_client("automations_v1")
+    client.async_scheduler_automations.side_effect = [
+        BridgeApiConnectionError(),
+        {"automations": []},
+    ]
+
+    with _setup_boundary(client):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.SETUP_RETRY
+        assert entry.error_reason_translation_key == "not_ready"
+        assert entry.reason == "Codex Bridge is not ready yet"
+        assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+        client.async_close.assert_awaited_once()
+        # Platforms were never forwarded, so cleanup must not try to unload them.
+        assert "Ignored unload request" not in caplog.text
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=5))
+        # HA retries in a background task, beside the endless event long-poll.
+        async with asyncio.timeout(5):
+            while entry.state is not ConfigEntryState.LOADED:
+                await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        assert client.async_scheduler_automations.await_count == 2
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_token_rejected_after_readiness_starts_reauthentication(hass):
+    entry = _entry(hass)
+    client = _app_client("automations_v1")
+    client.async_scheduler_automations.side_effect = BridgeApiAuthError()
+
+    with _setup_boundary(client):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.SETUP_ERROR
+    assert entry.error_reason_translation_key == "authentication_failed"
+    assert entry.reason == (
+        "Codex Bridge rejected the saved Home Assistant connection token"
+    )
+    assert list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
+    assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+    client.async_close.assert_awaited_once()
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_live_update_token_rejection_starts_reauthentication(hass):
+    entry = _entry(hass)
+    client = _app_client()
+    client.async_replay_events.side_effect = BridgeApiAuthError()
+
+    with _setup_boundary(client):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        [flow] = entry.async_get_active_flows(hass, {SOURCE_REAUTH})
+        assert flow["step_id"] == "reauth_confirm"
+        runtime = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id]
+        assert runtime.event_broker.connection_status["state"] == "authentication_failed"
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_app_reauth_restarts_live_updates_stopped_by_a_rejected_token(hass):
+    entry = _entry(hass)
+    client = _app_client()
+    replays = 0
+
+    async def replay(*, after: int) -> None:
+        nonlocal replays
+        replays += 1
+        if replays == 1:
+            raise BridgeApiAuthError()
+        await asyncio.Event().wait()
+
+    client.async_replay_events.side_effect = replay
+    flow_client = AsyncMock()
+    flow_client.negotiated_api_version = 1
+    flow_client.async_ready.return_value = object()
+    with (
+        _setup_boundary(client),
+        patch(
+            "custom_components.codex_bridge.config_flow.BridgeApiClient",
+            return_value=flow_client,
+        ),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        stopped = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].event_broker
+        assert stopped.connection_status["state"] == "authentication_failed"
+        [flow] = entry.async_get_active_flows(hass, {SOURCE_REAUTH})
+
+        # The App accepts the saved token again, e.g. after a restart.
+        result = await hass.config_entries.flow.async_configure(flow["flow_id"], {})
+        await hass.async_block_till_done()
+
+        assert result["type"] is FlowResultType.ABORT
+        assert result["reason"] == "reauth_successful"
+        assert entry.state is ConfigEntryState.LOADED
+        restarted = hass.data[DOMAIN][DATA_ENTRIES][entry.entry_id].event_broker
+        assert restarted is not stopped
+        assert restarted.connection_status["state"] == "connecting"
+        assert replays == 2
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_rejection_racing_a_reload_leaves_no_reauthentication_request(hass):
+    entry = _entry(hass)
+    client = _app_client()
+    release = asyncio.Event()
+    replays = 0
+
+    async def replay(*, after: int) -> None:
+        nonlocal replays
+        replays += 1
+        if replays == 1:
+            await release.wait()
+            raise BridgeApiAuthError()
+        await asyncio.Event().wait()
+
+    client.async_replay_events.side_effect = replay
+    unload_platforms = hass.config_entries.async_unload_platforms
+
+    async def unload_while_rejected(*args, **kwargs):
+        # The old token is rejected while the reload is unloading the entry.
+        release.set()
+        for _ in range(5):
+            await asyncio.sleep(0)
+        return await unload_platforms(*args, **kwargs)
+
+    with (
+        _setup_boundary(client),
+        patch.object(
+            hass.config_entries, "async_unload_platforms", new=unload_while_rejected
+        ),
+    ):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state is ConfigEntryState.LOADED
+        assert replays == 2
+        assert not list(entry.async_get_active_flows(hass, {SOURCE_REAUTH}))
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.usefixtures("core_components")
+async def test_setup_cancelled_while_forwarding_unloads_the_platforms(hass):
+    entry = _entry(hass)
+    client = _app_client()
+    unload_platforms = AsyncMock(return_value=True)
+    with (
+        _setup_boundary(client),
+        patch.object(
+            hass.config_entries,
+            "async_forward_entry_setups",
+            new=AsyncMock(side_effect=asyncio.CancelledError),
+        ),
+        patch.object(
+            hass.config_entries, "async_unload_platforms", new=unload_platforms
+        ),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await _setup_entry(hass, entry)
+
+    unload_platforms.assert_awaited_once_with(entry, PLATFORMS)
+    assert entry.entry_id not in hass.data[DOMAIN][DATA_ENTRIES]
+    client.async_close.assert_awaited_once()
