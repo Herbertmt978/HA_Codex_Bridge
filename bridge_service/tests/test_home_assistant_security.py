@@ -9,9 +9,61 @@ COMPONENT_ROOT = REPO_ROOT / "custom_components" / "codex_bridge"
 
 
 def test_all_home_assistant_websocket_commands_are_registered_admin_only() -> None:
-    source = (COMPONENT_ROOT / "websocket_api.py").read_text(encoding="utf-8")
+    tree = ast.parse((COMPONENT_ROOT / "websocket_api.py").read_text(encoding="utf-8"))
 
-    assert "websocket_api.async_register_command(hass, websocket_api.require_admin(command))" in source
+    # require_admin must be Home Assistant's decorator, not a local stand-in.
+    def imported_from(module: str) -> set[str]:
+        return {
+            alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == module
+            for alias in node.names
+            if alias.asname is None
+        }
+
+    redefined = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
+        for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name)
+    } | {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+    }
+    direct = (
+        "require_admin" in imported_from("homeassistant.components.websocket_api.decorators")
+        and "require_admin" not in redefined
+    )
+    via_package = (
+        "websocket_api" in imported_from("homeassistant.components")
+        and "websocket_api" not in redefined
+    )
+
+    def is_require_admin(func: ast.expr) -> bool:
+        if isinstance(func, ast.Name):
+            return direct and func.id == "require_admin"
+        return (
+            via_package
+            and isinstance(func, ast.Attribute)
+            and func.attr == "require_admin"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "websocket_api"
+        )
+
+    registrations = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "async_register_command"
+    ]
+    assert registrations
+    for call in registrations:
+        assert len(call.args) == 2 and not call.keywords, ast.unparse(call)
+        wrapped = call.args[1]
+        assert isinstance(wrapped, ast.Call) and is_require_admin(wrapped.func), ast.unparse(call)
 
 
 def test_panel_and_http_file_surfaces_require_home_assistant_admin() -> None:
