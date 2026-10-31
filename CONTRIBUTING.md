@@ -54,6 +54,7 @@ This tooling requirement does not change the installed Home Assistant runtime.
 ```powershell
 # Home Assistant Integration (run in Linux, matching CI)
 python -m pytest -q
+python -m mypy --strict -p custom_components.codex_bridge
 
 # Bridge suite (isolated from the Home Assistant pytest plugin)
 $env:PYTEST_DISABLE_PLUGIN_AUTOLOAD = "1"

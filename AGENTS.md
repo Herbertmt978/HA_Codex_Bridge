@@ -90,6 +90,7 @@ npm run lint
 npm run test:unit
 npm run build
 python -m ruff check bridge_service custom_components scripts tests
+python -m mypy --strict -p custom_components.codex_bridge
 python -m pytest -q bridge_service/tests
 python scripts/sync_app_release.py --check
 python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json

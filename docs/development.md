@@ -45,10 +45,12 @@ python scripts/sync_app_release.py --check
 python scripts/update_codex_lock.py --check codex_bridge_app/codex-release.json
 ```
 
-Run the full Home Assistant Integration suite on Linux, matching CI:
+Run the full Home Assistant Integration suite and its strict type check on
+Linux, matching CI:
 
 ```text
 python -m pytest -q
+python -m mypy --strict -p custom_components.codex_bridge
 ```
 
 For the Bridge suite, disable automatic loading of the Home Assistant pytest

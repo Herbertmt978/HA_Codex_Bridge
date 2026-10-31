@@ -44,6 +44,9 @@ jobs:
           uvx --from ruff==0.15.10 ruff check bridge_service custom_components scripts tests
           python -m compileall -q bridge_service/src custom_components scripts
 
+      - name: Check Integration types
+        run: python -m mypy --strict -p custom_components.codex_bridge
+
       - name: Test the Home Assistant Integration
         run: python -m pytest -q
 
