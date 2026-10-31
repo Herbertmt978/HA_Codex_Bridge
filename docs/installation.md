@@ -14,7 +14,7 @@ or HACS integration.
 
 ## Prerequisites
 
-- Home Assistant Core `2026.7.2` or newer, running on Home Assistant OS for
+- Home Assistant Core `2026.9.0` or newer, running on Home Assistant OS for
   `amd64`, with administrator access.
 - HACS, plus a ChatGPT account that can use Codex. No OpenAI API key is needed.
 - Browser access to the ChatGPT device-login page for initial sign-in and

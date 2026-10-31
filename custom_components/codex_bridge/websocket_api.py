@@ -1,10 +1,11 @@
 import asyncio
 from typing import Any
 
-import voluptuous as vol
+import probatio
 
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.typing import VolDictType
 
 from .bridge_api import (
     BridgeApiAuthError,
@@ -226,15 +227,15 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/terminal",
-    vol.Required("operation"): vol.In({"open", "read", "write", "resize", "close"}),
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Optional("session_id"): vol.All(str, vol.Length(min=32, max=32)),
-    vol.Optional("cols"): vol.All(int, vol.Range(min=20, max=300)),
-    vol.Optional("rows"): vol.All(int, vol.Range(min=2, max=100)),
-    vol.Optional("after"): vol.All(int, vol.Range(min=0, max=9_007_199_254_740_991)),
-    vol.Optional("sequence"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
-    vol.Optional("data"): vol.All(str, vol.Length(max=16 * 1024)),
+    probatio.Required("type"): f"{DOMAIN}/terminal",
+    probatio.Required("operation"): probatio.In({"open", "read", "write", "resize", "close"}),
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Optional("session_id"): probatio.All(str, probatio.Length(min=32, max=32)),
+    probatio.Optional("cols"): probatio.All(int, probatio.Range(min=20, max=300)),
+    probatio.Optional("rows"): probatio.All(int, probatio.Range(min=2, max=100)),
+    probatio.Optional("after"): probatio.All(int, probatio.Range(min=0, max=9_007_199_254_740_991)),
+    probatio.Optional("sequence"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
+    probatio.Optional("data"): probatio.All(str, probatio.Length(max=16 * 1024)),
 })
 @websocket_api.async_response
 async def ws_terminal(hass, connection, msg):
@@ -286,7 +287,7 @@ async def _async_handle(
         connection.send_result(msg["id"], result)
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_config"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_config"})
 @websocket_api.async_response
 async def ws_get_config(
     hass: HomeAssistant,
@@ -305,7 +306,7 @@ async def ws_get_config(
     await _async_handle(hass, connection, msg, None, runtime_handler=_handler)
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_status"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_status"})
 @websocket_api.async_response
 async def ws_get_status(
     hass: HomeAssistant,
@@ -323,9 +324,9 @@ async def ws_get_status(
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/consume_reset_credit",
-    vol.Required("credit_id"): vol.Match(r"^[\x21-\x7e]{1,256}$"),
-    vol.Required("idempotency_key"): vol.Match(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
+    probatio.Required("type"): f"{DOMAIN}/consume_reset_credit",
+    probatio.Required("credit_id"): probatio.Match(r"^[\x21-\x7e]{1,256}$"),
+    probatio.Required("idempotency_key"): probatio.Match(r"^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$"),
 })
 @websocket_api.async_response
 async def ws_consume_reset_credit(hass, connection, msg) -> None:
@@ -337,7 +338,7 @@ async def ws_consume_reset_credit(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_event_status"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_event_status"})
 @websocket_api.async_response
 async def ws_get_event_status(
     hass: HomeAssistant,
@@ -367,7 +368,7 @@ async def ws_get_event_status(
     connection.send_result(msg["id"], dict(runtime.event_broker.connection_status))
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/get_auth_status"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/get_auth_status"})
 @websocket_api.async_response
 async def ws_get_auth_status(
     hass: HomeAssistant,
@@ -381,8 +382,8 @@ async def ws_get_auth_status(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/start_auth_login",
-        vol.Optional("force_logout", default=False): bool,
+        probatio.Required("type"): f"{DOMAIN}/start_auth_login",
+        probatio.Optional("force_logout", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -399,7 +400,7 @@ async def ws_start_auth_login(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/cancel_auth_login"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/cancel_auth_login"})
 @websocket_api.async_response
 async def ws_cancel_auth_login(
     hass: HomeAssistant,
@@ -411,7 +412,7 @@ async def ws_cancel_auth_login(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/logout_auth"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/logout_auth"})
 @websocket_api.async_response
 async def ws_logout_auth(
     hass: HomeAssistant,
@@ -423,7 +424,7 @@ async def ws_logout_auth(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_account_profiles"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_account_profiles"})
 @websocket_api.async_response
 async def ws_list_account_profiles(hass, connection, msg) -> None:
     await _async_handle(
@@ -432,8 +433,8 @@ async def ws_list_account_profiles(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/save_account_profile",
-    vol.Required("label"): vol.All(str, vol.Length(min=1, max=60)),
+    probatio.Required("type"): f"{DOMAIN}/save_account_profile",
+    probatio.Required("label"): probatio.All(str, probatio.Length(min=1, max=60)),
 })
 @websocket_api.async_response
 async def ws_save_account_profile(hass, connection, msg) -> None:
@@ -444,8 +445,8 @@ async def ws_save_account_profile(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/switch_account_profile",
-    vol.Required("profile_id"): vol.Match(r"^[a-f0-9]{32}$"),
+    probatio.Required("type"): f"{DOMAIN}/switch_account_profile",
+    probatio.Required("profile_id"): probatio.Match(r"^[a-f0-9]{32}$"),
 })
 @websocket_api.async_response
 async def ws_switch_account_profile(hass, connection, msg) -> None:
@@ -456,8 +457,8 @@ async def ws_switch_account_profile(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/account_profile_details",
-    vol.Required("profile_id"): vol.Match(r"^[a-f0-9]{32}$"),
+    probatio.Required("type"): f"{DOMAIN}/account_profile_details",
+    probatio.Required("profile_id"): probatio.Match(r"^[a-f0-9]{32}$"),
 })
 @websocket_api.async_response
 async def ws_account_profile_details(hass, connection, msg) -> None:
@@ -467,7 +468,7 @@ async def ws_account_profile_details(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/prepare_new_account_login"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/prepare_new_account_login"})
 @websocket_api.async_response
 async def ws_prepare_new_account_login(hass, connection, msg) -> None:
     await _async_handle(
@@ -477,8 +478,8 @@ async def ws_prepare_new_account_login(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/remove_account_profile",
-    vol.Required("profile_id"): vol.Match(r"^[a-f0-9]{32}$"),
+    probatio.Required("type"): f"{DOMAIN}/remove_account_profile",
+    probatio.Required("profile_id"): probatio.Match(r"^[a-f0-9]{32}$"),
 })
 @websocket_api.async_response
 async def ws_remove_account_profile(hass, connection, msg) -> None:
@@ -488,7 +489,7 @@ async def ws_remove_account_profile(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_projects"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_projects"})
 @websocket_api.async_response
 async def ws_list_projects(
     hass: HomeAssistant,
@@ -502,11 +503,11 @@ async def ws_list_projects(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/create_project",
-        vol.Required("name"): str,
-        vol.Optional("root_path"): vol.Any(None, str),
-        vol.Optional("default_model"): str,
-        vol.Optional("default_thinking_level"): str,
+        probatio.Required("type"): f"{DOMAIN}/create_project",
+        probatio.Required("name"): str,
+        probatio.Optional("root_path"): probatio.Any(None, str),
+        probatio.Optional("default_model"): str,
+        probatio.Optional("default_thinking_level"): str,
     }
 )
 @websocket_api.async_response
@@ -530,12 +531,12 @@ async def ws_create_project(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/update_project",
-        vol.Required("project_id"): str,
-        vol.Optional("name"): vol.Any(None, str),
-        vol.Optional("root_path"): vol.Any(None, str),
-        vol.Optional("default_model"): vol.Any(None, str),
-        vol.Optional("default_thinking_level"): vol.Any(None, str),
+        probatio.Required("type"): f"{DOMAIN}/update_project",
+        probatio.Required("project_id"): str,
+        probatio.Optional("name"): probatio.Any(None, str),
+        probatio.Optional("root_path"): probatio.Any(None, str),
+        probatio.Optional("default_model"): probatio.Any(None, str),
+        probatio.Optional("default_thinking_level"): probatio.Any(None, str),
     }
 )
 @websocket_api.async_response
@@ -559,8 +560,8 @@ async def ws_update_project(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/archive_project",
-        vol.Required("project_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/archive_project",
+        probatio.Required("project_id"): str,
     }
 )
 @websocket_api.async_response
@@ -579,8 +580,8 @@ async def ws_archive_project(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/restore_project",
-        vol.Required("project_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/restore_project",
+        probatio.Required("project_id"): str,
     }
 )
 @websocket_api.async_response
@@ -599,8 +600,8 @@ async def ws_restore_project(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/delete_project",
-        vol.Required("project_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/delete_project",
+        probatio.Required("project_id"): str,
     }
 )
 @websocket_api.async_response
@@ -619,8 +620,8 @@ async def ws_delete_project(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/browse_paths",
-        vol.Optional("path"): vol.Any(None, str),
+        probatio.Required("type"): f"{DOMAIN}/browse_paths",
+        probatio.Optional("path"): probatio.Any(None, str),
     }
 )
 @websocket_api.async_response
@@ -639,9 +640,9 @@ async def ws_browse_paths(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/create_folder",
-        vol.Required("parent_path"): str,
-        vol.Required("folder_name"): str,
+        probatio.Required("type"): f"{DOMAIN}/create_folder",
+        probatio.Required("parent_path"): str,
+        probatio.Required("folder_name"): str,
     }
 )
 @websocket_api.async_response
@@ -662,8 +663,8 @@ async def ws_create_folder(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_threads",
-        vol.Optional("include_archived", default=False): bool,
+        probatio.Required("type"): f"{DOMAIN}/list_threads",
+        probatio.Optional("include_archived", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -682,11 +683,11 @@ async def ws_list_threads(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/search_transcript",
-        vol.Required("query"): vol.All(str, vol.Length(min=1, max=256)),
-        vol.Optional("include_archived", default=False): bool,
-        vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=100)),
-        vol.Optional("before_cursor"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+        probatio.Required("type"): f"{DOMAIN}/search_transcript",
+        probatio.Required("query"): probatio.All(str, probatio.Length(min=1, max=256)),
+        probatio.Optional("include_archived", default=False): bool,
+        probatio.Optional("limit", default=50): probatio.All(int, probatio.Range(min=1, max=100)),
+        probatio.Optional("before_cursor"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
     }
 )
 @websocket_api.async_response
@@ -710,9 +711,9 @@ async def ws_search_transcript(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/get_transcript_message",
-        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("sequence"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+        probatio.Required("type"): f"{DOMAIN}/get_transcript_message",
+        probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("sequence"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
     }
 )
 @websocket_api.async_response
@@ -732,9 +733,9 @@ async def ws_get_transcript_message(
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/git_context",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Optional("base_ref"): vol.All(str, vol.Length(min=1, max=256)),
+    probatio.Required("type"): f"{DOMAIN}/git_context",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Optional("base_ref"): probatio.All(str, probatio.Length(min=1, max=256)),
 })
 @websocket_api.async_response
 async def ws_git_context(
@@ -749,13 +750,13 @@ async def ws_git_context(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/git_review",
-        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("scope"): vol.In(["unstaged", "staged", "commit", "branch"]),
-        vol.Optional("base_ref"): vol.All(str, vol.Length(min=1, max=256)),
-        vol.Optional("commit_ref"): vol.All(str, vol.Length(min=1, max=256)),
-        vol.Optional("path"): vol.All(str, vol.Length(min=1, max=2048)),
-        vol.Optional("expected_state_token"): vol.Match(r"^[a-f0-9]{64}$"),
+        probatio.Required("type"): f"{DOMAIN}/git_review",
+        probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("scope"): probatio.In(["unstaged", "staged", "commit", "branch"]),
+        probatio.Optional("base_ref"): probatio.All(str, probatio.Length(min=1, max=256)),
+        probatio.Optional("commit_ref"): probatio.All(str, probatio.Length(min=1, max=256)),
+        probatio.Optional("path"): probatio.All(str, probatio.Length(min=1, max=2048)),
+        probatio.Optional("expected_state_token"): probatio.Match(r"^[a-f0-9]{64}$"),
     }
 )
 @websocket_api.async_response
@@ -781,8 +782,8 @@ async def ws_git_review(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/get_thread",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/get_thread",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -801,15 +802,15 @@ async def ws_get_thread(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/create_thread",
-        vol.Required("title"): str,
-        vol.Optional("project_id"): vol.Any(None, str),
-        vol.Optional("mode", default="full-auto"): vol.In(
+        probatio.Required("type"): f"{DOMAIN}/create_thread",
+        probatio.Required("title"): str,
+        probatio.Optional("project_id"): probatio.Any(None, str),
+        probatio.Optional("mode", default="full-auto"): probatio.In(
             ["observe", "edit", "full-auto", "haos-full-access"]
         ),
-        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
-        vol.Optional("model_override"): vol.Any(None, str),
-        vol.Optional("thinking_override"): vol.Any(None, str),
+        probatio.Optional("host_access_grant"): probatio.Any(None, probatio.Match(r"^[a-f0-9]{32}$")),
+        probatio.Optional("model_override"): probatio.Any(None, str),
+        probatio.Optional("thinking_override"): probatio.Any(None, str),
     }
 )
 @websocket_api.async_response
@@ -835,17 +836,17 @@ async def ws_create_thread(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/update_thread",
-        vol.Required("thread_id"): str,
-        vol.Optional("title"): vol.Any(None, str),
-        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto", "haos-full-access"]),
-        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
-        vol.Optional("model_override"): vol.Any(None, str),
-        vol.Optional("thinking_override"): vol.Any(None, str),
-        vol.Optional("pinned"): bool,
-        vol.Optional("unread"): bool,
-        vol.Optional("section_id"): vol.Any(None, vol.All(str, vol.Length(min=1, max=128))),
-        vol.Optional("navigation_revision"): vol.All(int, vol.Range(min=1)),
+        probatio.Required("type"): f"{DOMAIN}/update_thread",
+        probatio.Required("thread_id"): str,
+        probatio.Optional("title"): probatio.Any(None, str),
+        probatio.Optional("mode"): probatio.In(["observe", "edit", "full-auto", "haos-full-access"]),
+        probatio.Optional("host_access_grant"): probatio.Any(None, probatio.Match(r"^[a-f0-9]{32}$")),
+        probatio.Optional("model_override"): probatio.Any(None, str),
+        probatio.Optional("thinking_override"): probatio.Any(None, str),
+        probatio.Optional("pinned"): bool,
+        probatio.Optional("unread"): bool,
+        probatio.Optional("section_id"): probatio.Any(None, probatio.All(str, probatio.Length(min=1, max=128))),
+        probatio.Optional("navigation_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -867,25 +868,25 @@ async def ws_update_thread(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_chat_sections"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_chat_sections"})
 @websocket_api.async_response
 async def ws_list_chat_sections(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_chat_sections())
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/create_chat_section", vol.Required("name"): vol.All(str, vol.Length(min=1, max=320))})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/create_chat_section", probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=320))})
 @websocket_api.async_response
 async def ws_create_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_create_chat_section(msg["name"]))
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/update_chat_section", vol.Required("section_id"): vol.All(str, vol.Length(min=1, max=128)), vol.Required("name"): vol.All(str, vol.Length(min=1, max=320)), vol.Required("revision"): vol.All(int, vol.Range(min=1))})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/update_chat_section", probatio.Required("section_id"): probatio.All(str, probatio.Length(min=1, max=128)), probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=320)), probatio.Required("revision"): probatio.All(int, probatio.Range(min=1))})
 @websocket_api.async_response
 async def ws_update_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_update_chat_section(msg["section_id"], msg["name"], msg["revision"]))
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/delete_chat_section", vol.Required("section_id"): vol.All(str, vol.Length(min=1, max=128)), vol.Required("revision"): vol.All(int, vol.Range(min=1))})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/delete_chat_section", probatio.Required("section_id"): probatio.All(str, probatio.Length(min=1, max=128)), probatio.Required("revision"): probatio.All(int, probatio.Range(min=1))})
 @websocket_api.async_response
 async def ws_delete_chat_section(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_delete_chat_section(msg["section_id"], msg["revision"]))
@@ -893,8 +894,8 @@ async def ws_delete_chat_section(hass: HomeAssistant, connection: websocket_api.
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/archive_thread",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/archive_thread",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -913,8 +914,8 @@ async def ws_archive_thread(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/restore_thread",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/restore_thread",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -933,8 +934,8 @@ async def ws_restore_thread(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/delete_thread",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/delete_thread",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -951,7 +952,7 @@ async def ws_delete_thread(
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/fork_thread", vol.Required("thread_id"): str})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/fork_thread", probatio.Required("thread_id"): str})
 @websocket_api.async_response
 async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
     await _async_handle(
@@ -966,12 +967,12 @@ async def ws_fork_thread(hass: HomeAssistant, connection: websocket_api.ActiveCo
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/move_thread_project",
-    vol.Required("thread_id"): str,
-    vol.Required("project_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("navigation_revision"): vol.All(int, vol.Range(min=1)),
-    vol.Optional("workspace_artifact_ids", default=[]): vol.All(
-        [vol.All(str, vol.Length(min=1, max=128))], vol.Length(max=100)
+    probatio.Required("type"): f"{DOMAIN}/move_thread_project",
+    probatio.Required("thread_id"): str,
+    probatio.Required("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("navigation_revision"): probatio.All(int, probatio.Range(min=1)),
+    probatio.Optional("workspace_artifact_ids", default=[]): probatio.All(
+        [probatio.All(str, probatio.Length(min=1, max=128))], probatio.Length(max=100)
     ),
 })
 @websocket_api.async_response
@@ -993,11 +994,11 @@ async def ws_move_thread_project(hass: HomeAssistant, connection: websocket_api.
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/search_conversation",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("query"): vol.All(str, vol.Length(min=1, max=256)),
-    vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=100)),
-    vol.Optional("before_cursor"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+    probatio.Required("type"): f"{DOMAIN}/search_conversation",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("query"): probatio.All(str, probatio.Length(min=1, max=256)),
+    probatio.Optional("limit", default=50): probatio.All(int, probatio.Range(min=1, max=100)),
+    probatio.Optional("before_cursor"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
 })
 @websocket_api.async_response
 async def ws_search_conversation(hass, connection, msg):
@@ -1007,8 +1008,8 @@ async def ws_search_conversation(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/get_goal",
-    vol.Required("thread_id"): vol.Match(r"^[A-Za-z0-9_-]{1,128}$"),
+    probatio.Required("type"): f"{DOMAIN}/get_goal",
+    probatio.Required("thread_id"): probatio.Match(r"^[A-Za-z0-9_-]{1,128}$"),
 })
 @websocket_api.async_response
 async def ws_get_goal(hass, connection, msg):
@@ -1016,15 +1017,15 @@ async def ws_get_goal(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/goal_action",
-    vol.Required("thread_id"): vol.Match(r"^[A-Za-z0-9_-]{1,128}$"),
-    vol.Required("action"): vol.In({"create", "edit", "progress", "pause", "resume", "complete", "cancel"}),
-    vol.Required("expected_revision"): vol.All(int, vol.Range(min=0)),
-    vol.Required("client_request_id"): vol.Match(r"^[A-Za-z0-9_.:-]{1,128}$"),
-    vol.Optional("objective"): vol.All(str, vol.Length(min=1, max=4096)),
-    vol.Optional("completion_criteria"): vol.All([vol.All(str, vol.Length(min=1, max=1024))], vol.Length(min=1, max=16)),
-    vol.Optional("progress"): vol.All(str, vol.Length(max=8192)),
-    vol.Optional("completion_confirmed"): bool,
+    probatio.Required("type"): f"{DOMAIN}/goal_action",
+    probatio.Required("thread_id"): probatio.Match(r"^[A-Za-z0-9_-]{1,128}$"),
+    probatio.Required("action"): probatio.In({"create", "edit", "progress", "pause", "resume", "complete", "cancel"}),
+    probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=0)),
+    probatio.Required("client_request_id"): probatio.Match(r"^[A-Za-z0-9_.:-]{1,128}$"),
+    probatio.Optional("objective"): probatio.All(str, probatio.Length(min=1, max=4096)),
+    probatio.Optional("completion_criteria"): probatio.All([probatio.All(str, probatio.Length(min=1, max=1024))], probatio.Length(min=1, max=16)),
+    probatio.Optional("progress"): probatio.All(str, probatio.Length(max=8192)),
+    probatio.Optional("completion_confirmed"): bool,
 })
 @websocket_api.async_response
 async def ws_goal_action(hass, connection, msg):
@@ -1032,15 +1033,15 @@ async def ws_goal_action(hass, connection, msg):
     await _async_handle(hass, connection, msg, lambda client: client.async_goal_action(msg["thread_id"], payload))
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/attention_inbox"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/attention_inbox"})
 @websocket_api.async_response
 async def ws_attention_inbox(hass, connection, msg):
     await _async_handle(hass, connection, msg, lambda client: client.async_attention_inbox())
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/child_agents",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    probatio.Required("type"): f"{DOMAIN}/child_agents",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
 })
 @websocket_api.async_response
 async def ws_child_agents(hass, connection, msg):
@@ -1048,12 +1049,12 @@ async def ws_child_agents(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/child_agent_action",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("child_id"): vol.Match(r"^[a-f0-9]{32}$"),
-    vol.Required("action"): vol.In({"refresh", "stop"}),
-    vol.Optional("revision"): vol.All(vol.Coerce(int), vol.Range(min=1)),
-    vol.Optional("client_request_id"): vol.All(str, vol.Length(min=1, max=256)),
+    probatio.Required("type"): f"{DOMAIN}/child_agent_action",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("child_id"): probatio.Match(r"^[a-f0-9]{32}$"),
+    probatio.Required("action"): probatio.In({"refresh", "stop"}),
+    probatio.Optional("revision"): probatio.All(probatio.Coerce(int), probatio.Range(min=1)),
+    probatio.Optional("client_request_id"): probatio.All(str, probatio.Length(min=1, max=256)),
 })
 @websocket_api.async_response
 async def ws_child_agent_action(hass, connection, msg):
@@ -1064,9 +1065,9 @@ async def ws_child_agent_action(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/usage_history",
-    vol.Optional("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+    probatio.Required("type"): f"{DOMAIN}/usage_history",
+    probatio.Optional("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
 })
 @websocket_api.async_response
 async def ws_usage_history(hass, connection, msg):
@@ -1076,9 +1077,9 @@ async def ws_usage_history(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/workspace_context",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Optional("directory", default="."): vol.All(str, vol.Length(min=1, max=2048)),
+    probatio.Required("type"): f"{DOMAIN}/workspace_context",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Optional("directory", default="."): probatio.All(str, probatio.Length(min=1, max=2048)),
 })
 @websocket_api.async_response
 async def ws_workspace_context(hass, connection, msg):
@@ -1087,16 +1088,16 @@ async def ws_workspace_context(hass, connection, msg):
     ))
 
 
-_NULLABLE_CONTEXT_LINE = vol.Any(None, vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)))
+_NULLABLE_CONTEXT_LINE = probatio.Any(None, probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)))
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/read_workspace_context",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("path"): vol.All(str, vol.Length(min=1, max=2048)),
-    vol.Optional("start_line"): _NULLABLE_CONTEXT_LINE,
-    vol.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
-    vol.Optional("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    probatio.Required("type"): f"{DOMAIN}/read_workspace_context",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("path"): probatio.All(str, probatio.Length(min=1, max=2048)),
+    probatio.Optional("start_line"): _NULLABLE_CONTEXT_LINE,
+    probatio.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
+    probatio.Optional("expected_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
 @websocket_api.async_response
 async def ws_read_workspace_context(hass, connection, msg):
@@ -1108,23 +1109,23 @@ async def ws_read_workspace_context(hass, connection, msg):
 
 def _bounded_prompt(value: str) -> str:
     if not value.strip() or len(value.encode("utf-8")) > 1024 * 1024:
-        raise vol.Invalid("prompt is blank or exceeds its limit")
+        raise probatio.Invalid("prompt is blank or exceeds its limit")
     return value
 
 
-_CHAT_CONTEXT_SELECTION = {
-    vol.Required("source_thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Optional("message_sequence"): vol.Any(None, vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991))),
-    vol.Optional("start_char"): vol.Any(None, vol.All(int, vol.Range(min=0, max=1_048_576))),
-    vol.Optional("end_char"): vol.Any(None, vol.All(int, vol.Range(min=1, max=1_048_576))),
+_CHAT_CONTEXT_SELECTION: VolDictType = {
+    probatio.Required("source_thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Optional("message_sequence"): probatio.Any(None, probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991))),
+    probatio.Optional("start_char"): probatio.Any(None, probatio.All(int, probatio.Range(min=0, max=1_048_576))),
+    probatio.Optional("end_char"): probatio.Any(None, probatio.All(int, probatio.Range(min=1, max=1_048_576))),
 }
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/chat_context",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("source_thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Optional("before_sequence"): vol.All(int, vol.Range(min=1, max=9_007_199_254_740_991)),
+    probatio.Required("type"): f"{DOMAIN}/chat_context",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("source_thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Optional("before_sequence"): probatio.All(int, probatio.Range(min=1, max=9_007_199_254_740_991)),
 })
 @websocket_api.async_response
 async def ws_chat_context(hass, connection, msg):
@@ -1134,8 +1135,8 @@ async def ws_chat_context(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/read_chat_context",
-    vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+    probatio.Required("type"): f"{DOMAIN}/read_chat_context",
+    probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     **_CHAT_CONTEXT_SELECTION,
 })
 @websocket_api.async_response
@@ -1145,32 +1146,32 @@ async def ws_read_chat_context(hass, connection, msg):
     ))
 
 
-_CHAT_CONTEXT_REFERENCE = vol.Schema({
+_CHAT_CONTEXT_REFERENCE = probatio.Schema({
     **_CHAT_CONTEXT_SELECTION,
-    vol.Required("content_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    probatio.Required("content_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
 
 
-_WORKSPACE_CONTEXT_REFERENCE = vol.Schema({
-    vol.Required("path"): vol.All(str, vol.Length(min=1, max=2048)),
-    vol.Required("content_revision"): vol.Match(r"^[a-f0-9]{64}$"),
-    vol.Optional("start_line"): _NULLABLE_CONTEXT_LINE,
-    vol.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
+_WORKSPACE_CONTEXT_REFERENCE = probatio.Schema({
+    probatio.Required("path"): probatio.All(str, probatio.Length(min=1, max=2048)),
+    probatio.Required("content_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
+    probatio.Optional("start_line"): _NULLABLE_CONTEXT_LINE,
+    probatio.Optional("end_line"): _NULLABLE_CONTEXT_LINE,
 })
 
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/send_prompt",
-        vol.Required("thread_id"): str,
-        vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1024 * 1024), _bounded_prompt),
-        vol.Optional("client_request_id"): str,
-        vol.Optional("follow_up_mode"): vol.In({"queue", "steer"}),
-        vol.Optional("collaboration_mode"): vol.In({"default", "plan"}),
-        vol.Optional("web_search"): vol.In({"live", "disabled"}),
-        vol.Optional("max_duration_seconds"): vol.All(int, vol.Range(min=1, max=86_400)),
-        vol.Optional("workspace_context"): vol.All([_WORKSPACE_CONTEXT_REFERENCE], vol.Length(min=1, max=8)),
-        vol.Optional("chat_context"): vol.All([_CHAT_CONTEXT_REFERENCE], vol.Length(min=1, max=8)),
+        probatio.Required("type"): f"{DOMAIN}/send_prompt",
+        probatio.Required("thread_id"): str,
+        probatio.Required("prompt"): probatio.All(str, probatio.Length(min=1, max=1024 * 1024), _bounded_prompt),
+        probatio.Optional("client_request_id"): str,
+        probatio.Optional("follow_up_mode"): probatio.In({"queue", "steer"}),
+        probatio.Optional("collaboration_mode"): probatio.In({"default", "plan"}),
+        probatio.Optional("web_search"): probatio.In({"live", "disabled"}),
+        probatio.Optional("max_duration_seconds"): probatio.All(int, probatio.Range(min=1, max=86_400)),
+        probatio.Optional("workspace_context"): probatio.All([_WORKSPACE_CONTEXT_REFERENCE], probatio.Length(min=1, max=8)),
+        probatio.Optional("chat_context"): probatio.All([_CHAT_CONTEXT_REFERENCE], probatio.Length(min=1, max=8)),
     }
 )
 @websocket_api.async_response
@@ -1230,8 +1231,8 @@ async def ws_send_prompt(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/prompt_queue",
-        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/prompt_queue",
+        probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -1250,11 +1251,11 @@ async def ws_prompt_queue(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/update_queued_prompt",
-        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("run_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1024 * 1024)),
-        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+        probatio.Required("type"): f"{DOMAIN}/update_queued_prompt",
+        probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("run_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("prompt"): probatio.All(str, probatio.Length(min=1, max=1024 * 1024)),
+        probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -1278,9 +1279,9 @@ async def ws_update_queued_prompt(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/cancel_queued_prompt",
-        vol.Required("thread_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("run_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/cancel_queued_prompt",
+        probatio.Required("thread_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("run_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -1301,8 +1302,8 @@ async def ws_cancel_queued_prompt(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/cancel_run",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/cancel_run",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1321,14 +1322,14 @@ async def ws_cancel_run(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/get_events",
-        vol.Optional("after", default=0): vol.All(int, vol.Range(min=0)),
-        vol.Optional("scopes"): vol.All(
-            [vol.In(["auth", "runtime", "thread"])], vol.Length(min=1, max=3)
+        probatio.Required("type"): f"{DOMAIN}/get_events",
+        probatio.Optional("after", default=0): probatio.All(int, probatio.Range(min=0)),
+        probatio.Optional("scopes"): probatio.All(
+            [probatio.In(["auth", "runtime", "thread"])], probatio.Length(min=1, max=3)
         ),
-        vol.Optional("thread_ids"): vol.All([str], vol.Length(min=1, max=64)),
+        probatio.Optional("thread_ids"): probatio.All([str], probatio.Length(min=1, max=64)),
         # Compatibility-only input for a v0 external Bridge.
-        vol.Optional("thread_id"): str,
+        probatio.Optional("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1379,13 +1380,13 @@ async def ws_get_events(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/subscribe_events",
-        vol.Optional("after", default=0): vol.All(int, vol.Range(min=0)),
-        vol.Optional("scopes"): vol.All(
-            [vol.In(["auth", "runtime", "thread"])], vol.Length(min=1, max=3)
+        probatio.Required("type"): f"{DOMAIN}/subscribe_events",
+        probatio.Optional("after", default=0): probatio.All(int, probatio.Range(min=0)),
+        probatio.Optional("scopes"): probatio.All(
+            [probatio.In(["auth", "runtime", "thread"])], probatio.Length(min=1, max=3)
         ),
-        vol.Optional("thread_ids"): vol.All([str], vol.Length(min=1, max=64)),
-        vol.Optional("thread_id"): str,
+        probatio.Optional("thread_ids"): probatio.All([str], probatio.Length(min=1, max=64)),
+        probatio.Optional("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1543,8 +1544,8 @@ async def ws_subscribe_events(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/unsubscribe_events",
-        vol.Required("subscription_id"): int,
+        probatio.Required("type"): f"{DOMAIN}/unsubscribe_events",
+        probatio.Required("subscription_id"): int,
     }
 )
 @websocket_api.async_response
@@ -1561,8 +1562,8 @@ async def ws_unsubscribe_events(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_pending_interactions",
-        vol.Optional("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/list_pending_interactions",
+        probatio.Optional("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1581,11 +1582,11 @@ async def ws_list_pending_interactions(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/decide_interaction",
-        vol.Required("interaction_id"): str,
-        vol.Required("thread_id"): str,
-        vol.Required("decision"): vol.In(["accept", "decline", "cancel"]),
-        vol.Required("client_request_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/decide_interaction",
+        probatio.Required("interaction_id"): str,
+        probatio.Required("thread_id"): str,
+        probatio.Required("decision"): probatio.In(["accept", "decline", "cancel"]),
+        probatio.Required("client_request_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1613,22 +1614,22 @@ async def ws_decide_interaction(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/answer_interaction",
-        vol.Required("interaction_id"): str,
-        vol.Required("thread_id"): str,
-        vol.Required("answers"): vol.All(
+        probatio.Required("type"): f"{DOMAIN}/answer_interaction",
+        probatio.Required("interaction_id"): str,
+        probatio.Required("thread_id"): str,
+        probatio.Required("answers"): probatio.All(
             [
                 {
-                    vol.Required("question_id"): str,
-                    vol.Required("values"): vol.All(
-                        [vol.All(str, vol.Length(min=1, max=4096))],
-                        vol.Length(min=1, max=32),
+                    probatio.Required("question_id"): str,
+                    probatio.Required("values"): probatio.All(
+                        [probatio.All(str, probatio.Length(min=1, max=4096))],
+                        probatio.Length(min=1, max=32),
                     ),
                 }
             ],
-            vol.Length(min=1, max=32),
+            probatio.Length(min=1, max=32),
         ),
-        vol.Required("client_request_id"): str,
+        probatio.Required("client_request_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1656,11 +1657,11 @@ async def ws_answer_interaction(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/answer_mcp_form",
-        vol.Required("interaction_id"): str,
-        vol.Required("thread_id"): str,
-        vol.Required("content"): dict,
-        vol.Required("client_request_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/answer_mcp_form",
+        probatio.Required("interaction_id"): str,
+        probatio.Required("thread_id"): str,
+        probatio.Required("content"): dict,
+        probatio.Required("client_request_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1760,8 +1761,8 @@ def _legacy_snapshot_event(snapshot: dict[str, Any]) -> dict[str, Any]:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_artifacts",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/list_artifacts",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1781,9 +1782,9 @@ async def ws_list_artifacts(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/preview_artifact",
-        vol.Required("thread_id"): str,
-        vol.Required("artifact_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/preview_artifact",
+        probatio.Required("thread_id"): str,
+        probatio.Required("artifact_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1803,8 +1804,8 @@ async def ws_preview_artifact(
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/create_workspace_archive",
-        vol.Required("thread_id"): str,
+        probatio.Required("type"): f"{DOMAIN}/create_workspace_archive",
+        probatio.Required("thread_id"): str,
     }
 )
 @websocket_api.async_response
@@ -1833,7 +1834,7 @@ async def _automation_refresh(runtime) -> None:
             return
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_automations"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_automations"})
 @websocket_api.async_response
 async def ws_list_automations(hass, connection, msg) -> None:
     await _async_handle(
@@ -1843,8 +1844,8 @@ async def ws_list_automations(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/get_automation",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/get_automation",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -1859,8 +1860,8 @@ async def ws_get_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/preview_automation_schedule",
-        vol.Required("schedule"): vol.All(dict, vol.Length(max=16)),
+        probatio.Required("type"): f"{DOMAIN}/preview_automation_schedule",
+        probatio.Required("schedule"): probatio.All(dict, probatio.Length(max=16)),
     }
 )
 @websocket_api.async_response
@@ -1873,22 +1874,22 @@ async def ws_preview_automation_schedule(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/create_automation",
-        vol.Optional("client_request_id"): vol.Match(r"^[a-f0-9]{32}$"),
-        vol.Required("name"): vol.All(str, vol.Length(min=1, max=160)),
-        vol.Required("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
-        vol.Required("target"): vol.All(dict, vol.Length(max=16)),
-        vol.Required("schedule"): vol.All(dict, vol.Length(max=16)),
-        vol.Optional("mode", default="observe"): vol.In(
+        probatio.Required("type"): f"{DOMAIN}/create_automation",
+        probatio.Optional("client_request_id"): probatio.Match(r"^[a-f0-9]{32}$"),
+        probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=160)),
+        probatio.Required("prompt"): probatio.All(str, probatio.Length(min=1, max=1_048_576)),
+        probatio.Required("target"): probatio.All(dict, probatio.Length(max=16)),
+        probatio.Required("schedule"): probatio.All(dict, probatio.Length(max=16)),
+        probatio.Optional("mode", default="observe"): probatio.In(
             ["observe", "edit", "full-auto", "haos-full-access"]
         ),
-        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
-        vol.Optional("host_unattended_approved"): bool,
-        vol.Optional("model"): vol.Any(None, vol.All(str, vol.Length(min=1, max=160))),
-        vol.Optional("thinking"): vol.Any(
-            None, vol.All(str, vol.Length(min=1, max=160))
+        probatio.Optional("host_access_grant"): probatio.Any(None, probatio.Match(r"^[a-f0-9]{32}$")),
+        probatio.Optional("host_unattended_approved"): bool,
+        probatio.Optional("model"): probatio.Any(None, probatio.All(str, probatio.Length(min=1, max=160))),
+        probatio.Optional("thinking"): probatio.Any(
+            None, probatio.All(str, probatio.Length(min=1, max=160))
         ),
-        vol.Optional("notifications"): vol.All(dict, vol.Length(max=4)),
+        probatio.Optional("notifications"): probatio.All(dict, probatio.Length(max=4)),
     }
 )
 @websocket_api.async_response
@@ -1910,21 +1911,21 @@ async def ws_create_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/update_automation",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
-        vol.Optional("name"): vol.All(str, vol.Length(min=1, max=160)),
-        vol.Optional("prompt"): vol.All(str, vol.Length(min=1, max=1_048_576)),
-        vol.Optional("target"): vol.All(dict, vol.Length(max=16)),
-        vol.Optional("schedule"): vol.All(dict, vol.Length(max=16)),
-        vol.Optional("mode"): vol.In(["observe", "edit", "full-auto", "haos-full-access"]),
-        vol.Optional("host_access_grant"): vol.Any(None, vol.Match(r"^[a-f0-9]{32}$")),
-        vol.Optional("host_unattended_approved"): bool,
-        vol.Optional("model"): vol.Any(None, vol.All(str, vol.Length(min=1, max=160))),
-        vol.Optional("thinking"): vol.Any(
-            None, vol.All(str, vol.Length(min=1, max=160))
+        probatio.Required("type"): f"{DOMAIN}/update_automation",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
+        probatio.Optional("name"): probatio.All(str, probatio.Length(min=1, max=160)),
+        probatio.Optional("prompt"): probatio.All(str, probatio.Length(min=1, max=1_048_576)),
+        probatio.Optional("target"): probatio.All(dict, probatio.Length(max=16)),
+        probatio.Optional("schedule"): probatio.All(dict, probatio.Length(max=16)),
+        probatio.Optional("mode"): probatio.In(["observe", "edit", "full-auto", "haos-full-access"]),
+        probatio.Optional("host_access_grant"): probatio.Any(None, probatio.Match(r"^[a-f0-9]{32}$")),
+        probatio.Optional("host_unattended_approved"): bool,
+        probatio.Optional("model"): probatio.Any(None, probatio.All(str, probatio.Length(min=1, max=160))),
+        probatio.Optional("thinking"): probatio.Any(
+            None, probatio.All(str, probatio.Length(min=1, max=160))
         ),
-        vol.Optional("notifications"): vol.All(dict, vol.Length(max=4)),
+        probatio.Optional("notifications"): probatio.All(dict, probatio.Length(max=4)),
     }
 )
 @websocket_api.async_response
@@ -1957,9 +1958,9 @@ async def ws_update_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/pause_automation",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+        probatio.Required("type"): f"{DOMAIN}/pause_automation",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -1977,9 +1978,9 @@ async def ws_pause_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/resume_automation",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+        probatio.Required("type"): f"{DOMAIN}/resume_automation",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -1997,9 +1998,9 @@ async def ws_resume_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/delete_automation",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("expected_revision"): vol.All(int, vol.Range(min=1)),
+        probatio.Required("type"): f"{DOMAIN}/delete_automation",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("expected_revision"): probatio.All(int, probatio.Range(min=1)),
     }
 )
 @websocket_api.async_response
@@ -2017,8 +2018,8 @@ async def ws_delete_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/run_automation",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/run_automation",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2037,9 +2038,9 @@ async def ws_run_automation(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_automation_runs",
-        vol.Required("automation_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Optional("limit", default=100): vol.All(int, vol.Range(min=1, max=200)),
+        probatio.Required("type"): f"{DOMAIN}/list_automation_runs",
+        probatio.Required("automation_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Optional("limit", default=100): probatio.All(int, probatio.Range(min=1, max=200)),
     }
 )
 @websocket_api.async_response
@@ -2056,9 +2057,9 @@ async def ws_list_automation_runs(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_skills",
-        vol.Required("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
-        vol.Optional("force_reload", default=False): bool,
+        probatio.Required("type"): f"{DOMAIN}/list_skills",
+        probatio.Required("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
+        probatio.Optional("force_reload", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -2075,11 +2076,11 @@ async def ws_list_skills(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/set_skill",
-        vol.Required("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
-        vol.Required("enabled"): bool,
-        vol.Optional("name"): vol.Any(None, vol.All(str, vol.Length(min=1, max=128))),
-        vol.Optional("path"): vol.Any(None, vol.All(str, vol.Length(min=1, max=4096))),
+        probatio.Required("type"): f"{DOMAIN}/set_skill",
+        probatio.Required("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
+        probatio.Required("enabled"): bool,
+        probatio.Optional("name"): probatio.Any(None, probatio.All(str, probatio.Length(min=1, max=128))),
+        probatio.Optional("path"): probatio.Any(None, probatio.All(str, probatio.Length(min=1, max=4096))),
     }
 )
 @websocket_api.async_response
@@ -2100,12 +2101,12 @@ async def ws_set_skill(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/create_skill",
-        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("description"): vol.All(str, vol.Length(min=1, max=4096)),
-        vol.Required("instructions"): vol.All(str, vol.Length(max=256 * 1024)),
-        vol.Optional("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
-        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/create_skill",
+        probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("description"): probatio.All(str, probatio.Length(min=1, max=4096)),
+        probatio.Required("instructions"): probatio.All(str, probatio.Length(max=256 * 1024)),
+        probatio.Optional("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
+        probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2132,10 +2133,10 @@ async def ws_create_skill(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/delete_skill",
-        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Optional("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
-        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/delete_skill",
+        probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Optional("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
+        probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2154,9 +2155,9 @@ async def ws_delete_skill(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_plugins",
-        vol.Required("workspace_path"): vol.All(str, vol.Length(min=1, max=4096)),
-        vol.Optional("installed_only", default=False): bool,
+        probatio.Required("type"): f"{DOMAIN}/list_plugins",
+        probatio.Required("workspace_path"): probatio.All(str, probatio.Length(min=1, max=4096)),
+        probatio.Optional("installed_only", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -2173,10 +2174,10 @@ async def ws_list_plugins(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/install_plugin",
-        vol.Required("plugin_name"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Optional("marketplace_name"): vol.Any(
-            None, vol.All(str, vol.Length(min=1, max=128))
+        probatio.Required("type"): f"{DOMAIN}/install_plugin",
+        probatio.Required("plugin_name"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Optional("marketplace_name"): probatio.Any(
+            None, probatio.All(str, probatio.Length(min=1, max=128))
         ),
     }
 )
@@ -2194,8 +2195,8 @@ async def ws_install_plugin(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/uninstall_plugin",
-        vol.Required("plugin_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/uninstall_plugin",
+        probatio.Required("plugin_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2210,9 +2211,9 @@ async def ws_uninstall_plugin(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/list_marketplaces",
-        vol.Optional("workspace_path", default="."): vol.All(
-            str, vol.Length(min=1, max=4096)
+        probatio.Required("type"): f"{DOMAIN}/list_marketplaces",
+        probatio.Optional("workspace_path", default="."): probatio.All(
+            str, probatio.Length(min=1, max=4096)
         ),
     }
 )
@@ -2228,13 +2229,13 @@ async def ws_list_marketplaces(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/add_marketplace",
-        vol.Required("source"): vol.All(str, vol.Length(min=1, max=512)),
-        vol.Optional("ref_name"): vol.Any(
-            None, vol.All(str, vol.Length(min=1, max=128))
+        probatio.Required("type"): f"{DOMAIN}/add_marketplace",
+        probatio.Required("source"): probatio.All(str, probatio.Length(min=1, max=512)),
+        probatio.Optional("ref_name"): probatio.Any(
+            None, probatio.All(str, probatio.Length(min=1, max=128))
         ),
-        vol.Optional("sparse_paths"): vol.All(
-            [vol.All(str, vol.Length(min=1, max=256))], vol.Length(max=8)
+        probatio.Optional("sparse_paths"): probatio.All(
+            [probatio.All(str, probatio.Length(min=1, max=256))], probatio.Length(max=8)
         ),
     }
 )
@@ -2256,8 +2257,8 @@ async def ws_add_marketplace(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/remove_marketplace",
-        vol.Required("marketplace_name"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/remove_marketplace",
+        probatio.Required("marketplace_name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2272,8 +2273,8 @@ async def ws_remove_marketplace(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/upgrade_marketplace",
-        vol.Required("marketplace_name"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/upgrade_marketplace",
+        probatio.Required("marketplace_name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2286,24 +2287,24 @@ async def ws_upgrade_marketplace(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_mcp"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_mcp"})
 @websocket_api.async_response
 async def ws_list_mcp(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_mcp())
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/list_stdio_packages"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/list_stdio_packages"})
 @websocket_api.async_response
 async def ws_list_stdio_packages(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_list_stdio_packages())
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/add_stdio_mcp",
-    vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
-    vol.Required("package_id"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("revision"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("acknowledged"): vol.All(bool, vol.In([True])),
+    probatio.Required("type"): f"{DOMAIN}/add_stdio_mcp",
+    probatio.Required("name"): probatio.All(str, probatio.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    probatio.Required("package_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("revision"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("acknowledged"): probatio.All(bool, probatio.In([True])),
 })
 @websocket_api.async_response
 async def ws_add_stdio_mcp(hass, connection, msg) -> None:
@@ -2313,11 +2314,11 @@ async def ws_add_stdio_mcp(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/update_stdio_mcp",
-    vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
-    vol.Required("revision"): vol.All(str, vol.Length(min=1, max=128)),
-    vol.Required("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
-    vol.Required("acknowledged"): vol.All(bool, vol.In([True])),
+    probatio.Required("type"): f"{DOMAIN}/update_stdio_mcp",
+    probatio.Required("name"): probatio.All(str, probatio.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    probatio.Required("revision"): probatio.All(str, probatio.Length(min=1, max=128)),
+    probatio.Required("expected_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
+    probatio.Required("acknowledged"): probatio.All(bool, probatio.In([True])),
 })
 @websocket_api.async_response
 async def ws_update_stdio_mcp(hass, connection, msg) -> None:
@@ -2329,9 +2330,9 @@ async def ws_update_stdio_mcp(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/rollback_stdio_mcp",
-    vol.Required("name"): vol.All(str, vol.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
-    vol.Required("expected_revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    probatio.Required("type"): f"{DOMAIN}/rollback_stdio_mcp",
+    probatio.Required("name"): probatio.All(str, probatio.Match(r"\A[a-z][a-z0-9_-]{0,63}\Z")),
+    probatio.Required("expected_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
 @websocket_api.async_response
 async def ws_rollback_stdio_mcp(hass, connection, msg) -> None:
@@ -2341,8 +2342,8 @@ async def ws_rollback_stdio_mcp(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/list_mcp_tools",
-    vol.Required("name"): vol.All(str, vol.Length(min=1, max=64)),
+    probatio.Required("type"): f"{DOMAIN}/list_mcp_tools",
+    probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=64)),
 })
 @websocket_api.async_response
 async def ws_list_mcp_tools(hass, connection, msg) -> None:
@@ -2351,12 +2352,12 @@ async def ws_list_mcp_tools(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/set_mcp_tools",
-    vol.Required("name"): vol.All(str, vol.Length(min=1, max=64)),
-    vol.Required("enabled_tools"): vol.All(list, vol.Length(max=512)),
-    vol.Required("revision"): vol.All(str, vol.Length(min=64, max=64)),
-    vol.Required("catalogue_revision"): vol.All(str, vol.Length(min=64, max=64)),
-    vol.Optional("approval_mode"): vol.In(("auto", "approve")),
+    probatio.Required("type"): f"{DOMAIN}/set_mcp_tools",
+    probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=64)),
+    probatio.Required("enabled_tools"): probatio.All(list, probatio.Length(max=512)),
+    probatio.Required("revision"): probatio.All(str, probatio.Length(min=64, max=64)),
+    probatio.Required("catalogue_revision"): probatio.All(str, probatio.Length(min=64, max=64)),
+    probatio.Optional("approval_mode"): probatio.In(("auto", "approve")),
 })
 @websocket_api.async_response
 async def ws_set_mcp_tools(hass, connection, msg) -> None:
@@ -2368,9 +2369,9 @@ async def ws_set_mcp_tools(hass, connection, msg) -> None:
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/lock_down_mcp_tools",
-    vol.Required("name"): vol.All(str, vol.Length(min=1, max=64)),
-    vol.Required("revision"): vol.Match(r"^[a-f0-9]{64}$"),
+    probatio.Required("type"): f"{DOMAIN}/lock_down_mcp_tools",
+    probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=64)),
+    probatio.Required("revision"): probatio.Match(r"^[a-f0-9]{64}$"),
 })
 @websocket_api.async_response
 async def ws_lock_down_mcp_tools(hass, connection, msg) -> None:
@@ -2380,17 +2381,17 @@ async def ws_lock_down_mcp_tools(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/add_mcp",
-        vol.Optional("local"): bool,
-        vol.Optional("local_acknowledged"): bool,
-        vol.Optional("require_tool_selection"): bool,
-        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("url"): vol.All(str, vol.Length(min=1, max=2048)),
-        vol.Optional("oauth_client_id"): vol.Any(
-            None, vol.All(str, vol.Length(min=1, max=256))
+        probatio.Required("type"): f"{DOMAIN}/add_mcp",
+        probatio.Optional("local"): bool,
+        probatio.Optional("local_acknowledged"): bool,
+        probatio.Optional("require_tool_selection"): bool,
+        probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("url"): probatio.All(str, probatio.Length(min=1, max=2048)),
+        probatio.Optional("oauth_client_id"): probatio.Any(
+            None, probatio.All(str, probatio.Length(min=1, max=256))
         ),
-        vol.Optional("oauth_resource"): vol.Any(
-            None, vol.All(str, vol.Length(min=1, max=2048))
+        probatio.Optional("oauth_resource"): probatio.Any(
+            None, probatio.All(str, probatio.Length(min=1, max=2048))
         ),
     }
 )
@@ -2412,8 +2413,8 @@ async def ws_add_mcp(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/remove_mcp",
-        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/remove_mcp",
+        probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2425,8 +2426,8 @@ async def ws_remove_mcp(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/login_mcp",
-        vol.Required("name"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/login_mcp",
+        probatio.Required("name"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2439,8 +2440,8 @@ async def ws_login_mcp(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/get_agents",
-        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/get_agents",
+        probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2455,9 +2456,9 @@ async def ws_get_agents(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/update_agents",
-        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
-        vol.Required("content"): vol.All(str, vol.Length(max=256 * 1024)),
+        probatio.Required("type"): f"{DOMAIN}/update_agents",
+        probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
+        probatio.Required("content"): probatio.All(str, probatio.Length(max=256 * 1024)),
     }
 )
 @websocket_api.async_response
@@ -2474,8 +2475,8 @@ async def ws_update_agents(hass, connection, msg) -> None:
 
 @websocket_api.websocket_command(
     {
-        vol.Required("type"): f"{DOMAIN}/delete_agents",
-        vol.Optional("project_id"): vol.All(str, vol.Length(min=1, max=128)),
+        probatio.Required("type"): f"{DOMAIN}/delete_agents",
+        probatio.Optional("project_id"): probatio.All(str, probatio.Length(min=1, max=128)),
     }
 )
 @websocket_api.async_response
@@ -2488,16 +2489,16 @@ async def ws_delete_agents(hass, connection, msg) -> None:
     )
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/host_access"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/host_access"})
 @websocket_api.async_response
 async def ws_host_access(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_host_access())
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): f"{DOMAIN}/enable_host_access",
-    vol.Required("scope_revision"): vol.Match(r"^[a-f0-9]{64}$"),
-    vol.Required("acknowledged"): bool,
+    probatio.Required("type"): f"{DOMAIN}/enable_host_access",
+    probatio.Required("scope_revision"): probatio.Match(r"^[a-f0-9]{64}$"),
+    probatio.Required("acknowledged"): bool,
 })
 @websocket_api.async_response
 async def ws_enable_host_access(hass, connection, msg) -> None:
@@ -2506,7 +2507,7 @@ async def ws_enable_host_access(hass, connection, msg) -> None:
     ))
 
 
-@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/revoke_host_access"})
+@websocket_api.websocket_command({probatio.Required("type"): f"{DOMAIN}/revoke_host_access"})
 @websocket_api.async_response
 async def ws_revoke_host_access(hass, connection, msg) -> None:
     await _async_handle(hass, connection, msg, lambda client: client.async_revoke_host_access())

@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from typing import Any
 
-import voluptuous as vol
+import probatio
 
 from .host_access import HOST_WORKER_KEY, SUPERVISOR_SLUG_KEY, validate_host_discovery
 
@@ -161,7 +161,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="app",
-            data_schema=vol.Schema({}),
+            data_schema=probatio.Schema({}),
             errors={"base": "app_not_discovered"} if user_input is not None else {},
         )
 
@@ -209,10 +209,10 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="external",
-            data_schema=vol.Schema(
+            data_schema=probatio.Schema(
                 {
-                    vol.Required(CONF_BRIDGE_URL, default=DEFAULT_BRIDGE_URL): str,
-                    vol.Required(CONF_BRIDGE_TOKEN): str,
+                    probatio.Required(CONF_BRIDGE_URL, default=DEFAULT_BRIDGE_URL): str,
+                    probatio.Required(CONF_BRIDGE_TOKEN): str,
                 }
             ),
             errors=errors,
@@ -315,7 +315,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self.async_show_form(
                 step_id="hassio_confirm",
-                data_schema=vol.Schema({}),
+                data_schema=probatio.Schema({}),
                 description_placeholders={"name": self._hassio_title},
                 errors=(
                     {"base": self._hassio_error}
@@ -329,7 +329,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._hassio_error = error
                 return self.async_show_form(
                     step_id="hassio_confirm",
-                    data_schema=vol.Schema({}),
+                    data_schema=probatio.Schema({}),
                     description_placeholders={"name": self._hassio_title},
                     errors={"base": error},
                 )
@@ -380,7 +380,7 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_update_reload_and_abort(entry)
             errors["base"] = "app_restart_required" if error == "invalid_auth" else error
         return self.async_show_form(
-            step_id="reauth_confirm", data_schema=vol.Schema({}), errors=errors
+            step_id="reauth_confirm", data_schema=probatio.Schema({}), errors=errors
         )
 
     async def async_step_reauth_external(
@@ -406,9 +406,9 @@ class CodexBridgeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = error
         return self.async_show_form(
             step_id="reauth_external",
-            data_schema=vol.Schema(
+            data_schema=probatio.Schema(
                 {
-                    vol.Required(CONF_BRIDGE_TOKEN): selector.TextSelector(
+                    probatio.Required(CONF_BRIDGE_TOKEN): selector.TextSelector(
                         selector.TextSelectorConfig(
                             type=selector.TextSelectorType.PASSWORD
                         )
@@ -630,54 +630,54 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
         form_mcp = assist_mcp_selection(submitted.get(CONF_ASSIST_MCP_SERVERS, saved_mcp))
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
+            data_schema=probatio.Schema(
                 {
-                    vol.Required(
+                    probatio.Required(
                         CONF_WEB_SEARCH_MODE,
                         default=default,
-                    ): vol.In(
+                    ): probatio.In(
                         {
                             WEB_SEARCH_MODE_LIVE: "Live",
                             WEB_SEARCH_MODE_DISABLED: "Off",
                         }
                     ),
-                    vol.Required(
+                    probatio.Required(
                         CONF_ALLOW_UNATTENDED_TASK_ACTIONS,
                         default=self.config_entry.options.get(
                             CONF_ALLOW_UNATTENDED_TASK_ACTIONS, False
                         ),
                     ): bool,
-                    vol.Required(
+                    probatio.Required(
                         CONF_ASSIST_ENABLED,
                         default=self.config_entry.options.get(CONF_ASSIST_ENABLED, False),
                     ): bool,
-                    vol.Required(
+                    probatio.Required(
                         CONF_ASSIST_PROJECT_ID,
                         default=(
                             self.config_entry.options.get(CONF_ASSIST_PROJECT_ID, "")
                             if self.config_entry.options.get(CONF_ASSIST_PROJECT_ID, "") in choices
                             else ""
                         ),
-                    ): vol.In(choices),
-                    vol.Required(
+                    ): probatio.In(choices),
+                    probatio.Required(
                         CONF_ASSIST_ALLOW_VOICE,
                         default=self.config_entry.options.get(CONF_ASSIST_ALLOW_VOICE, False),
                     ): bool,
-                    vol.Required(CONF_ASSIST_MODEL, default=current_model): vol.In(model_choices),
-                    vol.Required(CONF_ASSIST_REASONING, default=current_reasoning): vol.In(reasoning_choices),
-                    vol.Required(
+                    probatio.Required(CONF_ASSIST_MODEL, default=current_model): probatio.In(model_choices),
+                    probatio.Required(CONF_ASSIST_REASONING, default=current_reasoning): probatio.In(reasoning_choices),
+                    probatio.Required(
                         CONF_QUESTION_NOTIFICATIONS_ENABLED,
                         default=notifications["enabled"],
                     ): bool,
-                    vol.Required(
+                    probatio.Required(
                         CONF_QUESTION_NOTIFICATIONS_PERSISTENT,
                         default=notifications["persistent"],
                     ): bool,
-                    vol.Required(
+                    probatio.Required(
                         CONF_QUESTION_NOTIFICATIONS_PREVIEW,
                         default=notifications["preview"],
                     ): bool,
-                    vol.Optional(
+                    probatio.Optional(
                         CONF_QUESTION_NOTIFICATIONS_TARGETS,
                         default=notifications["mobile_targets"],
                     ): selector.SelectSelector(selector.SelectSelectorConfig(
@@ -687,11 +687,11 @@ class CodexBridgeOptionsFlow(config_entries.OptionsFlowWithReload):
                         }.items()],
                         multiple=True,
                     )),
-                    vol.Optional(
+                    probatio.Optional(
                         CONF_ASSIST_INSTRUCTIONS,
                         default=submitted.get(CONF_ASSIST_INSTRUCTIONS, self.config_entry.options.get(CONF_ASSIST_INSTRUCTIONS, "")),
                     ): selector.TextSelector(selector.TextSelectorConfig(multiline=True)),
-                    vol.Optional(
+                    probatio.Optional(
                         CONF_ASSIST_MCP_SERVERS,
                         default=list(form_mcp if form_mcp is not None else saved_mcp),
                     ): selector.SelectSelector(selector.SelectSelectorConfig(

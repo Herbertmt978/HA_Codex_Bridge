@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
+from packaging.version import Version
 import pytest
 
 from homeassistant.config_entries import SOURCE_HASSIO, SOURCE_REAUTH
@@ -643,6 +644,19 @@ async def test_hassio_rotation_updates_and_reloads_without_exposing_token(hass, 
     assert update_reload.call_args.kwargs["reload_even_if_entry_is_unchanged"] is False
     assert TOKEN not in caplog.text
     assert rotated_token not in caplog.text
+
+
+def test_schemas_use_probatio_from_the_minimum_home_assistant() -> None:
+    """Home Assistant 2026.9 replaced voluptuous with probatio as its schema library."""
+
+    minimum = json.loads((REPOSITORY_ROOT / "hacs.json").read_text("utf-8"))
+    assert Version(minimum["homeassistant"]) >= Version("2026.9.0")
+    integration_root = REPOSITORY_ROOT / "custom_components" / DOMAIN
+    assert not [
+        module.name
+        for module in integration_root.glob("*.py")
+        if "voluptuous" in module.read_text("utf-8")
+    ]
 
 
 def test_manifest_and_english_localisation_describe_the_supervisor_flow() -> None:

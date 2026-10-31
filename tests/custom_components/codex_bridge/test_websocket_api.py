@@ -9,8 +9,8 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import aiohttp
+import probatio
 import pytest
-import voluptuous as vol
 from aiohttp import web
 
 from custom_components.codex_bridge.bridge_api import (
@@ -240,7 +240,7 @@ async def test_panel_transcript_search_contract_is_accepted_and_forwarded(search
     )
     assert connection.errors == []
     assert connection.results == [(92, {"results": []})]
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_search_transcript._ws_schema(
             {"id": 92, "type": f"{DOMAIN}/search_transcript", "q": search_request["query"]}
         )
@@ -318,7 +318,7 @@ async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits()
         },
     )
     assert connection.results == [(91, {"thread_id": "thr_safe"})]
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_update_thread._ws_schema(
             {
                 "type": f"{DOMAIN}/update_thread",
@@ -327,7 +327,7 @@ async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits()
                 "navigation_revision": 7,
             }
         )
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_update_thread._ws_schema(
             {
                 "type": f"{DOMAIN}/update_thread",
@@ -336,11 +336,11 @@ async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits()
                 "navigation_revision": 0,
             }
         )
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_create_chat_section._ws_schema(
             {"type": f"{DOMAIN}/create_chat_section", "name": ""}
         )
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_update_chat_section._ws_schema(
             {
                 "type": f"{DOMAIN}/update_chat_section",
@@ -349,7 +349,7 @@ async def test_chat_navigation_websocket_forwards_revision_and_enforces_limits()
                 "revision": 0,
             }
         )
-    with pytest.raises(vol.Invalid):
+    with pytest.raises(probatio.Invalid):
         ws_delete_chat_section._ws_schema(
             {
                 "type": f"{DOMAIN}/delete_chat_section",
