@@ -1,13 +1,13 @@
 # The fixture pins its matching Home Assistant and pytest dependencies exactly.
 # Keep it as the single version authority so Dependabot updates the pair together.
-pytest-homeassistant-custom-component==0.13.373
+pytest-homeassistant-custom-component==0.13.375
 
 # The opt-in conversation platform imports Home Assistant's conversation
 # component during test collection, before HA can install its requirements.
 # Keep these aligned with the HA version selected by the test fixture.
 gazetteer-matcher==1.2.0
 hassil==3.12.1
-home-assistant-intents==2026.10.6
+home-assistant-intents==2026.10.27
 
 # The Integration is checked with mypy --strict against the fixture's Home
 # Assistant release, matching the Platinum strict-typing rule.
