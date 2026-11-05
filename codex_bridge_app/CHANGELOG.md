@@ -2,6 +2,14 @@
 
 All notable App changes are recorded here.
 
+## 1.13.26
+
+- Updates the browser worker's Chromium, Chromium common resources and ANGLE packages from Alpine `155.0.8059.84-r0` to `156.0.8078.79-r0`, with matching SHA-256 pins and startup attestation. Alpine no longer serves the 155 packages, so App images could not be built. The browser worker remains off unless `enable_browser` is turned on.
+- Updates the hash-locked runtime to pydantic-settings `2.16.2`. No feature or access option is enabled by this update.
+- Bundles the Sigstore-verified Codex runtime `0.166.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.25
 
 - Pairs with Integration and panel 1.13.25, which require Home Assistant 2026.9.0 or later. Update Home Assistant Core before installing the Integration.
