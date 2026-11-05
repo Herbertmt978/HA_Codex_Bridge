@@ -57,10 +57,13 @@ separately on the target, so a website outage does not determine App startup.
 
 The worker permits one session, 100 actions and five minutes of session time.
 Control frames, page text and captures have fixed byte bounds. Kernel rlimits
-bound individual process data, output file size, descriptors and CPU time. A
-watchdog samples aggregate RSS plus swap and process count, terminating the
-browser tree above 1,500 MiB or 64 processes. This is a sampled bound, not a
-hard aggregate memory cgroup, and can briefly overshoot between samples.
+bound individual process data, output file size, descriptors and CPU time, and
+cap the browser tree at 256 threads. Chromium 156 peaks just above 128 threads
+on HAOS, where a 128-thread cap made PDF captures and the startup attestation
+fail intermittently. A watchdog samples aggregate RSS plus swap and process
+count, terminating the browser tree above 1,500 MiB or 64 processes. This is a
+sampled bound, not a hard aggregate memory cgroup, and can briefly overshoot
+between samples.
 The relay limits concurrent connections, idle time and transferred bytes.
 
 Cancellation stops a pending operation, closes the proxy and removes the

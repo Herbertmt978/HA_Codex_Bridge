@@ -5,6 +5,7 @@ All notable App changes are recorded here.
 ## 1.13.26
 
 - Updates the browser worker's Chromium, Chromium common resources and ANGLE packages from Alpine `155.0.8059.84-r0` to `156.0.8078.79-r0`, with matching SHA-256 pins and startup attestation. Alpine no longer serves the 155 packages, so App images could not be built. The browser worker remains off unless `enable_browser` is turned on.
+- Raises the browser sandbox's thread limit from 128 to 256. Chromium 156 peaks just above 128 threads, which made PDF captures and the startup browser check fail intermittently, leaving browser tools unavailable after some restarts.
 - Updates the hash-locked runtime to pydantic-settings `2.16.2`. No feature or access option is enabled by this update.
 - Bundles the Sigstore-verified Codex runtime `0.166.0`.
 - Keeps model and reasoning-level choices dynamically discovered from that runtime.

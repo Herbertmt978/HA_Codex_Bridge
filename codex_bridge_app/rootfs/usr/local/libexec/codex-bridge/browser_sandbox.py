@@ -253,7 +253,10 @@ async def run_namespace(proof: dict[str, object]) -> None:
     resource.setrlimit(resource.RLIMIT_DATA, (768 * 1024 * 1024, 768 * 1024 * 1024))
     resource.setrlimit(resource.RLIMIT_FSIZE, (64 * 1024 * 1024, 64 * 1024 * 1024))
     resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
-    resource.setrlimit(resource.RLIMIT_NPROC, (128, 128))
+    # RLIMIT_NPROC counts every thread of the browser tree in this namespace.
+    # Chromium 156 peaks above 128 threads while printing, which made PDF
+    # captures and startup attestation fail intermittently at the old limit.
+    resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))
     active: set[asyncio.Task] = set()
 
     async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:

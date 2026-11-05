@@ -100,6 +100,16 @@ def test_dockerfile_pins_the_alpine_chromium_package_and_verifies_its_version() 
     assert 'test "$(/usr/bin/chromium-browser --product-version)" = "156.0.8078.79"' in dockerfile
 
 
+def test_browser_thread_limit_is_bounded_with_room_for_chromium_printing() -> None:
+    sandbox = SANDBOX.read_text(encoding="utf-8")
+
+    # RLIMIT_NPROC counts every browser thread in the sandbox's user
+    # namespace. Chromium 156 peaks above 128 threads, and at that limit
+    # printToPDF and the startup attestation failed intermittently on HAOS.
+    assert "resource.setrlimit(resource.RLIMIT_NPROC, (256, 256))" in sandbox
+    assert sandbox.count("RLIMIT_NPROC") == 2
+
+
 def test_browser_has_a_distinct_child_profile_without_workspace_or_private_state() -> None:
     profile = (APP_ROOT / "apparmor.txt").read_text(encoding="utf-8")
     parent, child = profile.split("  profile browser_bwrap ", 1)
