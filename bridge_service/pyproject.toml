@@ -20,7 +20,7 @@ codex-bridge-service = "codex_bridge_service.__main__:main"
 [project.optional-dependencies]
 test = [
   "pytest>=9.0.3",
-  "pytest-asyncio>=1.4.0",
+  "pytest-asyncio>=1.4.1.post1",
   "PyYAML>=6.0.3,<7",
   "types-jsonschema>=4.26.0.20261006",
 ]
