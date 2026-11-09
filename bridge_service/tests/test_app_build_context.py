@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from typing import Any
 import zipfile
 
 import pytest
@@ -25,6 +26,7 @@ APP_ROOT = ROOT / "codex_bridge_app"
 STAGER = ROOT / "scripts" / "stage_app_context.py"
 LOCK = APP_ROOT / "codex-release.json"
 BUILD_REQUIREMENTS = APP_ROOT / "requirements-build.txt"
+RUNTIME_REQUIREMENTS = APP_ROOT / "requirements-runtime.txt"
 ASSET_INSTALLER = (
     APP_ROOT
     / "rootfs"
@@ -188,6 +190,141 @@ def test_stager_uses_a_hash_locked_build_toolchain() -> None:
     assert '"--require-hashes"' in stager
 
 
+def _load_stager(name: str) -> Any:
+    spec = importlib.util.spec_from_file_location(name, STAGER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_app_python_version_has_one_source() -> None:
+    """The base image's Python decides every Python-specific App artefact."""
+
+    version = _load_stager("task20_python_version_stager").base_python_version()
+    assert re.fullmatch(r"3\.[0-9]{1,2}", version)
+    compile_option = f"--python-version {version}"
+
+    runtime_header = RUNTIME_REQUIREMENTS.read_text(encoding="utf-8").splitlines()[:2]
+    assert any(compile_option in line for line in runtime_header), (
+        f"the runtime lock must be compiled for the base image's Python {version}"
+    )
+    documented = dict(
+        re.findall(
+            r"uv pip compile (\S+) .*--python-version (\S+)",
+            (ROOT / "docs" / "development.md").read_text(encoding="utf-8"),
+        )
+    )
+    assert documented["bridge_service/pyproject.toml"] == version
+
+    # Build tools run on the workflow's staging interpreter, so their lock
+    # follows that interpreter rather than the image.
+    workflow_versions = set(
+        re.findall(
+            r'python-version: "(3\.[0-9]{1,2})"',
+            (ROOT / ".github" / "workflows" / "build-app.yml").read_text(
+                encoding="utf-8"
+            ),
+        )
+    )
+    assert len(workflow_versions) == 1
+    (staging_version,) = workflow_versions
+    build_header = BUILD_REQUIREMENTS.read_text(encoding="utf-8").splitlines()[:2]
+    assert any(
+        f"--python-version {staging_version}" in line for line in build_header
+    ), "the build lock must match the App workflow's staging interpreter"
+    assert documented["codex_bridge_app/requirements-build.in"] == staging_version
+
+    dockerfile = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert not re.search(r"python3\.[0-9]", dockerfile), (
+        "derive Python paths from the base image's interpreter"
+    )
+    interpreter_paths = {
+        match
+        for path in (APP_ROOT / "rootfs").rglob("*.py")
+        for match in re.findall(
+            r"/usr/local/bin/python(3\.[0-9]{1,2})", path.read_text(encoding="utf-8")
+        )
+    }
+    assert interpreter_paths == {version}, (
+        "the stdio worker must run the base image's interpreter"
+    )
+
+
+class _StopAfterInstall(Exception):
+    """Stop staging once the captured uv command has been recorded."""
+
+
+def test_stager_targets_the_base_for_runtime_and_the_stager_for_build_tools(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load_stager("task20_runtime_python_stager")
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(
+        "FROM ghcr.io/home-assistant/base-python:3.15-alpine3.24@sha256:"
+        + "0" * 64
+        + "\n",
+        encoding="utf-8",
+    )
+    commands: list[list[str]] = []
+
+    def record(command: list[str], **_kwargs: object) -> None:
+        commands.append(command)
+        raise _StopAfterInstall
+
+    monkeypatch.setattr(module, "DOCKERFILE", dockerfile)
+    monkeypatch.setattr(module.shutil, "which", lambda _name: "uv")
+    monkeypatch.setattr(module.subprocess, "run", record)
+
+    with pytest.raises(_StopAfterInstall):
+        module._materialize_runtime(tmp_path / "runtime", "aarch64")
+    # The build-tool install is the first command of the wheel build.
+    with pytest.raises(_StopAfterInstall):
+        module._build_bridge_wheel(tmp_path / "wheel", tmp_path)
+
+    runtime, build_tools = commands
+    assert runtime[runtime.index("--python-version") + 1] == "3.15"
+    assert runtime[runtime.index("--python-platform") + 1] == (
+        "aarch64-unknown-linux-musl"
+    )
+    assert build_tools[build_tools.index("--python-version") + 1] == (
+        f"{sys.version_info.major}.{sys.version_info.minor}"
+    )
+    assert "--python-platform" not in build_tools
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        "FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24",
+        "FROM ghcr.io/home-assistant/base-python:latest@sha256:" + "0" * 64,
+        "FROM ghcr.io/home-assistant/base:3.24@sha256:" + "0" * 64,
+    ],
+)
+def test_stager_refuses_an_unversioned_or_unpinned_base(
+    tmp_path: Path, base: str
+) -> None:
+    module = _load_stager("task20_unpinned_python_stager")
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text(base + "\n", encoding="utf-8")
+    with pytest.raises(module.StageError):
+        module.base_python_version(dockerfile)
+
+
+def test_app_image_imports_the_bridge_runtime_with_its_interpreter() -> None:
+    """The image build fails if the staged runtime cannot be imported."""
+
+    text = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    assert "COPY runtime-site-packages/ /tmp/runtime-site-packages/" in text
+    assert "sysconfig.get_path(\"purelib\")" in text
+    assert 'cp -a /tmp/runtime-site-packages/. "${site_packages}/"' in text
+    install = text.index("python -m pip install")
+    import_check = text.index("pkgutil.walk_packages(package.__path__")
+    assert install < import_check < text.index("install_locked_assets.py")
+    assert "/tmp/runtime-site-packages;" in text
+
+
 def test_bundled_app_server_contract_matches_the_locked_codex_version() -> None:
     release_lock = json.loads(LOCK.read_text(encoding="utf-8"))
     contract_path = (
@@ -236,6 +373,15 @@ def test_selected_task19_lock_and_architecture_are_attested(tmp_path: Path, arch
     )
     native_extensions = list((context / "runtime-site-packages").rglob("*.so"))
     assert native_extensions, "the Linux runtime must contain native musl dependencies"
+    # Version-specific extensions must match the base image's interpreter;
+    # abi3 extensions load on any later CPython.
+    version = _load_stager("task20_attested_python_stager").base_python_version()
+    abi_tag = "cpython-" + version.replace(".", "") + "-"
+    for extension in native_extensions:
+        if ".cpython-" in extension.name:
+            assert abi_tag in extension.name, extension.name
+        else:
+            assert extension.name.endswith(".abi3.so"), extension.name
     for extension in native_extensions:
         header = _elf_header(extension)
         assert header[:7] == b"\x7fELF\x02\x01\x01"

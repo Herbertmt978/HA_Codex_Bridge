@@ -9,7 +9,7 @@ LABEL \
     io.hass.version="1.13.27"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
-COPY runtime-site-packages/ /usr/local/lib/python3.14/site-packages/
+COPY runtime-site-packages/ /tmp/runtime-site-packages/
 COPY wheel/ /tmp/wheel/
 COPY codex-release.json /tmp/codex-release.json
 COPY assets/ /tmp/assets/
@@ -41,7 +41,16 @@ RUN set -eux; \
     fi; \
     addgroup -S codexbridge; \
     adduser -S -D -H -h /data -s /sbin/nologin -G codexbridge codexbridge; \
+    # The runtime is staged for the base image's Python version. Install it
+    # where this interpreter looks, rather than at a version-specific path.
+    site_packages="$(python -I -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"; \
+    test -d "${site_packages}"; \
+    cp -a /tmp/runtime-site-packages/. "${site_packages}/"; \
     python -m pip install --no-cache-dir --no-index --no-deps /tmp/wheel/codex_bridge_service-*.whl; \
+    # Every Bridge module, and so every runtime dependency, must import with
+    # the image's interpreter. main is excluded because importing it
+    # constructs the application from runtime settings.
+    python -I -B -c 'import importlib, pkgutil, codex_bridge_service as package; [importlib.import_module(module.name) for module in pkgutil.walk_packages(package.__path__, package.__name__ + ".") if module.name != package.__name__ + ".main"]'; \
     python /usr/local/libexec/codex-bridge/install_locked_assets.py \
       --arch "${BUILD_ARCH}" \
       --lock /tmp/codex-release.json \
@@ -60,7 +69,7 @@ RUN set -eux; \
     chown -R root:root /opt/codex-stdio/packages; \
     find /opt/codex-stdio/packages -type d -exec chmod 0555 {} +; \
     find /opt/codex-stdio/packages -type f -exec chmod 0444 {} +; \
-    rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt; \
+    rm -rf /tmp/wheel /tmp/assets /tmp/codex-release.json /tmp/requirements-runtime.txt /tmp/runtime-site-packages; \
     chmod 0755 /usr/local/bin/codex-app-entrypoint /usr/local/bin/codex-ha /usr/local/bin/sandbox-self-test \
       /usr/local/bin/bwrap /opt/codex/bin/bwrap; \
     chmod 0444 /usr/local/share/codex-bridge/sandbox-contract.json; \

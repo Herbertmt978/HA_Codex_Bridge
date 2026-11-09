@@ -82,6 +82,18 @@ uv pip compile codex_bridge_app/requirements-build.in --generate-hashes --no-ann
 uv pip compile bridge_service/pyproject.toml --no-annotate --generate-hashes --python-version 3.14 --output-file codex_bridge_app/requirements-runtime.txt
 ```
 
+The digest-pinned `base-python` tag in `codex_bridge_app/Dockerfile` is the
+single source of the App's Python version. The stager materializes the runtime
+lock for that version, the image installs the runtime into its own
+interpreter's `site-packages` and imports every Bridge module before the build
+completes, and `test_app_python_version_has_one_source` fails if the runtime
+lock, its command above or the stdio worker interpreter path name a different
+version. The build lock instead follows the Python that runs the stager, the
+`python-version` in `.github/workflows/build-app.yml`. Move the base image, the
+runtime lock and the stdio worker together, and only once every compiled
+runtime dependency publishes musllinux wheels for the new version on amd64 and
+aarch64.
+
 Review the resulting diff. The build lock must retain setuptools, even if a
 dependency bot removes it, and the runtime lock must meet every Bridge
 dependency requirement. A deployed dependency change needs a new App patch
