@@ -103,8 +103,7 @@ def test_a_stopped_writer_is_replaced(monkeypatch, capsys) -> None:
     timer = AssistTimer(_Clock())
     timer.report("interrupted")
     _drain()
-    assert capsys.readouterr().out == timer.summary("interrupted") + "
-"
+    assert capsys.readouterr().out == timer.summary("interrupted") + "\n"
 
 
 def test_full_log_queue_drops_the_line(monkeypatch) -> None:
