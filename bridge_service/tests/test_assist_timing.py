@@ -99,6 +99,8 @@ def test_a_stopped_writer_is_replaced(monkeypatch, capsys) -> None:
     stopped = threading.Thread(target=lambda: None)
     stopped.start()
     stopped.join()
+    # A private queue, so only a newly started writer can deliver this line.
+    monkeypatch.setattr(assist_timing, "_LINES", queue.Queue(maxsize=64))
     monkeypatch.setattr(assist_timing, "_writer", stopped)
     timer = AssistTimer(_Clock())
     timer.report("interrupted")
@@ -110,7 +112,9 @@ def test_full_log_queue_drops_the_line(monkeypatch) -> None:
     full = queue.Queue(maxsize=1)
     full.put_nowait("waiting")
     monkeypatch.setattr(assist_timing, "_LINES", full)
+    started = time.monotonic()
     AssistTimer(_Clock()).report("completed")
+    assert time.monotonic() - started < 0.1
     assert full.qsize() == 1 and full.get_nowait() == "waiting"
 
 
