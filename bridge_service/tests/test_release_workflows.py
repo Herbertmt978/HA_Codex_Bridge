@@ -793,7 +793,8 @@ def test_dependabot_and_codeowners_cover_ci_policy() -> None:
     assert bridge_pip.get("ignore") == [
         {"dependency-name": "pydantic", "versions": [">=2.13.5"]},
         expected_pytest_ignore,
-    ], "Pydantic must move with the pinned Home Assistant test fixture"
+        {"dependency-name": "pytest-asyncio", "versions": [">=1.4.1"]},
+    ], "Pydantic and pytest plugins must move with the pinned Home Assistant test fixture"
 
     docker_updates = [
         item
