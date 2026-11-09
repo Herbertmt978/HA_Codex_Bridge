@@ -22,6 +22,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .bridge_api import BridgeApiConnectionError, BridgeApiError
+from .event_broker import EventRecord
 from .assist_settings import (
     MAX_ASSIST_INSTRUCTIONS,
     assist_prompt,
@@ -427,12 +428,39 @@ class CodexAssistConversation(ConversationEntity):
         return assist_selection_supported(choices, model, reasoning)
 
     async def _wait_for_answer(self, task_id: str) -> dict[str, Any]:
-        async with asyncio.timeout(_RESPONSE_TIMEOUT_SECONDS):
-            while True:
-                result = await self._runtime.client.async_get_task_answer(task_id)
-                if result["status"] in _TERMINAL:
-                    return result
-                await asyncio.sleep(_POLL_SECONDS)
+        """Read the answer as soon as the App's event stream reports the task finished.
+
+        The event only wakes the authenticated answer read, which stays the
+        authority. The poll still bounds the wait when the stream is down or absent.
+        """
+
+        wake = asyncio.Event()
+
+        def finished(event: EventRecord | None) -> None:
+            # None marks a stream reset or status change, which may hide the result.
+            if event is None or (
+                event.event_type == "task.result" and event.payload.get("task_id") == task_id
+            ):
+                wake.set()
+
+        broker = self._runtime.event_broker
+        remove = broker.add_listener(finished) if broker is not None else None
+        try:
+            async with asyncio.timeout(_RESPONSE_TIMEOUT_SECONDS):
+                while True:
+                    # Clear before reading so a result published during the read wakes the next one.
+                    wake.clear()
+                    result = await self._runtime.client.async_get_task_answer(task_id)
+                    if result["status"] in _TERMINAL:
+                        return result
+                    try:
+                        async with asyncio.timeout(_POLL_SECONDS):
+                            await wake.wait()
+                    except TimeoutError:
+                        pass
+        finally:
+            if remove is not None:
+                remove()
 
     @staticmethod
     def _reply(

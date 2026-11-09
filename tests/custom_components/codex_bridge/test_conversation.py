@@ -1,5 +1,6 @@
 """Assist must return the selected run's answer without broadening HA access."""
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -89,6 +90,7 @@ def _agent(hass, *, allow_voice=False, settings=None, mcp_capability=False):
         device_info=DeviceInfo(identifiers={(DOMAIN, "app_discovery")}, name="Codex Bridge App"),
         supports_capability=lambda capability: capability == "assist_conversation_v1"
         or (mcp_capability and capability == "assist_mcp_selection_v1"),
+        event_broker=None,
     )
     agent = CodexAssistConversation(entry, runtime)
     agent.hass = hass
@@ -501,3 +503,92 @@ async def test_oversized_instructions_never_reach_codex(hass):
     agent, client = _agent(hass, settings={CONF_ASSIST_INSTRUCTIONS: "x" * 4097})
     await agent._async_handle_message(_input(admin.id), Mock(conversation_id="invalid", content=[]))
     client.async_start_task.assert_not_awaited()
+
+
+class _Broker:
+    """Expose the event-stream listener hook the Assist agent registers."""
+
+    def __init__(self):
+        self.listeners = set()
+
+    def add_listener(self, listener):
+        self.listeners.add(listener)
+        return lambda: self.listeners.discard(listener)
+
+    def publish(self, event):
+        for listener in tuple(self.listeners):
+            listener(event)
+
+
+def _result(task_id):
+    return SimpleNamespace(event_type="task.result", payload={"task_id": task_id, "status": "completed"})
+
+
+async def _first_read_then(agent, client, answers):
+    """Return the read count and a started wait whose first read is still running."""
+
+    first_read = asyncio.Event()
+    reads = []
+
+    async def read(task_id):
+        reads.append(task_id)
+        first_read.set()
+        return answers[min(len(reads), len(answers)) - 1]
+
+    client.async_get_task_answer = AsyncMock(side_effect=read)
+    waiter = asyncio.create_task(agent._wait_for_answer("c" * 32))
+    await first_read.wait()
+    await asyncio.sleep(0)
+    return reads, waiter
+
+
+async def test_task_result_event_wakes_the_answer_read_before_the_poll(hass):
+    agent, client = _agent(hass)
+    agent._runtime.event_broker = broker = _Broker()
+    running = {"status": "running", "answer": None}
+    done = {"status": "completed", "answer": "Lights are off."}
+    with patch("custom_components.codex_bridge.conversation._POLL_SECONDS", 30):
+        reads, waiter = await _first_read_then(agent, client, [running, done])
+        broker.publish(_result("d" * 32))
+        broker.publish(SimpleNamespace(event_type="task.accepted", payload={"task_id": "c" * 32}))
+        await asyncio.sleep(0.05)
+        assert len(reads) == 1 and not waiter.done()
+        broker.publish(_result("c" * 32))
+        async with asyncio.timeout(1):
+            assert await waiter == done
+    assert len(reads) == 2
+    assert broker.listeners == set()
+
+
+async def test_stream_reset_rechecks_the_answer(hass):
+    agent, client = _agent(hass)
+    agent._runtime.event_broker = broker = _Broker()
+    done = {"status": "failed", "answer": None}
+    with patch("custom_components.codex_bridge.conversation._POLL_SECONDS", 30):
+        reads, waiter = await _first_read_then(agent, client, [{"status": "running", "answer": None}, done])
+        broker.publish(None)
+        async with asyncio.timeout(1):
+            assert await waiter == done
+    assert broker.listeners == set()
+
+
+async def test_answer_wait_still_polls_without_stream_events(hass):
+    agent, client = _agent(hass)
+    agent._runtime.event_broker = broker = _Broker()
+    done = {"status": "completed", "answer": "Done."}
+    with patch("custom_components.codex_bridge.conversation._POLL_SECONDS", 0.01):
+        reads, waiter = await _first_read_then(agent, client, [{"status": "running", "answer": None}] * 3 + [done])
+        async with asyncio.timeout(1):
+            assert await waiter == done
+    assert len(reads) == 4
+    assert broker.listeners == set()
+
+
+async def test_timed_out_wait_removes_its_listener(hass):
+    agent, client = _agent(hass)
+    agent._runtime.event_broker = broker = _Broker()
+    client.async_get_task_answer = AsyncMock(return_value={"status": "running", "answer": None})
+    with patch("custom_components.codex_bridge.conversation._RESPONSE_TIMEOUT_SECONDS", 0.05):
+        with pytest.raises(TimeoutError):
+            await agent._wait_for_answer("c" * 32)
+    assert broker.listeners == set()
