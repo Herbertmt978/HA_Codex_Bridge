@@ -391,6 +391,8 @@ for (const width of [390, 1280]) {
         element._renderedThreadFormKey = "";
         element._render();
       }, installed);
+      // The new-chat form lives in the navigation drawer, which is inert until opened.
+      if (width === 390) await panel.locator("#mobile-nav-toggle").click();
       const mode = panel.locator("#thread-mode-select");
       await mode.selectOption("haos-full-access");
       const dialog = panel.getByRole("dialog", { name: "Allow Codex full access to Home Assistant OS?" });

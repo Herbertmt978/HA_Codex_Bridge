@@ -55,7 +55,7 @@ jobs:
         run: uv pip install --system jsonschema==4.26.0
 
       - name: Install pinned Cosign verifier
-        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
 
       - name: Verify the latest stable Codex release into the lock
         run: >-
@@ -234,7 +234,7 @@ jobs:
         id: create-update-pr
         if: steps.updater-credentials.outputs.available == 'true'
         # v8.1.1 owns branch reuse, signed-off commits, and PR lifecycle.
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # zizmor: ignore[superfluous-actions]
+        uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8 # zizmor: ignore[superfluous-actions]
         with:
           add-paths: |
             bridge_service/src/codex_bridge_service/codex_app_server_contract.json
