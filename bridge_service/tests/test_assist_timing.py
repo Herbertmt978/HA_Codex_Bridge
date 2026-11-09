@@ -52,8 +52,7 @@ def test_summary_names_resumed_sessions_and_bounds_its_status_text() -> None:
 def test_report_prints_only_the_summary(capsys) -> None:
     timer = AssistTimer(_Clock())
     timer.report("completed")
-    assert capsys.readouterr().out == timer.summary("completed") + "
-"
+    assert capsys.readouterr().out == timer.summary("completed") + "\n"
 
 
 def test_assist_runs_log_one_content_free_timing_line_and_other_runs_none(tmp_path: Path, monkeypatch) -> None:
