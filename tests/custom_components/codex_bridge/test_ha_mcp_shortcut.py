@@ -17,7 +17,7 @@ from custom_components.codex_bridge.bridge_api import BridgeApiError
 from custom_components.codex_bridge.const import CONNECTION_TYPE_SUPERVISOR
 from custom_components.codex_bridge.ha_mcp_shortcut import (
     ACCESS_TOKEN_EXPIRATION,
-    FIXED_URL,
+    DEFAULT_URL,
     HaMcpShortcut,
     HaMcpShortcutError,
     _fingerprint,
@@ -67,6 +67,7 @@ def shortcut():
         SimpleNamespace(state=hass.state), HomeAssistant,
     )
     hass.auth = auth
+    hass.config.api = SimpleNamespace(port=8123, use_ssl=False)
     hass.config_entries.async_loaded_entries.return_value = [SimpleNamespace(domain="mcp_server")]
     client = Mock()
     client.async_add_mcp = AsyncMock(return_value={"name": "managed"})
@@ -144,7 +145,7 @@ async def test_connect_journals_before_native_call_and_hides_secrets(shortcut):
     name = await _connect(case)
     payload = case.client.async_add_mcp.call_args.args[0]
     assert name.startswith("ha-assist-") and len(name) == 22
-    assert payload == {"name": name, "url": FIXED_URL, "local": True,
+    assert payload == {"name": name, "url": DEFAULT_URL, "local": True,
                        "local_acknowledged": True, "authentication": {"mode": "bearer", "token": "synthetic.jwt.initial"},
                        "auth_acknowledged": True, "require_tool_selection": True}
     kwargs = case.auth.async_create_refresh_token.call_args.kwargs
@@ -180,7 +181,7 @@ async def test_rotation_is_bound_to_old_secret_and_never_enables_server(shortcut
     await case.helper.async_refresh()
     assert case.client.async_replace_mcp_credential.call_args.args == (name, {
         "authentication": {"mode": "bearer", "token": "synthetic.jwt.rotated"},
-        "auth_acknowledged": True, "expected_url": FIXED_URL,
+        "auth_acknowledged": True, "expected_url": DEFAULT_URL,
         "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
     })
     assert case.store.saved["record"]["fingerprint"] == _fingerprint("synthetic.jwt.rotated")
@@ -268,7 +269,7 @@ async def test_failed_native_create_recovery_removes_only_exact_owned_binding(sh
     assert raised.value.__cause__ is None
     case.auth.async_remove_refresh_token.assert_called_once()
     args = case.client.async_remove_managed_mcp.call_args.args
-    assert args[1] == {"expected_url": FIXED_URL, "expected_token_sha256": _fingerprint("synthetic.jwt.initial")}
+    assert args[1] == {"expected_url": DEFAULT_URL, "expected_token_sha256": _fingerprint("synthetic.jwt.initial")}
     case.client.async_remove_mcp.assert_not_called()
 
 
@@ -294,8 +295,8 @@ async def test_rotation_crash_checks_pending_then_old_fingerprint(shortcut):
     case.client.async_remove_managed_mcp.side_effect = [BridgeApiError(code="mcp_credential_binding_conflict"), None]
     await case.helper.async_setup()
     assert [call.args for call in case.client.async_remove_managed_mcp.await_args_list] == [
-        (name, {"expected_url": FIXED_URL, "expected_token_sha256": pending}),
-        (name, {"expected_url": FIXED_URL, "expected_token_sha256": _fingerprint("synthetic.jwt.initial")}),
+        (name, {"expected_url": DEFAULT_URL, "expected_token_sha256": pending}),
+        (name, {"expected_url": DEFAULT_URL, "expected_token_sha256": _fingerprint("synthetic.jwt.initial")}),
     ]
     assert case.store.saved == {"record": None}
 
@@ -349,7 +350,7 @@ async def test_unbounded_expiry_is_rejected_in_journal(shortcut, expiry):
     record = deepcopy(shortcut.store.saved)
     record["record"]["access_expires_at"] = expiry
     with pytest.raises(ValueError):
-        _parse_record(record)
+        _parse_record(record, DEFAULT_URL)
 
 
 async def test_fresh_remove_loads_owned_journal_without_starting_or_minting(shortcut):
@@ -513,7 +514,7 @@ async def test_settled_failed_mcp_startup_revokes_existing_grant(shortcut):
     case.auth.async_remove_refresh_token.assert_called_once()
     case.select.assert_awaited_once_with(name, False)
     case.client.async_remove_managed_mcp.assert_awaited_once_with(name, {
-        "expected_url": FIXED_URL,
+        "expected_url": DEFAULT_URL,
         "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
     })
     case.auth.async_create_refresh_token.assert_not_called()
@@ -673,7 +674,7 @@ async def test_public_mcp_reload_cancellation_revokes_after_setup_fails(hass, sh
     assert case.store.saved == {"record": None}
     case.auth.async_remove_refresh_token.assert_called_once()
     case.client.async_remove_managed_mcp.assert_awaited_once_with(name, {
-        "expected_url": FIXED_URL,
+        "expected_url": DEFAULT_URL,
         "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
     })
 
@@ -701,6 +702,117 @@ async def test_public_disable_or_removal_revokes_grant(shortcut, hass, monkeypat
     assert case.store.saved == {"record": None}
     case.auth.async_remove_refresh_token.assert_called_once()
     case.client.async_remove_managed_mcp.assert_awaited_once_with(name, {
-        "expected_url": FIXED_URL,
+        "expected_url": DEFAULT_URL,
         "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
     })
+
+
+def _remove_calls(case):
+    return [call.args for call in case.client.async_remove_managed_mcp.await_args_list]
+
+
+async def test_connect_rotate_and_remove_use_cores_configured_port(shortcut):
+    case = shortcut
+    case.hass.config.api.port = 80
+    url = "http://homeassistant:80/api/mcp/assist"
+    name = await _connect(case)
+    assert case.client.async_add_mcp.call_args.args[0]["url"] == url
+    assert case.store.saved["record"]["url"] == url
+    await case.helper.async_refresh()
+    assert case.client.async_replace_mcp_credential.call_args.args[1]["expected_url"] == url
+    await case.helper.async_disconnect()
+    assert _remove_calls(case) == [
+        (name, {"expected_url": url, "expected_token_sha256": _fingerprint("synthetic.jwt.rotated")}),
+    ]
+    assert case.store.saved == {"record": None}
+
+
+@pytest.mark.parametrize("api", [
+    SimpleNamespace(port=8123, use_ssl=True), SimpleNamespace(port=None, use_ssl=False),
+    SimpleNamespace(port=70000, use_ssl=False), None,
+])
+async def test_unusable_core_endpoint_creates_no_authority(shortcut, api):
+    case = shortcut
+    case.hass.config.api = api
+    assert (await case.helper.async_status())["state"] == "unavailable"
+    with pytest.raises(HaMcpShortcutError):
+        await _connect(case)
+    case.auth.async_create_refresh_token.assert_not_called()
+    case.client.async_add_mcp.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["setup", "status", "refresh"])
+async def test_changed_core_port_revokes_and_reconnects_at_new_url(shortcut, operation):
+    case = shortcut
+    name = await _connect(case)
+    case.hass.config.api.port = 8124
+    case.auth.async_create_access_token.reset_mock()
+    if operation == "setup":
+        await case.helper.async_setup()
+    elif operation == "status":
+        assert (await case.helper.async_status())["state"] == "reauthorise"
+    else:
+        assert (await case.helper.async_refresh())["state"] == "reauthorise"
+    assert case.tokens == {}
+    assert case.store.saved == {"record": None}
+    assert _remove_calls(case) == [
+        (name, {"expected_url": DEFAULT_URL, "expected_token_sha256": _fingerprint("synthetic.jwt.initial")}),
+    ]
+    case.auth.async_create_access_token.assert_not_called()
+    case.client.async_replace_mcp_credential.assert_not_called()
+    assert (await case.helper.async_status())["state"] == "reauthorise"
+    case.auth.async_create_access_token.side_effect = ["synthetic.jwt.reconnected"]
+    await _connect(case)
+    assert case.client.async_add_mcp.call_args.args[0]["url"] == "http://homeassistant:8124/api/mcp/assist"
+
+
+async def test_legacy_journal_is_adopted_at_current_port(shortcut):
+    case = shortcut
+    case.hass.config.api.port = 80
+    name = await _connect(case)
+    del case.store.saved["record"]["url"]
+    case.helper._record = None
+    case.helper._loaded = False
+    await case.helper.async_setup()
+    assert case.helper._record["url"] == "http://homeassistant:80/api/mcp/assist"
+    assert case.tokens and case.store.saved["record"]["state"] == "connected"
+    await case.helper.async_refresh()
+    assert case.client.async_replace_mcp_credential.call_args.args[1]["expected_url"] == (
+        "http://homeassistant:80/api/mcp/assist"
+    )
+    assert case.store.saved["record"]["url"] == "http://homeassistant:80/api/mcp/assist"
+    assert name == case.store.saved["record"]["server_name"]
+
+
+async def test_legacy_grant_on_fixed_port_is_still_removed(shortcut):
+    """A grant made at 8123 before URLs were journaled is removed after a port change."""
+    case = shortcut
+    name = await _connect(case)
+    del case.store.saved["record"]["url"]
+    case.helper._record = None
+    case.helper._loaded = False
+    case.hass.config.api.port = 80
+    case.client.async_remove_managed_mcp.side_effect = [
+        BridgeApiError(code="mcp_credential_binding_conflict"), None,
+    ]
+    await case.helper.async_remove()
+    initial = _fingerprint("synthetic.jwt.initial")
+    assert _remove_calls(case) == [
+        (name, {"expected_url": "http://homeassistant:80/api/mcp/assist", "expected_token_sha256": initial}),
+        (name, {"expected_url": DEFAULT_URL, "expected_token_sha256": initial}),
+    ]
+    assert case.tokens == {}
+    assert case.store.saved == {"record": None}
+
+
+@pytest.mark.parametrize("url", [
+    "https://homeassistant:8123/api/mcp/assist", "http://homeassistant.local:8123/api/mcp/assist",
+    "http://homeassistant/api/mcp/assist", "http://homeassistant:0/api/mcp/assist",
+    "http://homeassistant:65536/api/mcp/assist", "http://homeassistant:8123/api/mcp", 8123, None,
+])
+async def test_journal_rejects_unexpected_endpoint(shortcut, url):
+    await _connect(shortcut)
+    record = deepcopy(shortcut.store.saved)
+    record["record"]["url"] = url
+    with pytest.raises(ValueError):
+        _parse_record(record, DEFAULT_URL)

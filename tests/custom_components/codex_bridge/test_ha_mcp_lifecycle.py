@@ -18,7 +18,7 @@ from custom_components.codex_bridge.const import (
     DATA_PANEL_REGISTERED,
     DOMAIN,
 )
-from custom_components.codex_bridge.ha_mcp_shortcut import FIXED_URL, HaMcpShortcut, _fingerprint
+from custom_components.codex_bridge.ha_mcp_shortcut import DEFAULT_URL, HaMcpShortcut, _fingerprint
 from custom_components.codex_bridge.runtime import CodexBridgeRuntime
 
 from test_ha_mcp_shortcut import _connect, shortcut as grant_fixture
@@ -74,7 +74,7 @@ async def test_entry_removal_revokes_before_discovery_then_cleans_exact_binding(
     assert case.store.saved == {"record": None}
     case.auth.async_remove_refresh_token.assert_called_once()
     case.client.async_remove_managed_mcp.assert_awaited_once_with(name, {
-        "expected_url": FIXED_URL,
+        "expected_url": DEFAULT_URL,
         "expected_token_sha256": _fingerprint("synthetic.jwt.initial"),
     })
     case.client.async_close.assert_awaited_once()

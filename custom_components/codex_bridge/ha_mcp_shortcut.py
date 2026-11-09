@@ -23,7 +23,8 @@ from homeassistant.helpers.storage import Store
 from .bridge_api import BridgeApiClient, BridgeApiConnectionError, BridgeApiError
 from .const import CONNECTION_TYPE_SUPERVISOR, DOMAIN
 
-FIXED_URL = "http://homeassistant:8123/api/mcp/assist"
+_PATH = "/api/mcp/assist"
+DEFAULT_URL = f"http://homeassistant:8123{_PATH}"
 ACCESS_TOKEN_EXPIRATION = timedelta(hours=8)
 REFRESH_INTERVAL = timedelta(hours=1)
 _CAPABILITIES = frozenset({
@@ -32,6 +33,9 @@ _CAPABILITIES = frozenset({
     "assist_mcp_selection_v1",
 })
 _SERVER = re.compile(r"ha-assist-[a-f0-9]{12}\Z")
+_URL = re.compile(r"http://homeassistant:([1-9][0-9]{0,4})/api/mcp/assist\Z")
+_KEYS = frozenset({"owner_id", "token_id", "server_name", "fingerprint", "pending_fingerprint",
+                   "access_expires_at", "pending_expires_at", "state"})
 _DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 _STATES = {"preparing", "creating", "connected", "rotating", "disconnecting"}
 _BINDING_CONFLICT = "mcp_credential_binding_conflict"
@@ -98,7 +102,7 @@ class HaMcpShortcut:
         async with self._lock:
             try:
                 saved = await self._store.async_load()
-                self._record = _parse_record(saved)
+                self._record = _parse_record(saved, self._legacy_url())
                 self._loaded = True
             except Exception:  # noqa: BLE001 - private recovery must fail closed
                 self._invalid_journal = True
@@ -107,6 +111,9 @@ class HaMcpShortcut:
                 if self._record["state"] != "connected":
                     await self._disconnect_locked()
                 elif await self._owned_token() is None:
+                    await self._disconnect_locked()
+                    self._notice = "reauthorise"
+                elif self._moved():
                     await self._disconnect_locked()
                     self._notice = "reauthorise"
                 elif not self._environment():
@@ -145,7 +152,7 @@ class HaMcpShortcut:
             async with self._lock:
                 if not self._loaded:
                     try:
-                        self._record = _parse_record(await self._store.async_load())
+                        self._record = _parse_record(await self._store.async_load(), self._legacy_url())
                         self._loaded = True
                     except Exception:  # noqa: BLE001 - do not infer authority from corrupt storage
                         self._invalid_journal = True
@@ -170,7 +177,7 @@ class HaMcpShortcut:
                 return self._status("cleanup_pending" if self._record else "reauthorise")
             if not self._environment() and self._environment_pending():
                 return self._status("unavailable")
-            if not self._environment():
+            if not self._environment() or self._moved():
                 await self._disconnect_locked()
                 self._notice = "reauthorise"
                 return self._status("cleanup_pending" if self._record else "reauthorise")
@@ -211,11 +218,12 @@ class HaMcpShortcut:
                 raise HaMcpShortcutError() from None
             if current is None or current is not user or current.is_active is not True or current.is_admin is not True:
                 raise HaMcpShortcutError()
-            if not self._environment():
+            url = self._endpoint()
+            if not self._environment() or url is None:
                 raise HaMcpShortcutError()
             if not self._loaded:
                 try:
-                    self._record = _parse_record(await self._store.async_load())
+                    self._record = _parse_record(await self._store.async_load(), url)
                     self._loaded = True
                 except Exception:  # noqa: BLE001 - never overwrite an uncertain existing grant
                     self._invalid_journal = True
@@ -223,7 +231,7 @@ class HaMcpShortcut:
             if self._record is not None:
                 raise HaMcpShortcutError("cleanup_pending" if self._record["state"] != "connected" else "configured")
             name = "ha-assist-" + secrets.token_hex(6)
-            self._record = {"owner_id": user.id, "token_id": None, "server_name": name,
+            self._record = {"owner_id": user.id, "token_id": None, "server_name": name, "url": url,
                             "fingerprint": None, "pending_fingerprint": None,
                             "access_expires_at": 0.0, "pending_expires_at": None, "state": "preparing"}
             try:
@@ -239,7 +247,7 @@ class HaMcpShortcut:
                 self._record.update(fingerprint=_fingerprint(jwt), access_expires_at=time() + ACCESS_TOKEN_EXPIRATION.total_seconds(), state="creating")
                 await self._save()
                 await self._bridge().async_add_mcp({
-                    "name": name, "url": FIXED_URL, "local": True,
+                    "name": name, "url": url, "local": True,
                     "local_acknowledged": True, "authentication": {"mode": "bearer", "token": jwt},
                     "auth_acknowledged": True, "require_tool_selection": True,
                 })
@@ -270,7 +278,7 @@ class HaMcpShortcut:
             token = await self._owned_token()
             if not self._environment() and self._environment_pending() and token is not None:
                 raise HaMcpShortcutError()
-            if not self._environment() or token is None:
+            if not self._environment() or token is None or self._moved():
                 await self._disconnect_locked()
                 self._notice = "reauthorise"
                 return self._status("cleanup_pending" if self._record else "reauthorise")
@@ -281,7 +289,7 @@ class HaMcpShortcut:
                 await self._save()
                 await self._bridge().async_replace_mcp_credential(self._record["server_name"], {
                     "authentication": {"mode": "bearer", "token": jwt}, "auth_acknowledged": True,
-                    "expected_url": FIXED_URL, "expected_token_sha256": self._record["fingerprint"],
+                    "expected_url": self._record["url"], "expected_token_sha256": self._record["fingerprint"],
                 })
                 self._record.update(state="connected", fingerprint=self._record["pending_fingerprint"],
                                     access_expires_at=self._record["pending_expires_at"],
@@ -310,12 +318,33 @@ class HaMcpShortcut:
             self._notice = None
             return self._status("cleanup_pending" if self._record else "not_connected")
 
+    def _endpoint(self) -> str | None:
+        """Return Core's MCP URL on the Supervisor network, or None when it cannot be used.
+
+        An HTTPS-only Core is unusable: its certificate cannot name the internal host.
+        """
+        api = getattr(self.hass.config, "api", None)
+        port = getattr(api, "port", None)
+        if getattr(api, "use_ssl", None) is not False or type(port) is not int or not 0 < port < 65536:
+            return None
+        return f"http://homeassistant:{port}{_PATH}"
+
+    def _legacy_url(self) -> str:
+        """Grants journaled before the URL was recorded are adopted at the current port."""
+        return self._endpoint() or DEFAULT_URL
+
+    def _moved(self) -> bool:
+        """A changed Core port strands the grant; reconnecting creates it at the new URL."""
+        url = self._endpoint()
+        return self._record is not None and url is not None and url != self._record["url"]
+
     def _environment(self) -> bool:
         try:
             return (self.connection_type == CONNECTION_TYPE_SUPERVISOR
                     and all(self._supports(capability) is True for capability in _CAPABILITIES)
                     and len(self.hass.config_entries.async_loaded_entries("mcp_server")) == 1
-                    and any(api.id == llm.LLM_API_ASSIST for api in llm.async_get_apis(self.hass)))
+                    and any(api.id == llm.LLM_API_ASSIST for api in llm.async_get_apis(self.hass))
+                    and self._endpoint() is not None)
         except Exception:  # noqa: BLE001 - unavailable discovery cannot confer authority
             return False
 
@@ -396,10 +425,13 @@ class HaMcpShortcut:
             if not self._supports("mcp_credential_binding_v1"):
                 pending = True
             else:
-                for digest in digests:
+                # A grant adopted from before URLs were journaled may still be bound to
+                # the original fixed port, so that binding is tried last.
+                urls = dict.fromkeys((record["url"], DEFAULT_URL))
+                for url, digest in ((url, digest) for url in urls for digest in digests):
                     try:
                         await self._bridge().async_remove_managed_mcp(record["server_name"], {
-                            "expected_url": FIXED_URL, "expected_token_sha256": digest,
+                            "expected_url": url, "expected_token_sha256": digest,
                         })
                         break
                     except BridgeApiError as error:
@@ -464,13 +496,18 @@ def _fingerprint(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _parse_record(saved: Any) -> dict[str, Any] | None:
+def _parse_record(saved: Any, legacy_url: str) -> dict[str, Any] | None:
     if saved is None or saved == {"record": None}:
         return None
     if not isinstance(saved, dict) or set(saved) != {"record"} or not isinstance(saved["record"], dict):
         raise ValueError("Invalid private journal")
-    record = saved["record"]
-    if set(record) != {"owner_id", "token_id", "server_name", "fingerprint", "pending_fingerprint", "access_expires_at", "pending_expires_at", "state"}:
+    record = dict(saved["record"])
+    if set(record) == _KEYS:
+        record["url"] = legacy_url
+    if set(record) != _KEYS | {"url"}:
+        raise ValueError("Invalid private journal")
+    match = _URL.fullmatch(record["url"]) if isinstance(record["url"], str) else None
+    if match is None or int(match.group(1)) > 65535:
         raise ValueError("Invalid private journal")
     if (not isinstance(record["owner_id"], str) or not 1 <= len(record["owner_id"]) <= 128
             or not isinstance(record["server_name"], str) or not _SERVER.fullmatch(record["server_name"])
@@ -490,4 +527,4 @@ def _parse_record(saved: Any) -> dict[str, Any] | None:
         raise ValueError("Invalid private journal")
     if record["state"] == "rotating" and (not record["pending_fingerprint"] or not record["pending_expires_at"]):
         raise ValueError("Invalid private journal")
-    return dict(record)
+    return record
