@@ -4881,7 +4881,6 @@ class RuntimeBroker:
         timer = self._assist_timers.pop(run.run_id, None)
         if timer is not None:
             timer.mark("completed")
-            timer.report(status)
         # Capacity becomes observable as free before the terminal thread
         # projection is published. Consumers must never see a terminal run
         # while the global gate still counts it as active.
@@ -4894,6 +4893,9 @@ class RuntimeBroker:
         event = self._completion_events.pop(run.run_id, None)
         if event is not None:
             event.set()
+        if timer is not None:
+            # Best-effort and non-blocking: queued only after cleanup is signalled.
+            timer.report(status)
         self._activity.pop(run.run_id, None)
         self._discard_pre_response_callbacks_locked(run.run_id)
         for key in [key for key in self._item_paths if key[0] == run.run_id]:

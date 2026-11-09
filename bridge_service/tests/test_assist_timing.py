@@ -1,11 +1,13 @@
 """Assist step timings reach the App log without any private content."""
 
 from pathlib import Path
+import queue
 from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from codex_bridge_service import assist_timing
 from codex_bridge_service.assist_mcp import isolation_config
 from codex_bridge_service.assist_timing import AssistTimer
 from codex_bridge_service.routes import task_actions
@@ -52,12 +54,46 @@ def test_summary_names_resumed_sessions_and_bounds_its_status_text() -> None:
 def test_report_prints_only_the_summary(capsys) -> None:
     timer = AssistTimer(_Clock())
     timer.report("completed")
+    assist_timing._LINES.join()
     assert capsys.readouterr().out == timer.summary("completed") + "\n"
+
+
+def test_report_never_raises_or_blocks_on_a_broken_log(monkeypatch, capsys) -> None:
+    failures = []
+
+    def broken(*_args, **_kwargs):
+        failures.append(True)
+        raise BrokenPipeError()
+
+    monkeypatch.setattr(assist_timing, "print", broken, raising=False)
+    timer = AssistTimer(_Clock())
+    timer.report("completed")
+    assist_timing._LINES.join()
+    assert failures == [True]
+    monkeypatch.undo()
+    timer.report("failed")
+    assist_timing._LINES.join()
+    assert capsys.readouterr().out == timer.summary("failed") + "\n"
+
+
+def test_full_log_queue_drops_the_line(monkeypatch) -> None:
+    full = queue.Queue(maxsize=1)
+    full.put_nowait("waiting")
+    monkeypatch.setattr(assist_timing, "_LINES", full)
+    AssistTimer(_Clock()).report("completed")
+    assert full.qsize() == 1 and full.get_nowait() == "waiting"
 
 
 def test_assist_runs_log_one_content_free_timing_line_and_other_runs_none(tmp_path: Path, monkeypatch) -> None:
     printed: list[str] = []
-    monkeypatch.setattr(AssistTimer, "report", lambda self, status: printed.append(self.summary(status)))
+    active_at_report: list[int] = []
+
+    def report(timer, status):
+        # Reporting follows lease release, so no run holds capacity by then.
+        active_at_report.append(broker.gate.snapshot().active_turns)
+        printed.append(timer.summary(status))
+
+    monkeypatch.setattr(AssistTimer, "report", report)
     storage = BridgeStorage(root_path=tmp_path / "state")
     project = storage.create_project(
         name="Assist", root_path=str(tmp_path / "workspace"),
@@ -131,6 +167,7 @@ def test_assist_runs_log_one_content_free_timing_line_and_other_runs_none(tmp_pa
         _complete(peer, remote_thread_id=remote_id, turn_id=turn_id)
         _wait_until(lambda: broker.get_task_action_run("c" * 32).status == "completed")
         assert len(printed) == 2
+        assert active_at_report == [0, 0]
         assert broker._assist_timers == {}
     finally:
         broker.close()

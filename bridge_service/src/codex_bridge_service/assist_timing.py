@@ -8,6 +8,8 @@ measured on a real install without enabling any other logging.
 from __future__ import annotations
 
 from collections.abc import Callable
+import queue
+import threading
 from time import monotonic
 
 STEPS = (
@@ -24,6 +26,11 @@ STEPS = (
 )
 _LABELS = dict(STEPS)
 _STATUSES = frozenset({"completed", "failed", "cancelled", "interrupted"})
+# Lines wait here for one writer thread, so a slow or broken log pipe can never
+# block or fail run cleanup. A full queue drops the line.
+_LINES: queue.Queue[str] = queue.Queue(maxsize=64)
+_writer_lock = threading.Lock()
+_writer: threading.Thread | None = None
 
 
 class AssistTimer:
@@ -59,7 +66,35 @@ class AssistTimer:
         )
 
     def report(self, status: str) -> None:
-        print(self.summary(status), flush=True)
+        """Queue the summary for the App log without blocking or raising."""
+
+        try:
+            _queue_line(self.summary(status))
+        except Exception:  # noqa: BLE001 - timing output is best-effort
+            pass
+
+
+def _queue_line(line: str) -> None:
+    global _writer
+    try:
+        _LINES.put_nowait(line)
+    except queue.Full:
+        return
+    with _writer_lock:
+        if _writer is None:
+            _writer = threading.Thread(target=_write_lines, name="assist-timing-log", daemon=True)
+            _writer.start()
+
+
+def _write_lines() -> None:
+    while True:
+        line = _LINES.get()
+        try:
+            print(line, flush=True)
+        except Exception:  # noqa: BLE001 - a broken log pipe must not stop the writer
+            pass
+        finally:
+            _LINES.task_done()
 
 
 def _milliseconds(seconds: float) -> int:
