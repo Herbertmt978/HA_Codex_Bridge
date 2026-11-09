@@ -1,4 +1,4 @@
-FROM ghcr.io/home-assistant/base-python:3.14-alpine3.24@sha256:51837e17a94b578cc00357c98482b61b53b27e37d910c97b86dd6448cfb11a6f
+FROM ghcr.io/home-assistant/base-python:3.15-alpine3.24@sha256:31e73797b8c9a0ba62d33f0f46f81174b808fb42bdcb2a902cb0e8c3efdfd8fc
 
 ARG TARGETARCH
 ARG BUILD_ARCH=amd64
