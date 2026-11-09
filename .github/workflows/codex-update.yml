@@ -234,7 +234,7 @@ jobs:
         id: create-update-pr
         if: steps.updater-credentials.outputs.available == 'true'
         # v8.1.1 owns branch reuse, signed-off commits, and PR lifecycle.
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # zizmor: ignore[superfluous-actions]
+        uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8 # zizmor: ignore[superfluous-actions]
         with:
           add-paths: |
             bridge_service/src/codex_bridge_service/codex_app_server_contract.json
