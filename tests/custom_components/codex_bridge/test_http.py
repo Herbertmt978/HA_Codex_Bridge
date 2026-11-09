@@ -1365,6 +1365,7 @@ async def ha_mcp_http_grant(hass, hass_admin_user, monkeypatch):
     """A real HA-owned grant with only the remote MCP availability faked."""
     from custom_components.codex_bridge.const import CONNECTION_TYPE_SUPERVISOR
     from custom_components.codex_bridge.ha_mcp_shortcut import HaMcpShortcut
+    from homeassistant.components.http import ApiConfig
 
     bridge = SimpleNamespace(async_add_mcp=AsyncMock(return_value={}),
                              async_remove_managed_mcp=AsyncMock())
@@ -1373,6 +1374,8 @@ async def ha_mcp_http_grant(hass, hass_admin_user, monkeypatch):
         supports_capability=lambda _capability: True,
         selection_callback=AsyncMock())
     monkeypatch.setattr(helper, "_environment", lambda: True)
+    # Core publishes its listening port when the http integration loads.
+    monkeypatch.setattr(hass.config, "api", ApiConfig("127.0.0.1", "127.0.0.1", 8123, False))
     previous = set(hass_admin_user.refresh_tokens)
     result = await helper.async_connect(hass_admin_user, acknowledged=True)
     created = set(hass_admin_user.refresh_tokens) - previous
