@@ -64,6 +64,10 @@ updates:
       - dependency-name: "pytest"
         versions:
           - ">=9.1.0"
+      # The pinned Home Assistant test fixture requires pytest-asyncio==1.4.0.
+      - dependency-name: "pytest-asyncio"
+        versions:
+          - ">=1.4.1"
 
   - package-ecosystem: docker
     directory: "/codex_bridge_app"
