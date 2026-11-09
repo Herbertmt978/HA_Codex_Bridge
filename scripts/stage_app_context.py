@@ -370,8 +370,12 @@ def _build_bridge_wheel(destination: Path, scratch: Path) -> Path:
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
     build_tools = scratch / "build-tools"
+    # The build tools run on this staging interpreter, not in the image.
     _materialize_locked_requirements(
-        build_tools, APP_ROOT / "requirements-build.txt", platform=None
+        build_tools,
+        APP_ROOT / "requirements-build.txt",
+        python_version=f"{sys.version_info.major}.{sys.version_info.minor}",
+        platform=None,
     )
     environment = dict(
         os.environ,
@@ -412,7 +416,11 @@ def _build_bridge_wheel(destination: Path, scratch: Path) -> Path:
 
 
 def _materialize_locked_requirements(
-    destination: Path, requirements: Path, *, platform: str | None
+    destination: Path,
+    requirements: Path,
+    *,
+    python_version: str,
+    platform: str | None,
 ) -> None:
     uv = shutil.which("uv")
     if uv is None:
@@ -424,7 +432,7 @@ def _materialize_locked_requirements(
         "--target",
         str(destination),
         "--python-version",
-        base_python_version(),
+        python_version,
         "--require-hashes",
         "--no-build",
         "--no-compile-bytecode",
@@ -439,6 +447,7 @@ def _materialize_runtime(destination: Path, arch: str) -> None:
     _materialize_locked_requirements(
         destination,
         APP_ROOT / "requirements-runtime.txt",
+        python_version=base_python_version(),
         platform=ARCHITECTURES[arch],
     )
 

@@ -206,16 +206,35 @@ def test_app_python_version_has_one_source() -> None:
     assert re.fullmatch(r"3\.[0-9]{1,2}", version)
     compile_option = f"--python-version {version}"
 
-    for lock in (BUILD_REQUIREMENTS, RUNTIME_REQUIREMENTS):
-        header = lock.read_text(encoding="utf-8").splitlines()[:2]
-        assert any(compile_option in line for line in header), (
-            f"{lock.name} must be compiled for the base image's Python {version}"
-        )
-    documented = re.findall(
-        r"--python-version (\S+)",
-        (ROOT / "docs" / "development.md").read_text(encoding="utf-8"),
+    runtime_header = RUNTIME_REQUIREMENTS.read_text(encoding="utf-8").splitlines()[:2]
+    assert any(compile_option in line for line in runtime_header), (
+        f"the runtime lock must be compiled for the base image's Python {version}"
     )
-    assert documented and set(documented) == {version}
+    documented = dict(
+        re.findall(
+            r"uv pip compile (\S+) .*--python-version (\S+)",
+            (ROOT / "docs" / "development.md").read_text(encoding="utf-8"),
+        )
+    )
+    assert documented["bridge_service/pyproject.toml"] == version
+
+    # Build tools run on the workflow's staging interpreter, so their lock
+    # follows that interpreter rather than the image.
+    workflow_versions = set(
+        re.findall(
+            r'python-version: "(3\.[0-9]{1,2})"',
+            (ROOT / ".github" / "workflows" / "build-app.yml").read_text(
+                encoding="utf-8"
+            ),
+        )
+    )
+    assert len(workflow_versions) == 1
+    (staging_version,) = workflow_versions
+    build_header = BUILD_REQUIREMENTS.read_text(encoding="utf-8").splitlines()[:2]
+    assert any(
+        f"--python-version {staging_version}" in line for line in build_header
+    ), "the build lock must match the App workflow's staging interpreter"
+    assert documented["codex_bridge_app/requirements-build.in"] == staging_version
 
     dockerfile = (APP_ROOT / "Dockerfile").read_text(encoding="utf-8")
     assert not re.search(r"python3\.[0-9]", dockerfile), (
@@ -233,7 +252,11 @@ def test_app_python_version_has_one_source() -> None:
     )
 
 
-def test_stager_materializes_locks_for_the_base_image_python(
+class _StopAfterInstall(Exception):
+    """Stop staging once the captured uv command has been recorded."""
+
+
+def test_stager_targets_the_base_for_runtime_and_the_stager_for_build_tools(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = _load_stager("task20_runtime_python_stager")
@@ -245,22 +268,30 @@ def test_stager_materializes_locks_for_the_base_image_python(
         encoding="utf-8",
     )
     commands: list[list[str]] = []
+
+    def record(command: list[str], **_kwargs: object) -> None:
+        commands.append(command)
+        raise _StopAfterInstall
+
     monkeypatch.setattr(module, "DOCKERFILE", dockerfile)
     monkeypatch.setattr(module.shutil, "which", lambda _name: "uv")
-    monkeypatch.setattr(
-        module.subprocess,
-        "run",
-        lambda command, **_kwargs: commands.append(command),
-    )
+    monkeypatch.setattr(module.subprocess, "run", record)
 
-    module._materialize_runtime(tmp_path / "runtime", "aarch64")
+    with pytest.raises(_StopAfterInstall):
+        module._materialize_runtime(tmp_path / "runtime", "aarch64")
+    # The build-tool install is the first command of the wheel build.
+    with pytest.raises(_StopAfterInstall):
+        module._build_bridge_wheel(tmp_path / "wheel", tmp_path)
 
-    (command,) = commands
-    position = command.index("--python-version")
-    assert command[position + 1] == "3.15"
-    assert command[command.index("--python-platform") + 1] == (
+    runtime, build_tools = commands
+    assert runtime[runtime.index("--python-version") + 1] == "3.15"
+    assert runtime[runtime.index("--python-platform") + 1] == (
         "aarch64-unknown-linux-musl"
     )
+    assert build_tools[build_tools.index("--python-version") + 1] == (
+        f"{sys.version_info.major}.{sys.version_info.minor}"
+    )
+    assert "--python-platform" not in build_tools
 
 
 @pytest.mark.parametrize(
