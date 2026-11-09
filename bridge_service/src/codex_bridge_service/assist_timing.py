@@ -81,7 +81,8 @@ def _queue_line(line: str) -> None:
     except queue.Full:
         return
     with _writer_lock:
-        if _writer is None:
+        # A writer that has stopped is replaced, so lines never queue up unread.
+        if _writer is None or not _writer.is_alive():
             _writer = threading.Thread(target=_write_lines, name="assist-timing-log", daemon=True)
             _writer.start()
 

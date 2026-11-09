@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import queue
+import threading
+import time
 from types import SimpleNamespace
 
 from fastapi import FastAPI
@@ -51,10 +53,19 @@ def test_summary_names_resumed_sessions_and_bounds_its_status_text() -> None:
     )
 
 
+def _drain() -> None:
+    """Wait for the log writer with a deadline rather than an unbounded join."""
+
+    deadline = time.monotonic() + 5
+    while assist_timing._LINES.unfinished_tasks:
+        assert time.monotonic() < deadline, "timing log writer stalled"
+        time.sleep(0.01)
+
+
 def test_report_prints_only_the_summary(capsys) -> None:
     timer = AssistTimer(_Clock())
     timer.report("completed")
-    assist_timing._LINES.join()
+    _drain()
     assert capsys.readouterr().out == timer.summary("completed") + "\n"
 
 
@@ -68,12 +79,32 @@ def test_report_never_raises_or_blocks_on_a_broken_log(monkeypatch, capsys) -> N
     monkeypatch.setattr(assist_timing, "print", broken, raising=False)
     timer = AssistTimer(_Clock())
     timer.report("completed")
-    assist_timing._LINES.join()
+    _drain()
     assert failures == [True]
     monkeypatch.undo()
     timer.report("failed")
-    assist_timing._LINES.join()
+    _drain()
     assert capsys.readouterr().out == timer.summary("failed") + "\n"
+
+
+def test_report_swallows_a_failure_to_queue(monkeypatch) -> None:
+    def failing(_line):
+        raise RuntimeError("cannot start thread")
+
+    monkeypatch.setattr(assist_timing, "_queue_line", failing)
+    AssistTimer(_Clock()).report("completed")
+
+
+def test_a_stopped_writer_is_replaced(monkeypatch, capsys) -> None:
+    stopped = threading.Thread(target=lambda: None)
+    stopped.start()
+    stopped.join()
+    monkeypatch.setattr(assist_timing, "_writer", stopped)
+    timer = AssistTimer(_Clock())
+    timer.report("interrupted")
+    _drain()
+    assert capsys.readouterr().out == timer.summary("interrupted") + "
+"
 
 
 def test_full_log_queue_drops_the_line(monkeypatch) -> None:
