@@ -16,6 +16,7 @@ from uuid import uuid4
 from .activity_display import command_preview
 from .child_agents import ChildAgents, ChildAgentError, ChildOwner
 from .assist_mcp import private_execution_directory
+from .assist_timing import AssistTimer
 
 from .codex_app_server import (
     DEFERRED_RESPONSE,
@@ -636,6 +637,8 @@ class RuntimeBroker:
         # response. Keep the live dispatch fence until validation has finished;
         # a Bridge restart already replaces the entire native generation.
         self._assist_loading_runs: set[str] = set()
+        # In-memory only: step timings for the App log, never persisted.
+        self._assist_timers: dict[str, AssistTimer] = {}
         self._mcp_manager = mcp_manager if mcp_manager is not None and mcp_manager.enabled else None
         self._image_generation_authority = image_generation_authority
         self._browser_broker = browser_broker
@@ -1778,6 +1781,8 @@ class RuntimeBroker:
                         and self._active_run_for_thread_locked(thread_id) is not None
                     ):
                         self._set_thread_projection_locked(run)
+                    if assist:
+                        self._assist_timers[run.run_id] = AssistTimer()
                     self._spawn_worker_locked(run.run_id)
                 except RuntimeStateCommitUnknownError:
                     # The outbox may already own the accepted run and events.
@@ -2573,6 +2578,7 @@ class RuntimeBroker:
             if lease is None:
                 return
             lease.wait_until_active(timeout_seconds=queue_wait_timeout)
+            self._mark_assist(run_id, "worker")
             with self._lock:
                 if any(row.budget_stop_unconfirmed for row in self._state.runs.values()
                        if row.status not in _TERMINAL_RUN_STATES):
@@ -2972,6 +2978,7 @@ class RuntimeBroker:
             thread_config.update(manager.assist_thread_config(
                 workspace, thread.assist_mcp_servers, execution_cwd=native_cwd,
             ))
+            self._mark_assist(run.run_id, "config")
         # Apply last: no other configuration owner can revive native goals.
         thread_config["features.goals"] = False
         host_lease = None
@@ -3020,6 +3027,7 @@ class RuntimeBroker:
                 thread_params,
                 timeout_seconds=thread_request_timeout,
             )
+            self._mark_assist(run.run_id, "thread", resumed=True)
         else:
             thread_params["ephemeral"] = False
             # Client-owned namespace tools are attached at thread creation.
@@ -3044,6 +3052,7 @@ class RuntimeBroker:
                 thread_params,
                 timeout_seconds=thread_request_timeout,
             )
+            self._mark_assist(run.run_id, "thread")
         codex_thread_id = validate_thread_result(
             thread_result,
             expected_cwd=native_cwd,
@@ -3142,6 +3151,7 @@ class RuntimeBroker:
             turn_params,
             timeout_seconds=turn_request_timeout,
         )
+        self._mark_assist(run_id, "turn")
         turn_id, turn_status, turn = validate_turn_result(turn_result)
         with self._lock:
             run = self._state.runs[run_id]
@@ -3210,6 +3220,7 @@ class RuntimeBroker:
                     "run.started",
                     {"run_id": run.run_id},
                 )
+                self._mark_assist(run_id, "started")
             self._callback_replays_in_progress.add(run_id)
 
         if elapsed_expired and turn_status == "inProgress":
@@ -3929,6 +3940,8 @@ class RuntimeBroker:
         }
         if method in mapping:
             event_type, field, deduplicate = mapping[method]
+            if event_type == "message.delta":
+                self._mark_assist(run.run_id, "first_output")
             payload: dict[str, object] = {"run_id": run.run_id}
             if field is not None:
                 value = params.get(field)
@@ -4694,6 +4707,12 @@ class RuntimeBroker:
                 return
             sleep(min(0.1, max(0, deadline - monotonic())))
 
+    def _mark_assist(self, run_id: str, step: str, *, latest: bool = False, resumed: bool = False) -> None:
+        timer = self._assist_timers.get(run_id)
+        if timer is not None:
+            timer.mark(step, latest=latest)
+            timer.resumed = timer.resumed or resumed
+
     def _close_assist_mcp_before_release_locked(self, run: RuntimeRunState) -> None:
         """No idle Assist connection may retain a revoked public MCP binding."""
 
@@ -4746,8 +4765,10 @@ class RuntimeBroker:
     ) -> None:
         if run.status in _TERMINAL_RUN_STATES:
             return
+        self._mark_assist(run.run_id, "turn_completed")
         self._revoke_browser_turn_locked(run.run_id)
         self._close_assist_mcp_before_release_locked(run)
+        self._mark_assist(run.run_id, "unloaded")
         was_budget_unconfirmed = run.budget_stop_unconfirmed
         run.budget_stop_unconfirmed = False
         run.status = status  # type: ignore[assignment]
@@ -4857,6 +4878,9 @@ class RuntimeBroker:
                 )
             except RuntimeStateError as exc:
                 persistence_error = exc
+        timer = self._assist_timers.pop(run.run_id, None)
+        if timer is not None:
+            timer.mark("completed")
         # Capacity becomes observable as free before the terminal thread
         # projection is published. Consumers must never see a terminal run
         # while the global gate still counts it as active.
@@ -4869,6 +4893,9 @@ class RuntimeBroker:
         event = self._completion_events.pop(run.run_id, None)
         if event is not None:
             event.set()
+        if timer is not None:
+            # Best-effort and non-blocking: queued only after cleanup is signalled.
+            timer.report(status)
         self._activity.pop(run.run_id, None)
         self._discard_pre_response_callbacks_locked(run.run_id)
         for key in [key for key in self._item_paths if key[0] == run.run_id]:
@@ -5193,6 +5220,8 @@ class RuntimeBroker:
             event_type = "item.started"
         elif item_type == "agentMessage":
             event_type = "message.completed"
+            # A turn may send interim messages before tools; time the last one.
+            self._mark_assist(run.run_id, "answer", latest=True)
         else:
             event_type = "item.completed"
         self._emit_once_locked(
@@ -5893,6 +5922,7 @@ class RuntimeBroker:
                 # The closed gate remains the boundary if teardown is uncertain.
                 pass
         self._assist_loading_runs.clear()
+        self._assist_timers.clear()
         for admission in tuple(self._pending_prompt_admissions.values()):
             self._release_prompt_admission_locked(admission)
         for run_id in tuple(self._pre_response_callbacks):
