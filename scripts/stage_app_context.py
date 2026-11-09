@@ -16,6 +16,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,14 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = ROOT / "codex_bridge_app"
 DEFAULT_OUTPUT = ROOT / ".build" / "app-context"
+DOCKERFILE = APP_ROOT / "Dockerfile"
+# The digest-pinned base image is the single source of the App's Python
+# version. Locks are compiled, and the runtime is staged, for the interpreter
+# that image provides.
+BASE_PYTHON_IMAGE = re.compile(
+    r"(?m)^FROM ghcr\.io/home-assistant/base-python:"
+    r"(?P<version>3\.[0-9]{1,2})-alpine[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$"
+)
 ARCHITECTURES = {
     "amd64": "x86_64-unknown-linux-musl",
     "aarch64": "aarch64-unknown-linux-musl",
@@ -41,6 +50,19 @@ SANDBOX_CONTRACT_VERSION = 2
 
 class StageError(RuntimeError):
     """The context cannot be produced safely."""
+
+
+def base_python_version(dockerfile: Path | None = None) -> str:
+    """Return the major.minor Python version of the App's base image."""
+
+    text = (dockerfile or DOCKERFILE).read_text(encoding="utf-8")
+    matches = BASE_PYTHON_IMAGE.findall(text)
+    if len(matches) != 1:
+        raise StageError(
+            "the App Dockerfile must have one digest-pinned "
+            "Home Assistant base-python image"
+        )
+    return str(matches[0])
 
 
 def _sha256_bytes(payload: bytes) -> str:
@@ -402,7 +424,7 @@ def _materialize_locked_requirements(
         "--target",
         str(destination),
         "--python-version",
-        "3.14",
+        base_python_version(),
         "--require-hashes",
         "--no-build",
         "--no-compile-bytecode",
