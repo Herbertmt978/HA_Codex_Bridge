@@ -68,6 +68,11 @@ updates:
       - dependency-name: "pytest-asyncio"
         versions:
           - ">=1.4.1"
+      # Home Assistant's botocore requires python-dateutil<3 in the shared test
+      # environment, and the App runtime lock pins 2.9.0.post0.
+      - dependency-name: "python-dateutil"
+        versions:
+          - ">=3"
 
   - package-ecosystem: docker
     directory: "/codex_bridge_app"
