@@ -10,6 +10,14 @@ uses your Home Assistant administrator account, so some tools can control
 devices. Switch it off to pause the connection. It does not turn on Assist
 voice.
 
+The switch reaches Home Assistant at its internal `homeassistant` address on
+the port set by `server_port` in Home Assistant's `http:` configuration (8123
+unless you have changed it). If you change that port later, the connection asks
+to be authorised again; reconnecting uses the new port. The switch is
+unavailable when Home Assistant serves HTTPS itself through `ssl_certificate`,
+because that certificate cannot name the internal address. Serve HTTPS
+through a reverse proxy instead and keep Home Assistant's own server on HTTP.
+
 The community HA-MCP App has its own **Use community Home Assistant tools**
 switch. It keeps any tool choices you have already made; if none are selected,
 it chooses the current list. Community tools may also change Home Assistant
@@ -169,8 +177,9 @@ hostnames and optional OAuth. Local connections require App and Integration
 1.2.0 or later, both App options above, and acknowledgement for each endpoint.
 
 For the HA-MCP custom component, copy the **Local network** webhook URL from
-its Configure screen. It uses your HA hostname or IP, port 8123 and a private
-webhook path. You can also use an HA-MCP App's supported connection URL. Use
+its Configure screen. It uses your HA hostname or IP, HA's HTTP port (8123 by
+default) and a private webhook path. You can also use an HA-MCP App's
+supported connection URL. Use
 the address reachable from Codex Bridge, not `localhost`: that refers to the
 Bridge container. Do not paste a Home Assistant access token into the URL.
 
