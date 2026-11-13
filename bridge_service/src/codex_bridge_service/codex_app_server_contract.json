@@ -56,6 +56,8 @@
     "mcpServerStatus/list",
     "model/list",
     "modelProvider/capabilities/read",
+    "modelProvider/config/write",
+    "modelProvider/list",
     "permissionProfile/list",
     "plugin/install",
     "plugin/installed",
@@ -110,9 +112,9 @@
     "windowsSandbox/readiness",
     "windowsSandbox/setupStart"
   ],
-  "codexVersion": "codex-cli 0.167.2",
+  "codexVersion": "codex-cli 0.168.0",
   "contractVersion": 1,
-  "schemaBundleSha256": "c090c8ca369b03dcd70ba37d7a0fda4b739f5610f9dc5c9786ae5892d7459e59",
+  "schemaBundleSha256": "da84ccadb752cd1ca3d84f059800d3c53c7cce2d1ebf0e6d95e05a9aef093412",
   "serverNotifications": [
     "account/gatewayOAuth/changed",
     "account/login/completed",
@@ -213,6 +215,6 @@
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request"
   ],
-  "stableSchemaSha256": "24c2bffe17879072d78bfe6456589e226facddaf221e0a357cd9d2fb07d628b6",
-  "v2SchemaSha256": "b2748e1a1a5807c5d8c513651d2488d821c8a1ab1f93c90a745d9f9e08f4565d"
+  "stableSchemaSha256": "397ccdfb57ff924d4b5a797e0487ec49e898e12e94f438bb6cb9699e0901c735",
+  "v2SchemaSha256": "e16c0bc24c5fae2a488a387198aa25126e876bf2caa3d0abd1683279b2c8b7c6"
 }
