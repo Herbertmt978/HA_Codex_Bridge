@@ -12,6 +12,7 @@
     "account/rateLimitResetCredit/consume",
     "account/rateLimits/read",
     "account/read",
+    "account/securitySetup/read",
     "account/sendAddCreditsNudgeEmail",
     "account/usage/read",
     "account/workspaceMessages/read",
@@ -112,9 +113,9 @@
     "windowsSandbox/readiness",
     "windowsSandbox/setupStart"
   ],
-  "codexVersion": "codex-cli 0.168.0",
+  "codexVersion": "codex-cli 0.169.0",
   "contractVersion": 1,
-  "schemaBundleSha256": "da84ccadb752cd1ca3d84f059800d3c53c7cce2d1ebf0e6d95e05a9aef093412",
+  "schemaBundleSha256": "1a74868f23cc2ba45c05d4b995553291d641ba1c0427249f0cec8fd76d029cfe",
   "serverNotifications": [
     "account/gatewayOAuth/changed",
     "account/login/completed",
@@ -215,6 +216,6 @@
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request"
   ],
-  "stableSchemaSha256": "397ccdfb57ff924d4b5a797e0487ec49e898e12e94f438bb6cb9699e0901c735",
-  "v2SchemaSha256": "e16c0bc24c5fae2a488a387198aa25126e876bf2caa3d0abd1683279b2c8b7c6"
+  "stableSchemaSha256": "ad3ad72618cc3bca3e97ed68dd7bb836f845551ac6f2e3cd34edb6e4b74522de",
+  "v2SchemaSha256": "2362154bc14e8bd028bf686be689da04901f69930e4c2e4dbf054a74e2df478b"
 }
