@@ -472,3 +472,82 @@ def test_legacy_cosign_bundle_records_rekor_evidence_and_verifies_raw_binary(
     )
     assert command[command.index("--certificate-github-workflow-sha") + 1] == "b" * 40
     assert command[command.index("--certificate-github-workflow-trigger") + 1] == "push"
+
+class _Response(io.BytesIO):
+    def __enter__(self) -> "_Response":
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        self.close()
+
+
+@pytest.mark.parametrize(
+    ("url", "token", "authorized"),
+    [
+        (
+            "https://api.github.com/repos/openai/codex/releases/latest",
+            "read-only",
+            True,
+        ),
+        ("https://api.github.com/repos/openai/codex/releases/latest", "", False),
+        ("https://api.github.com/repos/openai/codex/releases/latest", None, False),
+        (
+            "https://github.com/openai/codex/releases/download/rust-v1.2.3/codex.tar.gz",
+            "read-only",
+            False,
+        ),
+        ("https://api.github.com.example/releases/latest", "read-only", False),
+        (
+            "http://api.github.com/repos/openai/codex/releases/latest",
+            "read-only",
+            False,
+        ),
+    ],
+)
+def test_workflow_token_is_sent_only_to_the_github_api(
+    monkeypatch: pytest.MonkeyPatch, url: str, token: str | None, authorized: bool
+) -> None:
+    updater = _updater()
+    if token is None:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_TOKEN", token)
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append(request)
+        return _Response(b"{}")
+
+    monkeypatch.setattr(updater, "urlopen", fake_urlopen)
+    assert updater._read_url(url, 16) == b"{}"
+    (request,) = requests
+    # Redirected requests carry only ordinary headers, never this one.
+    assert "Authorization" not in request.headers
+    if authorized:
+        assert request.unredirected_hdrs == {"Authorization": "Bearer read-only"}
+    else:
+        assert "Authorization" not in request.unredirected_hdrs
+
+
+def test_cosign_does_not_inherit_the_workflow_token(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    updater = _updater()
+    monkeypatch.setenv("GITHUB_TOKEN", "read-only")
+    environments = []
+
+    def fake_run(command, **kwargs):
+        environments.append(kwargs["env"])
+        return updater.subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(updater.subprocess, "run", fake_run)
+    updater.verify_sigstore_blob(
+        "cosign",
+        tmp_path / "codex",
+        tmp_path / "codex.sigstore",
+        "rust-v1.2.3",
+        "b" * 40,
+    )
+    (environment,) = environments
+    assert "GITHUB_TOKEN" not in environment
+    assert environment.get("PATH") == updater.os.environ.get("PATH")

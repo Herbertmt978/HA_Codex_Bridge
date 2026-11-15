@@ -23,12 +23,17 @@ import sys
 import tempfile
 import time
 from typing import Any, Mapping
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 
 REPOSITORY = "openai/codex"
 REPOSITORY_URL = "https://github.com/openai/codex"
 LATEST_RELEASE_URL = "https://api.github.com/repos/openai/codex/releases/latest"
+GITHUB_API_HOST = "api.github.com"
+# An optional read-only workflow token lifts the anonymous REST API rate limit,
+# which hosted runners share by IP address. It is sent only to the GitHub API.
+GITHUB_TOKEN_VARIABLE = "GITHUB_TOKEN"
 ISSUER = "https://token.actions.githubusercontent.com"
 WORKFLOW = ".github/workflows/rust-release.yml"
 TRANSPARENCY_LOG = "rekor.sigstore.dev"
@@ -322,7 +327,9 @@ def validate_lock(lock: Mapping[str, Any]) -> None:
     for arch, target in ARCHITECTURES.items():
         by_component = _mapping(assets[arch], f"assets.{arch}")
         if set(by_component) != set(COMPONENTS):
-            raise ReleaseLockError(f"lock must contain {', '.join(COMPONENTS)} for {arch}")
+            raise ReleaseLockError(
+                f"lock must contain {', '.join(COMPONENTS)} for {arch}"
+            )
         for component in COMPONENTS:
             asset = _mapping(by_component[component], f"assets.{arch}.{component}")
             archive_name = _asset_name(component, target, ".tar.gz")
@@ -492,6 +499,11 @@ def _read_url(url: str, maximum: int) -> bytes:
             "User-Agent": "ha-codex-bridge",
         },
     )
+    token = os.environ.get(GITHUB_TOKEN_VARIABLE, "").strip()
+    target = urlsplit(url)
+    if token and target.scheme == "https" and target.hostname == GITHUB_API_HOST:
+        # Unredirected, so a redirect to another host never receives it.
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
     with urlopen(request, timeout=30) as response:  # noqa: S310 - URL is validated from GitHub metadata.
         chunks: list[bytes] = []
         size = 0
@@ -773,8 +785,19 @@ def verify_sigstore_blob(
     if runner is not None:
         success = runner(command) == 0
     else:
+        # Cosign needs no GitHub credential.
+        environment = {
+            name: value
+            for name, value in os.environ.items()
+            if name != GITHUB_TOKEN_VARIABLE
+        }
         completed = subprocess.run(
-            command, check=False, capture_output=True, text=True, timeout=60
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=environment,
         )
         success = completed.returncode == 0
     if not success:
