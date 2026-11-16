@@ -8,6 +8,7 @@ the contract brittle.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import re
 import tomllib
@@ -373,7 +374,9 @@ def test_codex_updater_uses_scoped_app_token_and_guarded_auto_merge() -> None:
     assert pull_request_step.get("with", {}).get("sign-commits") is True
     normalized = source.lower()
     assert not re.search(r"git\s+push[^\n]*\bmain\b", normalized)
-    assert "github.token" not in normalized
+    assert "github.token" not in json.dumps(pull_request_job).lower(), (
+        "only the updater App token may submit or merge the update"
+    )
     merge_steps = [
         step
         for step in steps
@@ -392,6 +395,24 @@ def test_codex_updater_uses_scoped_app_token_and_guarded_auto_merge() -> None:
     assert "steps.updater-credentials.outputs.available == 'true'" in merge_condition
     assert "steps.create-update-pr.outputs.pull-request-number != ''" in merge_condition
     assert "steps.create-update-pr.outputs.pull-request-commits-verified == 'true'" in merge_condition
+
+
+def test_codex_updater_gives_only_the_release_check_a_read_only_token() -> None:
+    document, source = _workflow("codex-update")
+    generate_job = document["jobs"]["generate"]
+    assert generate_job["permissions"] == {"contents": "read"}
+    assert source.lower().count("github.token") == 1
+    token_steps = [
+        step
+        for step in generate_job["steps"]
+        if isinstance(step, dict) and "github.token" in json.dumps(step).lower()
+    ]
+    assert len(token_steps) == 1
+    (token_step,) = token_steps
+    assert "scripts/update_codex_lock.py" in str(token_step.get("run", ""))
+    assert "--update" in str(token_step.get("run", ""))
+    assert token_step.get("env") == {"GITHUB_TOKEN": "${{ github.token }}"}
+    assert "secrets.github_token" not in source.lower()
 
 
 def test_codex_updater_preserves_companion_release_projections() -> None:

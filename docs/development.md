@@ -192,7 +192,11 @@ leave the runtime behind. It deliberately
 does not fall back to `GITHUB_TOKEN`, because that token cannot start the
 required pull-request CI. The required policy checks both the PR author and the
 event actor against `CODEX_UPDATER_APP_ACTOR`, so a collaborator cannot retain
-the bot-authored PR while pushing a later branch mutation.
+the bot-authored PR while pushing a later branch mutation. Separately, the step
+that checks for a new Codex release receives the job's read-only `GITHUB_TOKEN`
+so its GitHub API requests are not rejected by the anonymous rate limit, which
+hosted runners share. The lock script sends it only to `api.github.com`, never
+on a redirect or to Cosign, and no other step receives it.
 
 Repository auto-merge must remain paired with protected `main` and its required
 CI contexts. The updater signs its PR commit and arms squash auto-merge only
