@@ -113,9 +113,9 @@
     "windowsSandbox/readiness",
     "windowsSandbox/setupStart"
   ],
-  "codexVersion": "codex-cli 0.169.0",
+  "codexVersion": "codex-cli 0.170.0",
   "contractVersion": 1,
-  "schemaBundleSha256": "1a74868f23cc2ba45c05d4b995553291d641ba1c0427249f0cec8fd76d029cfe",
+  "schemaBundleSha256": "1e1ca12ddeb6a5c0da452a6e07ecd6a09f4314c117f93315931c25f62698561e",
   "serverNotifications": [
     "account/gatewayOAuth/changed",
     "account/login/completed",
@@ -216,6 +216,6 @@
     "item/tool/requestUserInput",
     "mcpServer/elicitation/request"
   ],
-  "stableSchemaSha256": "ad3ad72618cc3bca3e97ed68dd7bb836f845551ac6f2e3cd34edb6e4b74522de",
-  "v2SchemaSha256": "2362154bc14e8bd028bf686be689da04901f69930e4c2e4dbf054a74e2df478b"
+  "stableSchemaSha256": "9d9e2ad75c72e94c8dd6a682b703301e71f11e881450c5f2fe728def1498d4dc",
+  "v2SchemaSha256": "31d07782ecb9be997958cc19e0c18148eb47f3813b54b609a11311f404ed4893"
 }
