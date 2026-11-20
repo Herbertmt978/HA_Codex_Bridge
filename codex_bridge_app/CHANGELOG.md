@@ -2,6 +2,12 @@
 
 All notable App changes are recorded here.
 
+## 1.13.33
+
+- Bundles the Sigstore-verified Codex runtime `0.171.0`.
+- Keeps model and reasoning-level choices dynamically discovered from that runtime.
+- Bundles Bridge `0.20.1` without changing its Integration API compatibility.
+
 ## 1.13.32
 
 - Bundles the Sigstore-verified Codex runtime `0.170.0`.
