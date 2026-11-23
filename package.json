@@ -29,7 +29,7 @@
     "globals": "17.14.0",
     "jsdom": "29.1.1",
     "pdfjs-dist": "6.5.438",
-    "vitest": "5.1.0"
+    "vitest": "5.1.1"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
