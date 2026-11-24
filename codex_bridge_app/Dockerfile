@@ -6,7 +6,7 @@ ARG BUILD_ARCH=amd64
 LABEL \
     io.hass.type="app" \
     io.hass.arch="${BUILD_ARCH}" \
-    io.hass.version="1.13.33"
+    io.hass.version="1.13.34"
 
 COPY requirements-runtime.txt /tmp/requirements-runtime.txt
 COPY runtime-site-packages/ /tmp/runtime-site-packages/
@@ -54,7 +54,7 @@ RUN set -eux; \
     python /usr/local/libexec/codex-bridge/install_locked_assets.py \
       --arch "${BUILD_ARCH}" \
       --lock /tmp/codex-release.json \
-      --lock-digest 704844c7097e6bf6ccf70716c1fff343f4391419737f25b800aafc2506a89be5 \
+      --lock-digest a7c8a0fbfc2c9ac8c7d21f5a0872f44feaaab6ecb4772c1bc7f468a9a034f283 \
       --assets-dir /tmp/assets \
       --destination /usr/local/bin; \
     install -d -o root -g root -m 0755 /opt/codex/bin; \
@@ -83,9 +83,9 @@ EXPOSE 8766
 
 ENTRYPOINT ["/usr/local/bin/codex-app-entrypoint"]
 
-ENV CODEX_BRIDGE_APP_VERSION="1.13.33" \
+ENV CODEX_BRIDGE_APP_VERSION="1.13.34" \
     CODEX_BRIDGE_VERSION="0.20.1" \
-    CODEX_BRIDGE_CODEX_VERSION="0.171.0" \
+    CODEX_BRIDGE_CODEX_VERSION="0.172.0" \
     CODEX_BRIDGE_ARCH="${BUILD_ARCH}" \
-    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="704844c7097e6bf6ccf70716c1fff343f4391419737f25b800aafc2506a89be5" \
+    CODEX_BRIDGE_RELEASE_LOCK_DIGEST="a7c8a0fbfc2c9ac8c7d21f5a0872f44feaaab6ecb4772c1bc7f468a9a034f283" \
     CODEX_BRIDGE_SANDBOX_CONTRACT_VERSION="2"
